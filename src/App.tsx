@@ -1,0 +1,579 @@
+import React, { useState } from 'react';
+import { useAuth } from './contexts/AuthContext';
+import LoginForm from './components/LoginForm';
+import { ManagementDashboard } from './components/NewManagementDashboard';
+import EmployeeDashboard from './components/EmployeeDashboard';
+import TimesheetStatusView from './components/TimesheetStatusView';
+import TeamReview from './components/TeamReview';
+import { EmployeeTimesheet } from './components/EmployeeTimesheet';
+import { UserManagement } from './components/UserManagement';
+import { ProjectManagement } from './components/ProjectManagement';
+import { BillingManagement } from './components/BillingManagement';
+import { AuditLogs } from './components/AuditLogs';
+import { Reports } from './components/Reports';
+import { 
+  Users, 
+  Clock, 
+  FileText, 
+  ChevronDown,
+  LogOut,
+  Shield,
+  Building2,
+  Menu,
+  Bell,
+  Search,
+  Home,
+  CheckSquare,
+  TrendingUp,
+  Activity
+} from 'lucide-react';
+
+interface SubItem {
+  id: string;
+  label: string;
+}
+
+interface NavigationItem {
+  id: string;
+  label: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  icon: any;
+  subItems: SubItem[];
+}
+
+const App: React.FC = () => {
+  const { currentUserRole, currentUser, isAuthenticated, isLoading, signOut } = useAuth();
+  const [activeSection, setActiveSection] = useState('dashboard');
+  const [activeSubSection, setActiveSubSection] = useState('');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [openDropdowns, setOpenDropdowns] = useState<Set<string>>(new Set());
+
+  // Ensure dropdown stays open when there's an active sub-section
+  React.useEffect(() => {
+    if (activeSubSection && activeSection) {
+      setOpenDropdowns(prev => {
+        const newSet = new Set(prev);
+        newSet.add(activeSection); // Add current section but keep others open
+        return newSet;
+      });
+    }
+  }, [activeSection, activeSubSection]);
+
+  // Handle navigation to create timesheet from list view
+  React.useEffect(() => {
+    const handleNavigateToCreate = () => {
+      setActiveSection('timesheet');
+      setActiveSubSection('timesheet-create');
+      setOpenDropdowns(prev => {
+        const newSet = new Set(prev);
+        newSet.add('timesheet');
+        return newSet;
+      });
+    };
+
+    window.addEventListener('navigate-to-create', handleNavigateToCreate);
+    return () => window.removeEventListener('navigate-to-create', handleNavigateToCreate);
+  }, []);
+
+  // Show loading screen
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="relative mb-4">
+            <Shield className="h-16 w-16 text-blue-600 mx-auto" />
+            <div className="absolute -top-1 -right-1 w-6 h-6 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full animate-pulse"></div>
+          </div>
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
+            TimeTracker Pro
+          </h1>
+          <p className="text-slate-600">
+            {isAuthenticated ? 'Loading your workspace...' : 'Checking authentication...'}
+          </p>
+          <div className="mt-4 text-xs text-slate-500">
+            Session restoration in progress
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login form if not authenticated
+  if (!isAuthenticated) {
+    return <LoginForm />;
+  }
+
+  const getNavigationItems = (): NavigationItem[] => {
+    const baseItems: NavigationItem[] = [
+      { 
+        id: 'dashboard', 
+        label: 'Dashboard', 
+        icon: Home,
+        subItems: []
+      },
+    ];
+
+    // Super Admin - Full system access
+    if (currentUserRole === 'super_admin') {
+      baseItems.push(
+        { id: 'users', label: 'User Management', icon: Users, subItems: [] },
+        { id: 'projects', label: 'Project Management', icon: Building2, subItems: [] },
+        { 
+          id: 'timesheet', 
+          label: 'Timesheet Overview', 
+          icon: Clock,
+          subItems: [
+            { id: 'timesheet-view', label: 'View Data (Read-Only)' },
+            { id: 'timesheet-reports', label: 'Timesheet Reports' }
+          ]
+        },
+        { id: 'reports', label: 'Reports & Analytics', icon: TrendingUp, subItems: [] },
+        { id: 'billing', label: 'Billing Overview', icon: FileText, subItems: [
+          { id: 'billing-view', label: 'View Data (Read-Only)' },
+          { id: 'billing-reports', label: 'Billing Reports' }
+        ]},
+        { id: 'audit', label: 'Audit Logs', icon: Activity, subItems: [
+          { id: 'audit-logs', label: 'View Logs' },
+          { id: 'audit-cleanup', label: 'Data Cleanup' }
+        ]}
+      );
+    }
+
+    // Management - Mid-level privileges
+    else if (currentUserRole === 'management') {
+      baseItems.push(
+        { id: 'users', label: 'User Management', icon: Users, subItems: []},
+        { id: 'projects', label: 'Project Management', icon: Building2, subItems: []},
+        { id: 'timesheet-team', label: 'Team Review', icon: Users, subItems: [] },
+        { id: 'reports', label: 'Reports & Analytics', icon: TrendingUp, subItems: [] },
+        { id: 'billing', label: 'Billing Management', icon: FileText, subItems: [
+          { id: 'billing-snapshots', label: 'Generate Snapshots' },
+          { id: 'billing-approval', label: 'Monthly Approvals' },
+          { id: 'billing-provisions', label: 'Billing Provisions' }
+        ]}
+      );
+    }
+
+    // Manager - Team management
+    else if (currentUserRole === 'manager') {
+      baseItems.push(
+        { id: 'users', label: 'Team Management', icon: Users, subItems: [] },
+        { id: 'projects', label: 'Project Management', icon: Building2, subItems: [] },
+        { 
+          id: 'timesheet', 
+          label: 'My Timesheet', 
+          icon: Clock,
+          subItems: [
+            { id: 'timesheet-list', label: 'List View' },
+            { id: 'timesheet-calendar', label: 'Calendar View' }
+          ]
+        },
+        { id: 'timesheet-team', label: 'Team Review', icon: Users, subItems: [] },
+        // { id: 'timesheet-status', label: 'Timesheet Status', icon: FileText, subItems: [] },
+        { id: 'reports', label: 'Reports & Analytics', icon: TrendingUp, subItems: [] }
+      );
+    }
+
+    // Lead - Team leadership with review capabilities
+    else if (currentUserRole === 'lead') {
+      baseItems.push(
+        { id: 'tasks', label: 'My Tasks', icon: CheckSquare, subItems: [] },
+        { id: 'projects', label: 'My Projects', icon: Building2, subItems: [] },
+        { 
+          id: 'timesheet', 
+          label: 'My Timesheet', 
+          icon: Clock,
+          subItems: [
+            { id: 'timesheet-list', label: 'List View' },
+            { id: 'timesheet-calendar', label: 'Calendar View' }
+          ]
+        },
+        { id: 'timesheet-team', label: 'Team Review', icon: Users, subItems: [] },
+        { id: 'timesheet-status', label: 'My Status', icon: Activity, subItems: [] },
+        { id: 'reports', label: 'My Reports', icon: TrendingUp, subItems: [] }
+      );
+    }
+
+    // Employee - Individual contributor
+    else if (currentUserRole === 'employee') {
+      baseItems.push(
+        { id: 'tasks', label: 'My Tasks', icon: CheckSquare, subItems: [] },
+        { id: 'projects', label: 'My Projects', icon: Building2, subItems: [] },
+        { 
+          id: 'timesheet', 
+          label: 'My Timesheet', 
+          icon: Clock,
+          subItems: [
+            { id: 'timesheet-list', label: 'List View' },
+            { id: 'timesheet-calendar', label: 'Calendar View' }
+          ]
+        },
+        { id: 'timesheet-status', label: 'My Status', icon: Activity, subItems: [] },
+        { id: 'reports', label: 'My Reports', icon: TrendingUp, subItems: [] }
+      );
+    }
+
+    return baseItems;
+  };
+
+  const navigationItems = getNavigationItems();
+
+  const handleNavigation = (itemId: string, subItemId?: string) => {
+    const item = navigationItems.find(nav => nav.id === itemId);
+    const hasSubItems = item?.subItems && item.subItems.length > 0;
+    
+    if (subItemId) {
+      // Clicking on a sub-item
+      setActiveSection(itemId);
+      setActiveSubSection(subItemId);
+    } else if (hasSubItems) {
+      // Clicking on main item with sub-items
+      const isCurrentlyOpen = openDropdowns.has(itemId);
+      
+      if (isCurrentlyOpen) {
+        // If dropdown is open, just toggle it closed
+        setOpenDropdowns(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(itemId);
+          return newSet;
+        });
+      } else {
+        // If dropdown is closed, navigate to first sub-item and open dropdown
+        // Keep other dropdowns open (no auto-close behavior)
+        const firstSubItem = item.subItems[0];
+        setActiveSection(itemId);
+        setActiveSubSection(firstSubItem.id);
+        setOpenDropdowns(prev => {
+          const newSet = new Set(prev);
+          newSet.add(itemId);
+          return newSet;
+        });
+      }
+    } else {
+      // Clicking on main item without sub-items
+      setActiveSection(itemId);
+      setActiveSubSection('');
+      // Don't close other dropdowns when navigating to non-dropdown items
+    }
+  };
+
+  // Handle sign out
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      console.log('User signed out successfully');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
+  const renderContent = () => {
+    // Handle specific sub-sections
+    if (activeSubSection) {
+      switch (activeSubSection) {
+        // User Management Sub-sections
+        case 'users-create':
+          return <UserManagement defaultTab="all" />;
+        case 'users-pending':
+          return <UserManagement defaultTab="pending" />;
+        
+        // Project Management Sub-sections
+        // No project sub-sections needed - handled within component
+        
+        // Timesheet Sub-sections
+        case 'timesheet-calendar':
+          // Calendar view for all users
+          return <EmployeeTimesheet viewMode="calendar" />;
+        case 'projects-overview':
+          return <ProjectManagement defaultTab="overview" />;
+        case 'projects-tasks':
+          return <ProjectManagement defaultTab="tasks" />;
+        case 'timesheet-list':
+          // List view for individual users
+          return <EmployeeTimesheet viewMode="list" />;
+        case 'timesheet-create':
+          // Create form view
+          return <EmployeeTimesheet viewMode="create" />;
+        case 'team-calendar':
+        case 'team-list':
+        case 'team-approval':
+        case 'team-verification':
+        case 'team-overview':
+        case 'timesheet-team':
+        case 'timesheet-approval':
+        case 'timesheet-verification':
+          return <TeamReview />;
+        
+        // Billing Sub-sections
+        case 'billing-view':
+        case 'billing-reports':
+        case 'billing-snapshots':
+        case 'billing-approval':
+        case 'billing-provisions':
+          return <BillingManagement />;
+        
+        // Timesheet Status Sub-sections
+        case 'timesheet-view':
+        case 'timesheet-reports':
+          return <TimesheetStatusView />;
+        
+        // Audit Sub-sections
+        case 'audit-logs':
+        case 'audit-cleanup':
+          return <AuditLogs />;
+        
+        default:
+          break;
+      }
+    }
+
+    // Handle timesheet sections first
+    if (activeSection === 'timesheet' || activeSection === 'timesheet-status' || activeSection === 'timesheet-team') {
+      if (activeSection === 'timesheet') {
+        // Default to list view for main timesheet
+        return <EmployeeTimesheet viewMode="list" />;
+      } else if (activeSection === 'timesheet-team') {
+        // Team Review section - use the new TeamReview component
+        return <TeamReview />;
+      } else {
+        return <TimesheetStatusView />;
+      }
+    }
+
+    // Handle specific management sections
+    switch (activeSection) {
+      case 'users':
+        return <UserManagement />;
+      case 'projects':
+        return <ProjectManagement />;
+      case 'billing':
+        return <BillingManagement />;
+      case 'audit':
+        return <AuditLogs />;
+      case 'reports':
+        return <Reports />;
+      case 'tasks':
+        // Handle My Tasks section for employee and lead
+        if (currentUserRole === 'employee' || currentUserRole === 'lead') {
+          return <EmployeeDashboard activeSection="tasks" setActiveSection={setActiveSection} />;
+        }
+        return <EmployeeDashboard activeSection={activeSection} setActiveSection={setActiveSection} />;
+      case 'dashboard':
+      default:
+        // Return appropriate dashboard based on role
+        if (currentUserRole === 'super_admin' || currentUserRole === 'management' || currentUserRole === 'manager') {
+          return <ManagementDashboard />;
+        } else {
+          return <EmployeeDashboard activeSection={activeSection} setActiveSection={setActiveSection} />;
+        }
+    }
+  };
+
+  const notifications = [
+    { id: 1, title: 'Timesheet Approved', message: 'Your timesheet for week of Feb 5 has been approved', time: '2 hours ago', type: 'success' },
+    { id: 2, title: 'New Task Assigned', message: 'Payment Gateway Setup task has been assigned to you', time: '4 hours ago', type: 'info' },
+    { id: 3, title: 'Project Deadline', message: 'E-commerce Platform milestone due in 2 days', time: '1 day ago', type: 'warning' }
+  ];
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      {/* Header */}
+      <header className="bg-white/95 backdrop-blur-sm shadow-lg border-b border-slate-200/50 fixed top-0 left-0 right-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-18">
+            <div className="flex items-center">
+              <button
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors lg:hidden"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+              <div className="flex-shrink-0">
+                <div className="flex items-center">
+                  <div className="relative">
+                    <Shield className="h-10 w-10 text-blue-600" />
+                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full"></div>
+                  </div>
+                  <div className="ml-3">
+                    <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                      TimeTracker Pro
+                    </span>
+                    <div className="text-xs text-slate-500 font-medium">Enterprise Edition</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-3">
+              {/* Search */}
+              <div className="hidden md:block relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  className="pl-9 pr-4 py-2 w-64 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                />
+              </div>
+
+              {/* Notifications */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowNotifications(!showNotifications)}
+                  className="relative p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  <Bell className="w-5 h-5" />
+                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></span>
+                </button>
+
+                {showNotifications && (
+                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-slate-200 z-50">
+                    <div className="p-4 border-b border-slate-100">
+                      <h3 className="font-semibold text-slate-900">Notifications</h3>
+                    </div>
+                    <div className="max-h-96 overflow-y-auto">
+                      {notifications.map((notification) => (
+                        <div key={notification.id} className="p-4 border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                          <div className="flex items-start space-x-3">
+                            <div className={`w-2 h-2 rounded-full mt-2 ${
+                              notification.type === 'success' ? 'bg-green-500' :
+                              notification.type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'
+                            }`}></div>
+                            <div className="flex-1">
+                              <h4 className="font-medium text-slate-900 text-sm">{notification.title}</h4>
+                              <p className="text-slate-600 text-sm mt-1">{notification.message}</p>
+                              <p className="text-slate-400 text-xs mt-2">{notification.time}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="p-3 border-t border-slate-100">
+                      <button className="w-full text-center text-sm text-blue-600 hover:text-blue-800 font-medium">
+                        View all notifications
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* User Info */}
+              <div className="flex items-center space-x-3 px-3 py-2 bg-slate-50 rounded-lg">
+                <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                  <span className="text-white text-sm font-bold">
+                    {currentUser?.full_name?.charAt(0) || 'U'}
+                  </span>
+                </div>
+                <div className="hidden md:block">
+                  <p className="text-sm font-medium text-slate-900">{currentUser?.full_name}</p>
+                  <p className="text-xs text-slate-500 capitalize">{currentUserRole.replace('_', ' ')}</p>
+                </div>
+              </div>
+
+              {/* Sign Out Button */}
+              <button 
+                onClick={handleSignOut}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                title="Sign Out"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div className="flex pt-18">
+        {/* Sidebar */}
+        <nav className={`${sidebarCollapsed ? 'w-16' : 'w-72'} bg-white/95 backdrop-blur-sm shadow-xl min-h-screen border-r border-slate-200/50 transition-all duration-300 fixed top-18 bottom-0 overflow-y-auto scrollbar-hide`}>
+          <div className="p-4">
+            
+            
+            <div className="space-y-2">
+              {navigationItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeSection === item.id;
+                const hasSubItems = item.subItems && item.subItems.length > 0;
+                const isDropdownOpen = openDropdowns.has(item.id);
+                
+                return (
+                  <div
+                    key={item.id}
+                  >
+                    <button
+                      onClick={() => handleNavigation(item.id)}
+                      className={`w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all group ${
+                        isActive
+                          ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      }`}
+                    >
+                      <Icon className={`w-5 h-5 ${sidebarCollapsed ? '' : 'mr-3'} ${isActive ? 'text-white' : ''}`} />
+                      {!sidebarCollapsed && (
+                        <>
+                          <span className="flex-1 text-left">{item.label}</span>
+                          {hasSubItems && (
+                            <ChevronDown className={`w-4 h-4 transition-transform ${isDropdownOpen ? 'rotate-180' : ''} ${isActive ? 'text-white' : ''}`} />
+                          )}
+                        </>
+                      )}
+                    </button>
+                    
+                    {/* Sub Items */}
+                    {!sidebarCollapsed && hasSubItems && isDropdownOpen && (
+                      <div className="mt-2 ml-4 space-y-1 animate-in slide-in-from-top-2 duration-200">
+                        {item.subItems.map((subItem) => (
+                          <button
+                            key={subItem.id}
+                            onClick={() => handleNavigation(item.id, subItem.id)}
+                            className={`w-full text-left px-4 py-2 text-sm rounded-lg transition-all duration-200 ${
+                              activeSubSection === subItem.id
+                                ? 'bg-blue-50 text-blue-700 border-l-2 border-blue-500 font-medium'
+                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                            }`}
+                          >
+                            {subItem.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            
+            {/* Sidebar Footer */}
+            {!sidebarCollapsed && (
+              <div className="mt-8 pt-4 border-t border-slate-200">
+                <div className="px-4 py-3 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl">
+                  <div className="text-xs font-medium text-slate-600 mb-1">Current Week</div>
+                  <div className="text-sm font-bold text-slate-900">40.5 hours logged</div>
+                  <div className="w-full bg-slate-200 rounded-full h-2 mt-2">
+                    <div className="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full" style={{ width: '81%' }}></div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </nav>
+
+        {/* Main Content */}
+        <main className={`flex-1 p-8 overflow-auto ${sidebarCollapsed ? 'ml-16' : 'ml-72'} transition-all duration-300`}>
+          {renderContent()}
+        </main>
+      </div>
+
+      {/* Click outside to close notifications */}
+      {showNotifications && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => {
+            setShowNotifications(false);
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+export default App;
