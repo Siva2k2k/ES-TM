@@ -5,8 +5,7 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('⚠️  Supabase environment variables not configured. Using default values for development.');
-  console.warn('Please update your .env file with proper Supabase credentials for production.');
+  console.warn('⚠️  Supabase environment variables not configured for the development.');
 }
 
 // Custom storage implementation to ensure persistence

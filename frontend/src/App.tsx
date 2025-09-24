@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import * as React from 'react';
 import { useAuth } from './store/contexts/AuthContext';
 import LoginForm from './components/forms/LoginForm';
 import { ManagementDashboard } from './pages/NewManagementDashboard';
