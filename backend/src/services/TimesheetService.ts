@@ -1,0 +1,778 @@
+import mongoose from 'mongoose';
+import {
+  Timesheet,
+  TimeEntry,
+  User,
+  Project,
+  Task,
+  ITimesheet,
+  ITimeEntry,
+  IUser,
+  TimesheetStatus,
+  EntryType
+} from '@/models';
+import {
+  ValidationError,
+  NotFoundError,
+  ConflictError,
+  TimesheetError,
+  AuthorizationError
+} from '@/utils/errors';
+import {
+  AuthUser,
+  validateTimesheetAccess,
+  requireManagerRole,
+  requireManagementRole,
+  canManageRoleHierarchy
+} from '@/utils/auth';
+
+export interface TimesheetWithDetails extends ITimesheet {
+  user_name: string;
+  user_email?: string;
+  time_entries: ITimeEntry[];
+  can_edit: boolean;
+  can_submit: boolean;
+  can_approve: boolean;
+  can_reject: boolean;
+  next_action: string;
+  user?: IUser;
+  billableHours?: number;
+  nonBillableHours?: number;
+}
+
+export interface TimeEntryForm {
+  project_id?: string;
+  task_id?: string;
+  date: string;
+  hours: number;
+  description?: string;
+  is_billable: boolean;
+  custom_task_description?: string;
+  entry_type: EntryType;
+}
+
+export interface CalendarData {
+  [date: string]: {
+    hours: number;
+    status: string;
+    entries: ITimeEntry[];
+  };
+}
+
+/**
+ * Timesheet Management Service - MongoDB/Mongoose Implementation
+ * Converted from Supabase to support Node.js, TypeScript, MongoDB, and Mongoose
+ */
+export class TimesheetService {
+
+  /**
+   * Get all timesheets (Super Admin and Management)
+   */
+  static async getAllTimesheets(currentUser: AuthUser): Promise<{ timesheets: ITimesheet[]; error?: string }> {
+    try {
+      // Check permissions
+      if (!['super_admin', 'management'].includes(currentUser.role)) {
+        throw new AuthorizationError('Only super admin and management can view all timesheets');
+      }
+
+      const timesheets = await Timesheet.find({ deleted_at: null })
+        .populate('user_id', 'full_name email role')
+        .sort({ week_start_date: -1 })
+        .lean();
+
+      return { timesheets };
+    } catch (error) {
+      console.error('Error fetching all timesheets:', error);
+      return {
+        timesheets: [],
+        error: error instanceof Error ? error.message : 'Failed to fetch timesheets'
+      };
+    }
+  }
+
+  /**
+   * Get timesheets by status
+   */
+  static async getTimesheetsByStatus(
+    status: TimesheetStatus,
+    currentUser: AuthUser
+  ): Promise<{ timesheets: ITimesheet[]; error?: string }> {
+    try {
+      // Check permissions based on role
+      if (!canManageRoleHierarchy(currentUser.role, 'employee')) {
+        throw new AuthorizationError('Insufficient permissions to view timesheets by status');
+      }
+
+      const timesheets = await Timesheet.find({
+        status,
+        deleted_at: null
+      })
+        .populate('user_id', 'full_name email role')
+        .sort({ week_start_date: -1 })
+        .lean();
+
+      return { timesheets };
+    } catch (error) {
+      console.error('Error fetching timesheets by status:', error);
+      return {
+        timesheets: [],
+        error: error instanceof Error ? error.message : 'Failed to fetch timesheets by status'
+      };
+    }
+  }
+
+  /**
+   * Get user's timesheets
+   */
+  static async getUserTimesheets(
+    currentUser: AuthUser,
+    userId?: string,
+    statusFilter?: TimesheetStatus[],
+    weekStartFilter?: string,
+    limit = 50,
+    offset = 0
+  ): Promise<{ timesheets: TimesheetWithDetails[]; total: number; error?: string }> {
+    try {
+      const effectiveUserId = userId || currentUser.id;
+
+      // Validate access permissions
+      validateTimesheetAccess(currentUser, effectiveUserId, 'view');
+
+      // Build query
+      const query: any = {
+        user_id: new mongoose.Types.ObjectId(effectiveUserId),
+        deleted_at: null
+      };
+
+      if (statusFilter && statusFilter.length > 0) {
+        query.status = { $in: statusFilter };
+      }
+
+      if (weekStartFilter) {
+        query.week_start_date = new Date(weekStartFilter);
+      }
+
+      // Execute aggregation to get timesheets with time entries
+      const pipeline = [
+        { $match: query },
+        {
+          $lookup: {
+            from: 'timeentries',
+            localField: '_id',
+            foreignField: 'timesheet_id',
+            as: 'time_entries',
+            pipeline: [
+              { $match: { deleted_at: null } },
+              {
+                $lookup: {
+                  from: 'projects',
+                  localField: 'project_id',
+                  foreignField: '_id',
+                  as: 'project',
+                  pipeline: [{ $project: { name: 1 } }]
+                }
+              },
+              {
+                $lookup: {
+                  from: 'tasks',
+                  localField: 'task_id',
+                  foreignField: '_id',
+                  as: 'task',
+                  pipeline: [{ $project: { name: 1 } }]
+                }
+              }
+            ]
+          }
+        },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'user_id',
+            foreignField: '_id',
+            as: 'user',
+            pipeline: [{ $project: { full_name: 1, email: 1, role: 1 } }]
+          }
+        },
+        { $sort: { week_start_date: -1 } } as any,
+        { $skip: offset },
+        { $limit: limit }
+      ];
+
+      const timesheets = await Timesheet.aggregate(pipeline as any);
+
+      // Enhance timesheets with calculated fields
+      const enhancedTimesheets: TimesheetWithDetails[] = timesheets.map(ts => {
+        const entries = ts.time_entries || [];
+        const billableHours = entries
+          .filter((e: ITimeEntry) => e.is_billable)
+          .reduce((sum: number, e: ITimeEntry) => sum + e.hours, 0);
+        const nonBillableHours = entries
+          .filter((e: ITimeEntry) => !e.is_billable)
+          .reduce((sum: number, e: ITimeEntry) => sum + e.hours, 0);
+
+        const user = ts.user[0];
+
+        return {
+          ...ts,
+          id: ts._id.toString(),
+          user_id: ts.user_id.toString(),
+          user_name: user?.full_name || 'Unknown User',
+          user_email: user?.email,
+          time_entries: entries,
+          user: user,
+          billableHours,
+          nonBillableHours,
+          can_edit: ['draft', 'manager_rejected', 'management_rejected'].includes(ts.status),
+          can_submit: ts.status === 'draft' && ts.total_hours > 0,
+          can_approve: false, // Determined by role in component
+          can_reject: false, // Determined by role in component
+          next_action: this.getNextAction(ts.status)
+        };
+      });
+
+      return {
+        timesheets: enhancedTimesheets,
+        total: enhancedTimesheets.length
+      };
+    } catch (error) {
+      console.error('Error in getUserTimesheets:', error);
+      return {
+        timesheets: [],
+        total: 0,
+        error: error instanceof Error ? error.message : 'Failed to fetch user timesheets'
+      };
+    }
+  }
+
+  /**
+   * Create new timesheet
+   */
+  static async createTimesheet(
+    userId: string,
+    weekStartDate: string,
+    currentUser: AuthUser
+  ): Promise<{ timesheet?: ITimesheet; error?: string }> {
+    try {
+      console.log('TimesheetService.createTimesheet called with:', { userId, weekStartDate });
+
+      // Validate access permissions
+      validateTimesheetAccess(currentUser, userId, 'create');
+
+      // Check if timesheet already exists for this user and week
+      const existingTimesheet = await Timesheet.findOne({
+        user_id: new mongoose.Types.ObjectId(userId),
+        week_start_date: new Date(weekStartDate),
+        deleted_at: null
+      });
+
+      if (existingTimesheet) {
+        throw new ConflictError(
+          `A timesheet already exists for the week starting ${weekStartDate}. Status: ${existingTimesheet.status}`
+        );
+      }
+
+      // Calculate week end date
+      const weekStart = new Date(weekStartDate);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+
+      // Create new timesheet
+      const timesheetData = {
+        user_id: new mongoose.Types.ObjectId(userId),
+        week_start_date: weekStart,
+        week_end_date: weekEnd,
+        total_hours: 0,
+        status: 'draft' as TimesheetStatus,
+        is_verified: false,
+        is_frozen: false
+      };
+
+      const timesheet = await Timesheet.create(timesheetData);
+
+      console.log('Timesheet created successfully:', timesheet);
+      return { timesheet };
+    } catch (error) {
+      console.error('Error in createTimesheet:', error);
+
+      if (error instanceof ConflictError) {
+        return { error: error.message };
+      }
+
+      return { error: error instanceof Error ? error.message : 'Failed to create timesheet' };
+    }
+  }
+
+  /**
+   * Get timesheet for specific user and week
+   */
+  static async getTimesheetByUserAndWeek(
+    userId: string,
+    weekStartDate: string,
+    currentUser: AuthUser
+  ): Promise<{ timesheet?: TimesheetWithDetails; error?: string }> {
+    try {
+      // Validate access permissions
+      validateTimesheetAccess(currentUser, userId, 'view');
+
+      const pipeline = [
+        {
+          $match: {
+            user_id: new mongoose.Types.ObjectId(userId),
+            week_start_date: new Date(weekStartDate),
+            deleted_at: null
+          }
+        },
+        {
+          $lookup: {
+            from: 'timeentries',
+            localField: '_id',
+            foreignField: 'timesheet_id',
+            as: 'time_entries',
+            pipeline: [
+              { $match: { deleted_at: null } },
+              { $sort: { date: 1 } }
+            ]
+          }
+        },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'user_id',
+            foreignField: '_id',
+            as: 'user',
+            pipeline: [{ $project: { full_name: 1, email: 1, role: 1 } }]
+          }
+        }
+      ];
+
+      const results = await Timesheet.aggregate(pipeline as any);
+      const timesheet = results[0];
+
+      if (!timesheet) {
+        return { timesheet: undefined };
+      }
+
+      // Calculate billable/non-billable hours
+      const entries = timesheet.time_entries || [];
+      const billableHours = entries
+        .filter((e: ITimeEntry) => e.is_billable)
+        .reduce((sum: number, e: ITimeEntry) => sum + e.hours, 0);
+      const nonBillableHours = entries
+        .filter((e: ITimeEntry) => !e.is_billable)
+        .reduce((sum: number, e: ITimeEntry) => sum + e.hours, 0);
+
+      const user = timesheet.user[0];
+      const enhancedTimesheet: TimesheetWithDetails = {
+        ...timesheet,
+        id: timesheet._id.toString(),
+        user_id: timesheet.user_id.toString(),
+        user_name: user?.full_name || 'Unknown User',
+        user_email: user?.email,
+        time_entries: entries,
+        user: user,
+        billableHours,
+        nonBillableHours,
+        can_edit: ['draft', 'manager_rejected', 'management_rejected'].includes(timesheet.status),
+        can_submit: timesheet.status === 'draft' && timesheet.total_hours > 0,
+        can_approve: false,
+        can_reject: false,
+        next_action: this.getNextAction(timesheet.status)
+      };
+
+      return { timesheet: enhancedTimesheet };
+    } catch (error) {
+      console.error('Error in getTimesheetByUserAndWeek:', error);
+      return { error: error instanceof Error ? error.message : 'Failed to fetch timesheet' };
+    }
+  }
+
+  /**
+   * Submit timesheet for approval
+   */
+  static async submitTimesheet(
+    timesheetId: string,
+    currentUser: AuthUser
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log('TimesheetService.submitTimesheet called for ID:', timesheetId);
+
+      // Get timesheet
+      const timesheet = await Timesheet.findOne({
+        _id: new mongoose.Types.ObjectId(timesheetId),
+        deleted_at: null
+      });
+
+      if (!timesheet) {
+        throw new NotFoundError('Timesheet not found');
+      }
+
+      // Validate access permissions
+      validateTimesheetAccess(currentUser, timesheet.user_id.toString(), 'edit');
+
+      // Check status
+      if (!['draft', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
+        throw new TimesheetError(`Timesheet cannot be submitted from current status: ${timesheet.status}`);
+      }
+
+      // Check if timesheet has entries
+      if (timesheet.total_hours === 0) {
+        throw new TimesheetError('Cannot submit timesheet with zero hours');
+      }
+
+      // Update status
+      await Timesheet.findByIdAndUpdate(timesheetId, {
+        status: 'submitted',
+        submitted_at: new Date(),
+        updated_at: new Date()
+      });
+
+      console.log('Timesheet submitted successfully:', timesheetId);
+      return { success: true };
+    } catch (error) {
+      console.error('Error in submitTimesheet:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to submit timesheet'
+      };
+    }
+  }
+
+  /**
+   * Manager approve/reject timesheet
+   */
+  static async managerApproveRejectTimesheet(
+    timesheetId: string,
+    action: 'approve' | 'reject',
+    currentUser: AuthUser,
+    reason?: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      requireManagerRole(currentUser);
+
+      const timesheet = await Timesheet.findOne({
+        _id: new mongoose.Types.ObjectId(timesheetId),
+        deleted_at: null
+      });
+
+      if (!timesheet) {
+        throw new NotFoundError('Timesheet not found');
+      }
+
+      // Check status
+      if (timesheet.status !== 'submitted') {
+        throw new TimesheetError(`Timesheet cannot be processed from current status: ${timesheet.status}`);
+      }
+
+      let updateData: any;
+      if (action === 'approve') {
+        updateData = {
+          status: 'manager_approved',
+          approved_by_manager_id: new mongoose.Types.ObjectId(currentUser.id),
+          approved_by_manager_at: new Date(),
+          updated_at: new Date()
+        };
+      } else {
+        if (!reason || reason.trim() === '') {
+          throw new ValidationError('Rejection reason is required');
+        }
+        updateData = {
+          status: 'manager_rejected',
+          manager_rejection_reason: reason,
+          manager_rejected_at: new Date(),
+          updated_at: new Date()
+        };
+      }
+
+      await Timesheet.findByIdAndUpdate(timesheetId, updateData);
+
+      console.log(`Manager ${action}ed timesheet: ${timesheetId}`);
+      return { success: true };
+    } catch (error) {
+      console.error('Error in managerApproveRejectTimesheet:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : `Failed to ${action} timesheet`
+      };
+    }
+  }
+
+  /**
+   * Management approve/reject timesheet
+   */
+  static async managementApproveRejectTimesheet(
+    timesheetId: string,
+    action: 'approve' | 'reject',
+    currentUser: AuthUser,
+    reason?: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      requireManagementRole(currentUser);
+
+      const timesheet = await Timesheet.findOne({
+        _id: new mongoose.Types.ObjectId(timesheetId),
+        deleted_at: null
+      }).populate('user_id', 'hourly_rate');
+
+      if (!timesheet) {
+        throw new NotFoundError('Timesheet not found');
+      }
+
+      // Check status
+      if (!['manager_approved', 'management_pending'].includes(timesheet.status)) {
+        throw new TimesheetError(`Timesheet cannot be processed from current status: ${timesheet.status}`);
+      }
+
+      let updateData: any;
+      if (action === 'approve') {
+        updateData = {
+          status: 'frozen',
+          approved_by_management_id: new mongoose.Types.ObjectId(currentUser.id),
+          approved_by_management_at: new Date(),
+          verified_by_id: new mongoose.Types.ObjectId(currentUser.id),
+          verified_at: new Date(),
+          is_verified: true,
+          is_frozen: true,
+          updated_at: new Date()
+        };
+      } else {
+        if (!reason || reason.trim() === '') {
+          throw new ValidationError('Rejection reason is required');
+        }
+        updateData = {
+          status: 'management_rejected',
+          management_rejection_reason: reason,
+          management_rejected_at: new Date(),
+          updated_at: new Date()
+        };
+      }
+
+      await Timesheet.findByIdAndUpdate(timesheetId, updateData);
+
+      console.log(`Management ${action}ed timesheet: ${timesheetId}`);
+      return { success: true };
+    } catch (error) {
+      console.error('Error in managementApproveRejectTimesheet:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : `Failed to ${action} timesheet`
+      };
+    }
+  }
+
+  /**
+   * Get next action description for timesheet status
+   */
+  private static getNextAction(status: TimesheetStatus): string {
+    switch (status) {
+      case 'draft':
+        return 'Ready to submit';
+      case 'submitted':
+        return 'Awaiting manager approval';
+      case 'manager_approved':
+        return 'Automatically forwarded to management';
+      case 'management_pending':
+        return 'Awaiting management approval';
+      case 'manager_rejected':
+        return 'Needs revision after manager rejection';
+      case 'management_rejected':
+        return 'Needs revision after management rejection';
+      case 'frozen':
+        return 'Approved & frozen - ready for billing';
+      case 'billed':
+        return 'Complete - timesheet has been billed';
+      default:
+        return 'Unknown status';
+    }
+  }
+
+  /**
+   * Add time entry to timesheet
+   */
+  static async addTimeEntry(
+    timesheetId: string,
+    entryData: TimeEntryForm,
+    currentUser: AuthUser
+  ): Promise<{ entry?: ITimeEntry; error?: string }> {
+    try {
+      console.log('TimesheetService.addTimeEntry called with:', { timesheetId, entryData });
+
+      // Get timesheet to validate permissions
+      const timesheet = await Timesheet.findOne({
+        _id: new mongoose.Types.ObjectId(timesheetId),
+        deleted_at: null
+      });
+
+      if (!timesheet) {
+        throw new NotFoundError('Timesheet not found');
+      }
+
+      // Validate access permissions
+      validateTimesheetAccess(currentUser, timesheet.user_id.toString(), 'edit');
+
+      // Validate timesheet status
+      if (!['draft', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
+        throw new TimesheetError('Cannot add entries to timesheet in current status');
+      }
+
+      // Validate time entry
+      const validation = await this.validateTimeEntry(timesheetId, entryData);
+      if (!validation.valid) {
+        throw new ValidationError(validation.error!);
+      }
+
+      // Create time entry
+      const entryInsertData = {
+        timesheet_id: new mongoose.Types.ObjectId(timesheetId),
+        project_id: entryData.project_id ? new mongoose.Types.ObjectId(entryData.project_id) : undefined,
+        task_id: entryData.task_id ? new mongoose.Types.ObjectId(entryData.task_id) : undefined,
+        date: new Date(entryData.date),
+        hours: entryData.hours,
+        description: entryData.description,
+        is_billable: entryData.is_billable,
+        custom_task_description: entryData.custom_task_description,
+        entry_type: entryData.entry_type
+      };
+
+      const entry = await TimeEntry.create(entryInsertData);
+
+      // Update timesheet total hours
+      await this.updateTimesheetTotalHours(timesheetId);
+
+      console.log('Time entry created successfully:', entry);
+      return { entry };
+    } catch (error) {
+      console.error('Error in addTimeEntry:', error);
+      return { error: error instanceof Error ? error.message : 'Failed to add time entry' };
+    }
+  }
+
+  /**
+   * Validate time entry for overlaps and business rules
+   */
+  private static async validateTimeEntry(
+    timesheetId: string,
+    entryData: TimeEntryForm,
+    excludeEntryId?: string
+  ): Promise<{ valid: boolean; error?: string }> {
+    try {
+      // Get existing entries for the date
+      const query: any = {
+        timesheet_id: new mongoose.Types.ObjectId(timesheetId),
+        date: new Date(entryData.date),
+        deleted_at: null
+      };
+
+      if (excludeEntryId) {
+        query._id = { $ne: new mongoose.Types.ObjectId(excludeEntryId) };
+      }
+
+      const existingEntries = await TimeEntry.find(query);
+
+      // Check for duplicate project/task combinations
+      if (entryData.entry_type === 'project_task' && entryData.project_id && entryData.task_id) {
+        const duplicateProjectTask = existingEntries.find(e =>
+          e.entry_type === 'project_task' &&
+          e.project_id?.toString() === entryData.project_id &&
+          e.task_id?.toString() === entryData.task_id
+        );
+
+        if (duplicateProjectTask) {
+          return {
+            valid: false,
+            error: 'A time entry for this project and task already exists on this date. Please update the existing entry instead.'
+          };
+        }
+      }
+
+      // Check for duplicate custom tasks
+      if (entryData.entry_type === 'custom_task' && entryData.custom_task_description) {
+        const duplicateCustomTask = existingEntries.find(e =>
+          e.entry_type === 'custom_task' &&
+          e.custom_task_description === entryData.custom_task_description
+        );
+
+        if (duplicateCustomTask) {
+          return {
+            valid: false,
+            error: 'A custom task with this description already exists on this date. Please update the existing entry instead.'
+          };
+        }
+      }
+
+      // Check daily hours limit (8-10 hours business rule)
+      const currentDayHours = existingEntries.reduce((sum, entry) => sum + entry.hours, 0);
+      const totalHoursWithNewEntry = currentDayHours + entryData.hours;
+
+      if (totalHoursWithNewEntry > 10) {
+        return {
+          valid: false,
+          error: `Total hours for this date would exceed the maximum limit of 10 hours (current: ${currentDayHours}, adding: ${entryData.hours}, total: ${totalHoursWithNewEntry})`
+        };
+      }
+
+      if (entryData.hours <= 0) {
+        return {
+          valid: false,
+          error: 'Hours must be greater than zero'
+        };
+      }
+
+      return { valid: true };
+    } catch (error) {
+      console.error('Error in validateTimeEntry:', error);
+      return { valid: false, error: 'Failed to validate time entry' };
+    }
+  }
+
+  /**
+   * Update timesheet total hours (called automatically after entry changes)
+   */
+  private static async updateTimesheetTotalHours(timesheetId: string): Promise<void> {
+    try {
+      console.log('Updating total hours for timesheet:', timesheetId);
+
+      // Calculate total hours from time entries
+      const entries = await TimeEntry.find({
+        timesheet_id: new mongoose.Types.ObjectId(timesheetId),
+        deleted_at: null
+      });
+
+      const totalHours = entries.reduce((sum, entry) => sum + entry.hours, 0);
+      console.log('Calculated total hours:', totalHours);
+
+      // Update timesheet
+      await Timesheet.findByIdAndUpdate(timesheetId, {
+        total_hours: totalHours,
+        updated_at: new Date()
+      });
+
+      console.log('Timesheet total hours updated successfully');
+    } catch (error) {
+      console.error('Error in updateTimesheetTotalHours:', error);
+    }
+  }
+
+  /**
+   * Check if timesheet can be modified
+   */
+  static canModifyTimesheet(timesheet: ITimesheet): boolean {
+    return ['draft', 'manager_rejected', 'management_rejected'].includes(timesheet.status) &&
+      !timesheet.is_frozen;
+  }
+
+  /**
+   * Check if timesheet is frozen
+   */
+  static isTimesheetFrozen(timesheet: ITimesheet): boolean {
+    return timesheet.is_frozen || timesheet.status === 'frozen' || timesheet.status === 'billed';
+  }
+
+  /**
+   * Check if timesheet is billed
+   */
+  static isTimesheetBilled(timesheet: ITimesheet): boolean {
+    return timesheet.status === 'billed';
+  }
+}
+
+export default TimesheetService;

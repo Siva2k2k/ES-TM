@@ -1,0 +1,93 @@
+import mongoose, { Document, Schema } from 'mongoose';
+
+export type UserRole = 'super_admin' | 'management' | 'manager' | 'lead' | 'employee';
+
+export interface IUser extends Document {
+  _id: mongoose.Types.ObjectId;
+  email: string;
+  full_name: string;
+  role: UserRole;
+  hourly_rate: number;
+  is_active: boolean;
+  is_approved_by_super_admin: boolean;
+  manager_id?: mongoose.Types.ObjectId;
+  password_hash?: string;
+  created_at: Date;
+  updated_at: Date;
+  deleted_at?: Date;
+}
+
+const UserSchema: Schema = new Schema({
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    lowercase: true,
+    trim: true
+  },
+  full_name: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  role: {
+    type: String,
+    enum: ['super_admin', 'management', 'manager', 'lead', 'employee'],
+    default: 'employee'
+  },
+  hourly_rate: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  is_active: {
+    type: Boolean,
+    default: true
+  },
+  is_approved_by_super_admin: {
+    type: Boolean,
+    default: false
+  },
+  manager_id: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    required: false
+  },
+  password_hash: {
+    type: String,
+    required: false
+  },
+  deleted_at: {
+    type: Date,
+    required: false
+  }
+}, {
+  timestamps: {
+    createdAt: 'created_at',
+    updatedAt: 'updated_at'
+  }
+});
+
+// Indexes
+UserSchema.index({ email: 1 });
+UserSchema.index({ role: 1 });
+UserSchema.index({ is_active: 1 });
+UserSchema.index({ manager_id: 1 });
+UserSchema.index({ deleted_at: 1 });
+
+// Virtual for ID as string
+UserSchema.virtual('id').get(function() {
+  return (this._id as any).toHexString();
+});
+
+UserSchema.set('toJSON', {
+  virtuals: true,
+  transform: function(_doc: any, ret: any) {
+    delete ret._id;
+    delete ret.__v;
+    if (ret.password_hash) delete ret.password_hash; // Never expose password hash
+    return ret;
+  }
+});
+
+export default mongoose.models.User || mongoose.model<IUser>('User', UserSchema);

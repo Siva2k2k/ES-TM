@@ -11,11 +11,11 @@ import path from 'path';
 import dotenv from 'dotenv';
 
 import { connectDB } from './config/database';
-import { logger } from './config/logger';
+import logger from './config/logger';
 import { configurePassport } from './config/passport';
-import { errorHandler } from './middleware/errorHandler';
+import { errorHandler, notFound } from './middleware/errorHandler';
 import { checkMaintenanceMode } from './middleware/auth';
-import routes from './routes';
+import { registerRoutes } from './routes';
 
 dotenv.config();
 
@@ -79,7 +79,13 @@ app.get('/health', (req, res) => {
 });
 
 // API routes
-app.use('/api/v1', routes);
+registerRoutes(app);
+
+// 404 handler for API routes
+app.use('/api/*', notFound);
+
+// Global error handler
+app.use(errorHandler);
 
 // Serve static files from frontend build directory
 const frontendDistPath = path.join(__dirname, '../../frontend/dist');
