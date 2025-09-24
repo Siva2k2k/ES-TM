@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 import { connectDB } from '../config/database';
 import { User, Client, Project, Task } from '../models';
-import { logger } from '../config/logger';
+import logger from '../config/logger';
 
 dotenv.config();
 
@@ -15,17 +15,17 @@ const seedData = async (): Promise<void> => {
     logger.info('🌱 Starting database seeding...');
 
     // Clear existing data (optional - remove in production)
-    await User.deleteMany({});
-    await Client.deleteMany({});
-    await Project.deleteMany({});
-    await Task.deleteMany({});
+    await (User.deleteMany as any)({}).exec();
+    await (Client.deleteMany as any)({}).exec();
+    await (Project.deleteMany as any)({}).exec();
+    await (Task.deleteMany as any)({}).exec();
     
     logger.info('🧹 Cleared existing data');
 
     // Create users
     const hashedPassword = await bcrypt.hash('admin123', 12);
     
-    const users = await User.insertMany([
+    const users = await (User.create as any)([
       {
         email: 'admin@company.com',
         full_name: 'System Administrator',
@@ -67,7 +67,7 @@ const seedData = async (): Promise<void> => {
     logger.info(`👥 Created ${users.length} users`);
 
     // Create clients
-    const clients = await Client.insertMany([
+    const clients = await (Client.create as any)([
       {
         name: 'Tech Solutions Inc',
         description: 'A technology consulting company',
@@ -85,7 +85,7 @@ const seedData = async (): Promise<void> => {
     logger.info(`🏢 Created ${clients.length} clients`);
 
     // Create projects
-    const projects = await Project.insertMany([
+    const projects = await (Project.create as any)([
       {
         name: 'Website Redesign',
         description: 'Complete website redesign and development',
@@ -118,7 +118,7 @@ const seedData = async (): Promise<void> => {
     logger.info(`📋 Created ${projects.length} projects`);
 
     // Create tasks
-    const tasks = await Task.insertMany([
+    const tasks = await (Task.create as any)([
       {
         name: 'Frontend Development',
         description: 'Develop responsive frontend components',

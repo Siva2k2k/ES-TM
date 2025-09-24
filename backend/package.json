@@ -8,10 +8,6 @@
     "dev": "nodemon -r tsconfig-paths/register src/index.ts",
     "clean": "rm -rf dist",
     "seed": "ts-node -r tsconfig-paths/register src/scripts/seed.ts",
-    "test:db": "ts-node -r tsconfig-paths/register src/scripts/test-db-connection.ts",
-    "test:auth": "ts-node -r tsconfig-paths/register src/scripts/test-auth.ts",
-    "debug:env": "ts-node -r tsconfig-paths/register src/scripts/debug-env.ts",
-    "test:noauth": "ts-node -r tsconfig-paths/register src/scripts/test-no-auth.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

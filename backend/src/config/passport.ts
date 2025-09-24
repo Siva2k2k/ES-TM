@@ -1,7 +1,7 @@
 import passport from 'passport';
 import { Strategy as JwtStrategy, ExtractJwt } from 'passport-jwt';
 import { User } from '../models';
-import { logger } from './logger';
+import logger from './logger';
 
 export const configurePassport = (): void => {
   // JWT Strategy
@@ -13,7 +13,7 @@ export const configurePassport = (): void => {
   passport.use(
     new JwtStrategy(jwtOptions, async (payload, done) => {
       try {
-        const user = await User.findById(payload.sub).select('-password');
+        const user = await (User.findById as any)(payload.sub).select('-password').exec();
         
         if (user) {
           return done(null, user);
@@ -35,7 +35,7 @@ export const configurePassport = (): void => {
   // Deserialize user from session (if using sessions)
   passport.deserializeUser(async (id: string, done) => {
     try {
-      const user = await User.findById(id).select('-password');
+      const user = await (User.findById as any)(id).select('-password').exec();
       done(null, user);
     } catch (error) {
       done(error, null);

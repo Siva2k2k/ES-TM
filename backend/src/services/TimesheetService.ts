@@ -75,10 +75,11 @@ export class TimesheetService {
         throw new AuthorizationError('Only super admin and management can view all timesheets');
       }
 
-      const timesheets = await Timesheet.find({ deleted_at: null })
+      const timesheets = await (Timesheet.find as any)({ deleted_at: null })
         .populate('user_id', 'full_name email role')
         .sort({ week_start_date: -1 })
-        .lean();
+        .lean()
+        .exec();
 
       return { timesheets };
     } catch (error) {
@@ -103,13 +104,14 @@ export class TimesheetService {
         throw new AuthorizationError('Insufficient permissions to view timesheets by status');
       }
 
-      const timesheets = await Timesheet.find({
+      const timesheets = await (Timesheet.find as any)({
         status,
         deleted_at: null
       })
         .populate('user_id', 'full_name email role')
         .sort({ week_start_date: -1 })
-        .lean();
+        .lean()
+        .exec();
 
       return { timesheets };
     } catch (error) {
@@ -198,7 +200,7 @@ export class TimesheetService {
         { $limit: limit }
       ];
 
-      const timesheets = await Timesheet.aggregate(pipeline as any);
+      const timesheets = await (Timesheet.aggregate as any)(pipeline).exec();
 
       // Enhance timesheets with calculated fields
       const enhancedTimesheets: TimesheetWithDetails[] = timesheets.map(ts => {
@@ -259,11 +261,11 @@ export class TimesheetService {
       validateTimesheetAccess(currentUser, userId, 'create');
 
       // Check if timesheet already exists for this user and week
-      const existingTimesheet = await Timesheet.findOne({
+      const existingTimesheet = await (Timesheet.findOne as any)({
         user_id: new mongoose.Types.ObjectId(userId),
         week_start_date: new Date(weekStartDate),
         deleted_at: null
-      });
+      }).exec();
 
       if (existingTimesheet) {
         throw new ConflictError(
@@ -287,7 +289,7 @@ export class TimesheetService {
         is_frozen: false
       };
 
-      const timesheet = await Timesheet.create(timesheetData);
+      const timesheet = await (Timesheet.create as any)(timesheetData);
 
       console.log('Timesheet created successfully:', timesheet);
       return { timesheet };
@@ -345,7 +347,7 @@ export class TimesheetService {
         }
       ];
 
-      const results = await Timesheet.aggregate(pipeline as any);
+      const results = await (Timesheet.aggregate as any)(pipeline).exec();
       const timesheet = results[0];
 
       if (!timesheet) {
@@ -397,10 +399,10 @@ export class TimesheetService {
       console.log('TimesheetService.submitTimesheet called for ID:', timesheetId);
 
       // Get timesheet
-      const timesheet = await Timesheet.findOne({
+      const timesheet = await (Timesheet.findOne as any)({
         _id: new mongoose.Types.ObjectId(timesheetId),
         deleted_at: null
-      });
+      }).exec();
 
       if (!timesheet) {
         throw new NotFoundError('Timesheet not found');
@@ -420,11 +422,11 @@ export class TimesheetService {
       }
 
       // Update status
-      await Timesheet.findByIdAndUpdate(timesheetId, {
+      await (Timesheet.findByIdAndUpdate as any)(timesheetId, {
         status: 'submitted',
         submitted_at: new Date(),
         updated_at: new Date()
-      });
+      }).exec();
 
       console.log('Timesheet submitted successfully:', timesheetId);
       return { success: true };
@@ -449,10 +451,10 @@ export class TimesheetService {
     try {
       requireManagerRole(currentUser);
 
-      const timesheet = await Timesheet.findOne({
+      const timesheet = await (Timesheet.findOne as any)({
         _id: new mongoose.Types.ObjectId(timesheetId),
         deleted_at: null
-      });
+      }).exec();
 
       if (!timesheet) {
         throw new NotFoundError('Timesheet not found');
@@ -483,7 +485,7 @@ export class TimesheetService {
         };
       }
 
-      await Timesheet.findByIdAndUpdate(timesheetId, updateData);
+      await (Timesheet.findByIdAndUpdate as any)(timesheetId, updateData).exec();
 
       console.log(`Manager ${action}ed timesheet: ${timesheetId}`);
       return { success: true };
@@ -508,10 +510,10 @@ export class TimesheetService {
     try {
       requireManagementRole(currentUser);
 
-      const timesheet = await Timesheet.findOne({
+      const timesheet = await (Timesheet.findOne as any)({
         _id: new mongoose.Types.ObjectId(timesheetId),
         deleted_at: null
-      }).populate('user_id', 'hourly_rate');
+      }).populate('user_id', 'hourly_rate').exec();
 
       if (!timesheet) {
         throw new NotFoundError('Timesheet not found');
@@ -546,7 +548,7 @@ export class TimesheetService {
         };
       }
 
-      await Timesheet.findByIdAndUpdate(timesheetId, updateData);
+      await (Timesheet.findByIdAndUpdate as any)(timesheetId, updateData).exec();
 
       console.log(`Management ${action}ed timesheet: ${timesheetId}`);
       return { success: true };
@@ -597,10 +599,10 @@ export class TimesheetService {
       console.log('TimesheetService.addTimeEntry called with:', { timesheetId, entryData });
 
       // Get timesheet to validate permissions
-      const timesheet = await Timesheet.findOne({
+      const timesheet = await (Timesheet.findOne as any)({
         _id: new mongoose.Types.ObjectId(timesheetId),
         deleted_at: null
-      });
+      }).exec();
 
       if (!timesheet) {
         throw new NotFoundError('Timesheet not found');
@@ -633,7 +635,7 @@ export class TimesheetService {
         entry_type: entryData.entry_type
       };
 
-      const entry = await TimeEntry.create(entryInsertData);
+      const entry = await (TimeEntry.create as any)(entryInsertData);
 
       // Update timesheet total hours
       await this.updateTimesheetTotalHours(timesheetId);
@@ -666,7 +668,7 @@ export class TimesheetService {
         query._id = { $ne: new mongoose.Types.ObjectId(excludeEntryId) };
       }
 
-      const existingEntries = await TimeEntry.find(query);
+      const existingEntries = await (TimeEntry.find as any)(query).exec();
 
       // Check for duplicate project/task combinations
       if (entryData.entry_type === 'project_task' && entryData.project_id && entryData.task_id) {
@@ -732,19 +734,19 @@ export class TimesheetService {
       console.log('Updating total hours for timesheet:', timesheetId);
 
       // Calculate total hours from time entries
-      const entries = await TimeEntry.find({
+      const entries = await (TimeEntry.find as any)({
         timesheet_id: new mongoose.Types.ObjectId(timesheetId),
         deleted_at: null
-      });
+      }).exec();
 
       const totalHours = entries.reduce((sum, entry) => sum + entry.hours, 0);
       console.log('Calculated total hours:', totalHours);
 
       // Update timesheet
-      await Timesheet.findByIdAndUpdate(timesheetId, {
+      await (Timesheet.findByIdAndUpdate as any)(timesheetId, {
         total_hours: totalHours,
         updated_at: new Date()
-      });
+      }).exec();
 
       console.log('Timesheet total hours updated successfully');
     } catch (error) {

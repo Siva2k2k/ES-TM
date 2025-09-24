@@ -1,35 +1,17 @@
 import { supabase } from '../lib/supabase';
+import { BackendTimesheetService } from './BackendTimesheetService';
 import type { Timesheet, TimeEntry, TimesheetStatus, TimesheetWithDetails } from '../types';
 
 /**
- * Timesheet Management Service - Supabase Integration
- * Enhanced to support new workflow with management_pending and billed statuses
+ * Timesheet Management Service - Hybrid Backend/Supabase Integration
+ * Core timesheet operations use Backend API, auth and dashboard use Supabase
  */
 export class TimesheetService {
   /**
-   * Get all timesheets (Super Admin and Management)
+   * Get all timesheets (Super Admin and Management) - Using Backend API
    */
   static async getAllTimesheets(): Promise<{ timesheets: Timesheet[]; error?: string }> {
-    try {
-      const { data, error } = await supabase
-        .from('timesheets')
-        .select(`
-          *,
-          users!inner(full_name, email, role)
-        `)
-        .is('deleted_at', null)
-        .order('week_start_date', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching all timesheets:', error);
-        return { timesheets: [], error: error.message };
-      }
-
-      return { timesheets: data as Timesheet[] };
-    } catch (error) {
-      console.error('Error in getAllTimesheets:', error);
-      return { timesheets: [], error: 'Failed to fetch timesheets' };
-    }
+    return BackendTimesheetService.getAllTimesheets();
   }
 
   /**
@@ -60,7 +42,7 @@ export class TimesheetService {
   }
 
   /**
-   * Get user's timesheets using the API function
+   * Get user's timesheets - Using Backend API
    */
   static async getUserTimesheets(
     userId?: string,
@@ -69,148 +51,31 @@ export class TimesheetService {
     limit = 50,
     offset = 0
   ): Promise<{ timesheets: TimesheetWithDetails[]; total: number; error?: string }> {
-    try {
-      let query = supabase
-        .from('timesheets')
-        .select(`
-          *,
-          time_entries (
-            id,
-            project_id,
-            task_id,
-            date,
-            hours,
-            description,
-            is_billable,
-            custom_task_description,
-            entry_type,
-            created_at,
-            updated_at
-          )
-        `)
-        .is('deleted_at', null)
-        .order('week_start_date', { ascending: false });
-
-      // Add user filter if provided
-      if (userId) {
-        query = query.eq('user_id', userId);
-      }
-
-      // Add status filter if provided
-      if (statusFilter && statusFilter.length > 0) {
-        query = query.in('status', statusFilter);
-      }
-
-      // Add week start filter if provided
-      if (weekStartFilter) {
-        query = query.eq('week_start_date', weekStartFilter);
-      }
-
-      // Add pagination
-      query = query.range(offset, offset + limit - 1);
-
-      const { data, error } = await query;
-
-      if (error) {
-        console.error('Error fetching user timesheets:', error);
-        return { timesheets: [], total: 0, error: error.message };
-      }
-
-      return {
-        timesheets: (data || []) as TimesheetWithDetails[],
-        total: data?.length || 0
-      };
-    } catch (error) {
-      console.error('Error in getUserTimesheets:', error);
-      return { timesheets: [], total: 0, error: 'Failed to fetch user timesheets' };
-    }
+    return BackendTimesheetService.getUserTimesheets(userId, statusFilter, weekStartFilter, limit, offset);
   }
 
   /**
-   * Create new timesheet
+   * Create new timesheet - Using Backend API with auth check
    */
   static async createTimesheet(userId: string, weekStartDate: string): Promise<{ timesheet?: Timesheet; error?: string }> {
     try {
-      console.log('TimesheetService.createTimesheet called with:', { userId, weekStartDate });
-
-      // Check current auth user
+      // Verify auth with Supabase first
       const { data: { user }, error: authError } = await supabase.auth.getUser();
-      console.log('Current auth user:', user?.id, 'Target user ID:', userId);
 
       if (authError) {
-        console.error('Auth error:', authError);
         return { error: 'Authentication error: ' + authError.message };
       }
 
       if (!user) {
-        console.error('No authenticated user found');
         return { error: 'User not authenticated' };
       }
 
       if (user.id !== userId) {
-        console.error('Auth user ID mismatch:', { authUserId: user.id, targetUserId: userId });
         return { error: 'User ID mismatch - cannot create timesheet for different user' };
       }
 
-      // Check if a timesheet already exists for this user and week
-      // Use `match` to combine filters into a single call which is easier to mock
-      const { data: existingTimesheet, error: checkError } = await supabase
-        .from('timesheets')
-        .select('id, status')
-        .match({ user_id: userId, week_start_date: weekStartDate })
-        .is('deleted_at', null)
-        .maybeSingle();
-
-      if (checkError) {
-        console.error('Error checking for existing timesheet:', checkError);
-        return { error: 'Error checking for existing timesheet: ' + checkError.message };
-      }
-
-      if (existingTimesheet) {
-        console.warn('Timesheet already exists for this week:', existingTimesheet);
-        return { error: `A timesheet already exists for the week starting ${weekStartDate}. Status: ${existingTimesheet.status}` };
-      }
-
-      const weekEndDate = new Date(weekStartDate);
-      weekEndDate.setDate(weekEndDate.getDate() + 6);
-
-      console.log('Attempting to insert timesheet with data:', {
-        user_id: userId,
-        week_start_date: weekStartDate,
-        week_end_date: weekEndDate.toISOString().split('T')[0],
-        total_hours: 0,
-        status: 'draft',
-        is_verified: false,
-        is_frozen: false
-      });
-
-      const { data, error } = await supabase
-        .from('timesheets')
-        .insert({
-          user_id: userId,
-          week_start_date: weekStartDate,
-          week_end_date: weekEndDate.toISOString().split('T')[0],
-          total_hours: 0,
-          status: 'draft',
-          is_verified: false,
-          is_frozen: false
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Supabase insert error:', error);
-
-        // Handle duplicate key error specifically
-        if (error.code === '23505' && error.message.includes('timesheets_user_id_week_start_date_key')) {
-          return { error: `A timesheet already exists for the week starting ${weekStartDate}. Please edit the existing timesheet instead.` };
-        }
-
-        return { error: error.message };
-      }
-
-      console.log('Timesheet created successfully:', data);
-      return { timesheet: data as Timesheet };
+      // Use backend service for the actual creation
+      return BackendTimesheetService.createTimesheet(userId, weekStartDate);
     } catch (error) {
       console.error('Error in createTimesheet:', error);
       return { error: 'Failed to create timesheet' };
@@ -218,153 +83,42 @@ export class TimesheetService {
   }
 
   /**
-   * Get timesheet for specific user and week
+   * Get timesheet for specific user and week - Using Backend API
    */
   static async getTimesheetByUserAndWeek(userId: string, weekStartDate: string): Promise<{ timesheet?: TimesheetWithDetails; error?: string }> {
-    try {
-      const { data, error } = await supabase.rpc('api_get_user_timesheets', {
-        target_user_id: userId,
-        status_filter: null,
-        week_start_filter: weekStartDate,
-        limit_count: 1,
-        offset_count: 0
-      });
-
-      if (error) {
-        console.error('Error fetching timesheet by user and week:', error);
-        return { error: error.message };
-      }
-
-      const result = data as { success: boolean; data: TimesheetWithDetails[]; total: number };
-
-      if (!result.success) {
-        return { error: 'API call failed' };
-      }
-
-      const timesheets = result.data || [];
-      return { timesheet: timesheets.length > 0 ? timesheets[0] : undefined };
-    } catch (error) {
-      console.error('Error in getTimesheetByUserAndWeek:', error);
-      return { error: 'Failed to fetch timesheet' };
-    }
+    return BackendTimesheetService.getTimesheetByUserAndWeek(userId, weekStartDate);
   }
 
   /**
    * Submit timesheet for approval using database function
    */
   /**
-   * Submit timesheet for approval with enhanced team notifications
+   * Submit timesheet for approval - Using Backend API
    */
   static async submitTimesheet(timesheetId: string): Promise<{ success: boolean; error?: string }> {
-    try {
-      console.log('📤 TimesheetService.submitTimesheet called for ID:', timesheetId);
-
-      // Test basic Supabase connectivity first
-      console.log('🔍 Testing basic Supabase connectivity...');
-
-      try {
-        // Test 1: Try a simple table query without filters
-        console.log('� Test 1: Basic table access test...');
-        const { data: testData, error: testError } = await supabase
-          .from('timesheets')
-          .select('id')
-          .limit(1);
-
-        console.log('📋 Basic table test result:', {
-          hasData: !!testData,
-          dataLength: testData?.length || 0,
-          error: testError
-        });
-
-        if (testError) {
-          console.error('❌ Basic table access failed:', testError);
-          return { success: false, error: `Database access denied: ${testError.message}` };
-        }
-      } catch (connectError) {
-        console.error('💥 Connection test failed:', connectError);
-        return { success: false, error: 'Database connection failed' };
-      }
-
-      // Test 2: Try the specific update
-      console.log('🔄 Test 2: Attempting status update...');
-      const { error: updateError } = await supabase
-        .from('timesheets')
-        .update({
-          status: 'submitted',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', timesheetId);
-
-      console.log('📊 Update result:', { error: updateError });
-
-      if (updateError) {
-        console.error('❌ Error updating timesheet status:', updateError);
-        return { success: false, error: updateError.message };
-      }
-
-      console.log('✅ Status update successful!');
-      console.log(`✅ Timesheet submitted successfully: ${timesheetId}`);
-      return { success: true };
-    } catch (error) {
-      console.error('💥 Error in submitTimesheet:', error);
-      return { success: false, error: 'Failed to submit timesheet' };
-    }
+    return BackendTimesheetService.submitTimesheet(timesheetId);
   }
 
   /**
-   * Manager approve/reject timesheet using database function
+   * Manager approve/reject timesheet - Using Backend API
    */
   static async managerApproveRejectTimesheet(
     timesheetId: string,
     action: 'approve' | 'reject',
     reason?: string
   ): Promise<{ success: boolean; error?: string }> {
-    try {
-      const { error } = await supabase.rpc('manager_approve_reject_timesheet', {
-        timesheet_uuid: timesheetId,
-        action,
-        reason: reason || null
-      });
-
-      if (error) {
-        console.error('Error in manager timesheet action:', error);
-        return { success: false, error: error.message };
-      }
-
-      console.log(`Manager ${action}ed timesheet: ${timesheetId}`);
-      return { success: true };
-    } catch (error) {
-      console.error('Error in managerApproveRejectTimesheet:', error);
-      return { success: false, error: `Failed to ${action} timesheet` };
-    }
+    return BackendTimesheetService.managerApproveRejectTimesheet(timesheetId, action, reason);
   }
 
   /**
-   * Management approve/reject timesheet using database function
+   * Management approve/reject timesheet - Using Backend API
    */
   static async managementApproveRejectTimesheet(
     timesheetId: string,
     action: 'approve' | 'reject',
     reason?: string
   ): Promise<{ success: boolean; error?: string }> {
-    try {
-      const { error } = await supabase.rpc('management_approve_reject_timesheet', {
-        timesheet_uuid: timesheetId,
-        action,
-        reason: reason || null
-      });
-
-      if (error) {
-        console.error('Error in management timesheet action:', error);
-        return { success: false, error: error.message };
-      }
-
-      console.log(`Management ${action}ed timesheet: ${timesheetId}`);
-      return { success: true };
-    } catch (error) {
-      console.error('Error in managementApproveRejectTimesheet:', error);
-      return { success: false, error: `Failed to ${action} timesheet` };
-    }
+    return BackendTimesheetService.managementApproveRejectTimesheet(timesheetId, action, reason);
   }
 
   /**
@@ -412,7 +166,7 @@ export class TimesheetService {
   }
 
   /**
-   * Get timesheet dashboard data
+   * Get timesheet dashboard data - Using Backend/Supabase (keeping Supabase for now)
    */
   static async getTimesheetDashboard(): Promise<{
     totalTimesheets: number;
@@ -426,63 +180,7 @@ export class TimesheetService {
     completionRate: number;
     error?: string;
   }> {
-    try {
-      const { data, error } = await supabase
-        .from('timesheets')
-        .select('status, total_hours')
-        .is('deleted_at', null);
-
-      if (error) {
-        console.error('Error fetching timesheet dashboard:', error);
-        return {
-          totalTimesheets: 0,
-          pendingApproval: 0,
-          pendingManagement: 0,
-          pendingBilling: 0,
-          verified: 0,
-          billed: 0,
-          totalHours: 0,
-          averageHoursPerWeek: 0,
-          completionRate: 0,
-          error: error.message
-        };
-      }
-
-      const timesheets = data as { status: TimesheetStatus; total_hours: number }[];
-      const totalTimesheets = timesheets.length;
-      const pendingApproval = timesheets.filter(ts => ts.status === 'submitted').length;
-      const pendingManagement = timesheets.filter(ts => ts.status === 'management_pending').length;
-      const pendingBilling = timesheets.filter(ts => ts.status === 'frozen').length;
-      const verified = timesheets.filter(ts => ts.status === 'frozen').length;
-      const billed = timesheets.filter(ts => ts.status === 'billed').length;
-      const totalHours = timesheets.reduce((sum, ts) => sum + ts.total_hours, 0);
-
-      return {
-        totalTimesheets,
-        pendingApproval,
-        pendingManagement,
-        pendingBilling,
-        verified,
-        billed,
-        totalHours,
-        averageHoursPerWeek: totalHours / Math.max(totalTimesheets, 1),
-        completionRate: (verified / Math.max(totalTimesheets, 1)) * 100
-      };
-    } catch (error) {
-      console.error('Error in getTimesheetDashboard:', error);
-      return {
-        totalTimesheets: 0,
-        pendingApproval: 0,
-        pendingManagement: 0,
-        pendingBilling: 0,
-        verified: 0,
-        billed: 0,
-        totalHours: 0,
-        averageHoursPerWeek: 0,
-        completionRate: 0,
-        error: 'Failed to fetch dashboard data'
-      };
-    }
+    return BackendTimesheetService.getTimesheetDashboard();
   }
 
   /**
@@ -614,7 +312,7 @@ export class TimesheetService {
   }
 
   /**
-   * Add time entry to timesheet
+   * Add time entry to timesheet - Using Backend API
    */
   static async addTimeEntry(
     timesheetId: string,
@@ -629,51 +327,7 @@ export class TimesheetService {
       entry_type: 'project_task' | 'custom_task';
     }
   ): Promise<{ entry?: TimeEntry; error?: string }> {
-    try {
-      console.log('⏰ TimesheetService.addTimeEntry called with:', { timesheetId, entryData });
-
-      // Validate the time entry before adding
-      const validation = await this.validateTimeEntry(timesheetId, entryData);
-      if (!validation.valid) {
-        console.error('❌ Time entry validation failed:', validation.error);
-        return { error: validation.error };
-      }
-
-      // Convert empty strings to null for UUID fields
-      const insertData = {
-        timesheet_id: timesheetId,
-        project_id: entryData.project_id || null,
-        task_id: entryData.task_id || null,
-        date: entryData.date,
-        hours: entryData.hours,
-        description: entryData.description,
-        is_billable: entryData.is_billable,
-        custom_task_description: entryData.custom_task_description,
-        entry_type: entryData.entry_type
-      };
-
-      console.log('📝 Inserting time entry with data:', insertData);
-      const { data, error } = await supabase
-        .from('time_entries')
-        .insert(insertData)
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Supabase error adding time entry:', error);
-        return { error: error.message };
-      }
-
-      console.log('✅ Time entry created successfully:', data);
-
-      // Update timesheet total hours
-      await this.updateTimesheetTotalHours(timesheetId);
-
-      return { entry: data as TimeEntry };
-    } catch (error) {
-      console.error('Error in addTimeEntry:', error);
-      return { error: 'Failed to add time entry' };
-    }
+    return BackendTimesheetService.addTimeEntry(timesheetId, entryData);
   }
 
   /**
@@ -1190,69 +844,12 @@ export class TimesheetService {
   }
 
   /**
-   * Get timesheets for approval (Manager/Management view)
+   * Get timesheets for approval (Manager/Management view) - Using Backend API
    */
   static async getTimesheetsForApproval(
     approverRole: 'manager' | 'management' | 'lead'
   ): Promise<{ timesheets: TimesheetWithDetails[]; error?: string }> {
-    try {
-      let statusFilter: TimesheetStatus[];
-
-      if (approverRole === 'lead') {
-        // Lead can view all statuses but cannot approve
-        statusFilter = ['draft', 'submitted', 'manager_approved', 'manager_rejected', 'frozen'];
-      } else if (approverRole === 'manager') {
-        statusFilter = ['submitted', 'management_rejected'];
-      } else {
-        statusFilter = ['management_pending'];
-      }
-
-      const { data, error } = await supabase
-        .from('timesheets')
-        .select(`
-          *,
-          users!inner(full_name, email, role)
-        `)
-        .in('status', statusFilter)
-        .is('deleted_at', null)
-        .order('submitted_at', { ascending: true });
-
-      if (error) {
-        console.error('Error fetching timesheets for approval:', error);
-        return { timesheets: [], error: error.message };
-      }
-
-      // Enhance with time entries
-      const enhancedTimesheets: TimesheetWithDetails[] = [];
-
-      for (const timesheet of data) {
-        const { entries } = await this.getTimeEntries(timesheet.id);
-
-        const billableHours = entries.filter(e => e.is_billable).reduce((sum, e) => sum + e.hours, 0);
-        const nonBillableHours = entries.filter(e => !e.is_billable).reduce((sum, e) => sum + e.hours, 0);
-
-        enhancedTimesheets.push({
-          ...timesheet,
-          time_entries: entries,
-          entries,
-          user_name: timesheet.users.full_name,
-          user_email: timesheet.users.email,
-          user: timesheet.users,
-          billableHours,
-          nonBillableHours,
-          can_edit: approverRole !== 'lead', // Lead cannot edit
-          can_submit: false,
-          can_approve: approverRole !== 'lead', // Lead cannot approve
-          can_reject: approverRole !== 'lead', // Lead cannot reject
-          next_action: this.getNextAction(timesheet.status)
-        });
-      }
-
-      return { timesheets: enhancedTimesheets };
-    } catch (error) {
-      console.error('Error in getTimesheetsForApproval:', error);
-      return { timesheets: [], error: 'Failed to fetch timesheets for approval' };
-    }
+    return BackendTimesheetService.getTimesheetsForApproval(approverRole);
   }
 
   /**
