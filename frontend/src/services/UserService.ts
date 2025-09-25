@@ -1,4 +1,4 @@
-import { backendApi } from '../lib/backendApi';
+import { backendApi, BackendApiError } from '../lib/backendApi';
 import type { User, UserRole } from '../types';
 
 /**
@@ -11,13 +11,19 @@ export class UserService {
    */
   static async createUser(userData: Partial<User>): Promise<{ user?: User; error?: string }> {
     try {
-      const response = await backendApi.post<{ success: boolean; user?: User; error?: string }>('/api/v1/users', {
+      const requestBody: any = {
         email: userData.email!,
         full_name: userData.full_name!,
         role: userData.role || 'employee',
-        hourly_rate: userData.hourly_rate || 50,
-        manager_id: userData.manager_id || null
-      });
+        hourly_rate: userData.hourly_rate || 50
+      };
+      
+      // Only include manager_id if it's provided and not null
+      if (userData.manager_id) {
+        requestBody.manager_id = userData.manager_id;
+      }
+
+      const response = await backendApi.post<{ success: boolean; user?: User; error?: string }>('/users', requestBody);
 
       if (response.success) {
         console.log('Super Admin created user directly:', response.user);
@@ -28,10 +34,21 @@ export class UserService {
       }
     } catch (error: unknown) {
       console.error('Error in createUser:', error);
-      const errorMessage = (error as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error 
-        || (error as { message?: string })?.message 
-        || 'Failed to create user';
-      return { error: errorMessage };
+      
+      // Handle BackendApiError specifically
+      if (error instanceof Error) {
+        const errorMessage = error.message || 'Failed to create user';
+        const apiError = error as BackendApiError;
+        console.error('Detailed error:', { 
+          name: error.name, 
+          message: error.message, 
+          status: apiError.status,
+          code: apiError.code 
+        });
+        return { error: errorMessage };
+      }
+      
+      return { error: 'Failed to create user' };
     }
   }
 
@@ -40,13 +57,19 @@ export class UserService {
    */
   static async createUserForApproval(userData: Partial<User>): Promise<{ user?: User; error?: string }> {
     try {
-      const response = await backendApi.post<{ success: boolean; user?: User; error?: string }>('/api/v1/users/for-approval', {
+      const requestBody: any = {
         email: userData.email!,
         full_name: userData.full_name!,
         role: userData.role || 'employee',
-        hourly_rate: userData.hourly_rate || 50,
-        manager_id: userData.manager_id || null
-      });
+        hourly_rate: userData.hourly_rate || 50
+      };
+      
+      // Only include manager_id if it's provided and not null
+      if (userData.manager_id) {
+        requestBody.manager_id = userData.manager_id;
+      }
+
+      const response = await backendApi.post<{ success: boolean; user?: User; error?: string }>('/users/for-approval', requestBody);
 
       if (response.success) {
         console.log('User created for approval:', response.user);
@@ -57,10 +80,21 @@ export class UserService {
       }
     } catch (error: unknown) {
       console.error('Error in createUserForApproval:', error);
-      const errorMessage = (error as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error 
-        || (error as { message?: string })?.message 
-        || 'Failed to create user for approval';
-      return { error: errorMessage };
+      
+      // Handle BackendApiError specifically
+      if (error instanceof Error) {
+        const errorMessage = error.message || 'Failed to create user for approval';
+        const apiError = error as BackendApiError;
+        console.error('Detailed error:', { 
+          name: error.name, 
+          message: error.message, 
+          status: apiError.status,
+          code: apiError.code 
+        });
+        return { error: errorMessage };
+      }
+      
+      return { error: 'Failed to create user for approval' };
     }
   }
 
@@ -69,7 +103,7 @@ export class UserService {
    */
   static async approveUser(userId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await backendApi.post<{ success: boolean; error?: string }>(`/api/v1/users/${userId}/approve`, {});
+      const response = await backendApi.post<{ success: boolean; error?: string }>(`/users/${userId}/approve`, {});
 
       if (response.success) {
         console.log(`Super Admin approved user: ${userId}`);
@@ -92,7 +126,7 @@ export class UserService {
    */
   static async setUserStatus(userId: string, isActive: boolean): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await backendApi.put<{ success: boolean; error?: string }>(`/api/v1/users/${userId}/status`, { isActive });
+      const response = await backendApi.put<{ success: boolean; error?: string }>(`/users/${userId}/status`, { isActive });
 
       if (response.success) {
         console.log(`Setting user ${userId} status to: ${isActive ? 'active' : 'inactive'}`);
@@ -115,7 +149,7 @@ export class UserService {
    */
   static async setUserBilling(userId: string, hourlyRate: number): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await backendApi.put<{ success: boolean; error?: string }>(`/api/v1/users/${userId}/billing`, { hourlyRate });
+      const response = await backendApi.put<{ success: boolean; error?: string }>(`/users/${userId}/billing`, { hourlyRate });
 
       if (response.success) {
         console.log(`Setting billing for user ${userId}: $${hourlyRate}/hr`);
@@ -138,7 +172,7 @@ export class UserService {
    */
   static async getAllUsers(): Promise<{ users: User[]; error?: string }> {
     try {
-      const response = await backendApi.get<{ success: boolean; users?: User[]; error?: string }>('/api/v1/users');
+      const response = await backendApi.get<{ success: boolean; users?: User[]; error?: string }>('/users');
 
       if (response.success) {
         return { users: response.users || [] };
@@ -160,7 +194,7 @@ export class UserService {
    */
   static async getUsers(userRole: UserRole): Promise<{ users: User[]; error?: string }> {
     try {
-      const response = await backendApi.get<{ success: boolean; users?: User[]; error?: string }>(`/api/v1/users/by-role?role=${userRole}`);
+      const response = await backendApi.get<{ success: boolean; users?: User[]; error?: string }>(`/users/by-role?role=${userRole}`);
 
       if (response.success) {
         return { users: response.users || [] };
@@ -182,7 +216,7 @@ export class UserService {
    */
   static async getPendingApprovals(): Promise<{ users: User[]; error?: string }> {
     try {
-      const response = await backendApi.get<{ success: boolean; users?: User[]; error?: string }>('/api/v1/users/pending-approvals');
+      const response = await backendApi.get<{ success: boolean; users?: User[]; error?: string }>('/users/pending-approvals');
 
       if (response.success) {
         return { users: response.users || [] };
@@ -204,7 +238,7 @@ export class UserService {
    */
   static async updateUser(userId: string, updates: Partial<User>): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await backendApi.put<{ success: boolean; error?: string }>(`/api/v1/users/${userId}`, updates);
+      const response = await backendApi.put<{ success: boolean; error?: string }>(`/users/${userId}`, updates);
 
       if (response.success) {
         console.log(`Updated user ${userId}`);
@@ -227,7 +261,7 @@ export class UserService {
    */
   static async deleteUser(userId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await backendApi.delete<{ success: boolean; error?: string }>(`/api/v1/users/${userId}`);
+      const response = await backendApi.delete<{ success: boolean; error?: string }>(`/users/${userId}`);
 
       if (response.success) {
         console.log(`Soft deleted user: ${userId}`);
@@ -250,7 +284,7 @@ export class UserService {
    */
   static async getUserById(userId: string): Promise<{ user?: User; error?: string }> {
     try {
-      const response = await backendApi.get<{ success: boolean; user?: User; error?: string }>(`/api/v1/users/${userId}`);
+      const response = await backendApi.get<{ success: boolean; user?: User; error?: string }>(`/users/${userId}`);
 
       if (response.success) {
         return { user: response.user };
@@ -272,7 +306,7 @@ export class UserService {
    */
   static async getTeamMembers(managerId: string): Promise<{ users: User[]; error?: string }> {
     try {
-      const response = await backendApi.get<{ success: boolean; users?: User[]; error?: string }>(`/api/v1/users?manager_id=${managerId}`);
+      const response = await backendApi.get<{ success: boolean; users?: User[]; error?: string }>(`/users?manager_id=${managerId}`);
 
       if (response.success) {
         return { users: response.users || [] };
@@ -295,7 +329,7 @@ export class UserService {
   static async getUsersByRole(roles: UserRole[]): Promise<{ users: User[]; error?: string }> {
     try {
       const rolesParam = roles.join(',');
-      const response = await backendApi.get<{ success: boolean; users?: User[]; error?: string }>(`/api/v1/users/roles?roles=${rolesParam}`);
+      const response = await backendApi.get<{ success: boolean; users?: User[]; error?: string }>(`/users/roles?roles=${rolesParam}`);
 
       if (response.success) {
         return { users: response.users || [] };
@@ -317,7 +351,7 @@ export class UserService {
    */
   static async setUserCredentials(userId: string, password: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await backendApi.put<{ success: boolean; error?: string }>(`/api/v1/users/${userId}/credentials`, { password });
+      const response = await backendApi.put<{ success: boolean; error?: string }>(`/users/${userId}/credentials`, { password });
 
       if (response.success) {
         console.log(`Set credentials for user ${userId}`);

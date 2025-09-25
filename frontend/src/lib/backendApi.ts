@@ -1,5 +1,3 @@
-import { supabase } from './supabase';
-
 /**
  * Backend API Client for Timesheet Service
  * Handles communication with the Node.js/MongoDB backend with optional Supabase auth
@@ -29,23 +27,13 @@ export class BackendApiClient {
   }
 
   /**
-   * Get authorization token from Supabase or local storage
+   * Get authorization token from local storage (MongoDB backend)
    */
   private async getAuthToken(): Promise<string | null> {
-    // Try to get token from Supabase first (if configured)
-    if (supabase) {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.access_token) {
-          return session.access_token;
-        }
-      } catch (error) {
-        console.warn('Supabase session error:', error);
-      }
-    }
-    
-    // Fallback to local storage for backend JWT token
-    return localStorage.getItem('accessToken');
+    // Get token from local storage (our MongoDB backend auth system)
+    const token = localStorage.getItem('accessToken');
+    console.log('Retrieved token from localStorage:', token ? `${token.substring(0, 20)}...` : 'null');
+    return token;
   }
 
   /**
@@ -81,10 +69,12 @@ export class BackendApiClient {
 
         try {
           errorData = await response.json();
+          console.log('Error response data:', errorData);
+          
           if (errorData.error) {
-            errorMessage = errorData.error;
+            errorMessage = typeof errorData.error === 'string' ? errorData.error : JSON.stringify(errorData.error);
           } else if (errorData.message) {
-            errorMessage = errorData.message;
+            errorMessage = typeof errorData.message === 'string' ? errorData.message : JSON.stringify(errorData.message);
           }
         } catch {
           // Response is not JSON, keep the HTTP error message

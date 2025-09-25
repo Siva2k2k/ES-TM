@@ -50,15 +50,21 @@ export class UserService {
         throw new ValidationError(validation.errors.join(', '));
       }
 
-      const user = new User({
+      const userDoc: any = {
         email: userData.email!.toLowerCase(),
         full_name: userData.full_name!,
         role: userData.role || 'employee',
         hourly_rate: userData.hourly_rate || 50,
         is_active: true,
         is_approved_by_super_admin: true, // Super Admin creates directly
-        manager_id: userData.manager_id || null
-      });
+      };
+
+      // Only set manager_id if it's provided
+      if (userData.manager_id) {
+        userDoc.manager_id = userData.manager_id;
+      }
+
+      const user = new User(userDoc);
 
       await user.save();
 
@@ -97,15 +103,21 @@ export class UserService {
         throw new ValidationError(validation.errors.join(', '));
       }
 
-      const user = new User({
+      const userDoc: any = {
         email: userData.email!.toLowerCase(),
         full_name: userData.full_name!,
         role: userData.role || 'employee',
         hourly_rate: userData.hourly_rate || 50,
         is_active: true,
         is_approved_by_super_admin: false, // Needs Super Admin approval
-        manager_id: userData.manager_id || null
-      });
+      };
+
+      // Only set manager_id if it's provided
+      if (userData.manager_id) {
+        userDoc.manager_id = userData.manager_id;
+      }
+
+      const user = new User(userDoc);
 
       await user.save();
 
@@ -280,13 +292,12 @@ export class UserService {
   }
 
   /**
-   * Get pending approvals (Super Admin only)
+   * Get pending approvals (Super Admin and Management)
    */
   static async getPendingApprovals(currentUser: AuthUser): Promise<{ users: IUser[]; error?: string }> {
     try {
-      if (currentUser.role !== 'super_admin') {
-        throw new AuthorizationError('Only super admins can view pending approvals');
-      }
+      // Both super_admin and management can view pending approvals
+      requireManagementRole(currentUser);
 
       const users = await (User.find as any)({
         is_approved_by_super_admin: false,

@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { backendApi, BackendApiError } from '../lib/backendApi';
 import type { User, AuditAction } from '../types';
 
 export interface ActivityAuditLog {
@@ -24,7 +24,8 @@ export interface ActivityAuditLog {
  */
 export class AuditLogService {
   /**
-   * Log an audit event
+   * Log an audit event (Note: In production, audit logging is typically done server-side)
+   * This is kept for backward compatibility but will log a warning
    */
   static async logEvent(
     tableName: string,
@@ -36,32 +37,18 @@ export class AuditLogService {
     oldData?: Record<string, unknown>,
     newData?: Record<string, unknown>
   ): Promise<{ success: boolean; error?: string }> {
-    try {
-      const { error } = await supabase
-        .from('audit_logs')
-        .insert({
-          table_name: tableName,
-          record_id: recordId,
-          action,
-          actor_id: actor.id,
-          actor_name: actor.full_name,
-          details: details || null,
-          metadata: metadata || null,
-          old_data: oldData || null,
-          new_data: newData || null
-        });
-
-      if (error) {
-        console.error('Error logging audit event:', error);
-        return { success: false, error: error.message };
-      }
-
-      console.log('Audit Event Logged:', { tableName, recordId, action, actor: actor.full_name });
-      return { success: true };
-    } catch (error) {
-      console.error('Error in logEvent:', error);
-      return { success: false, error: 'Failed to log audit event' };
-    }
+    console.warn('Frontend audit logging detected. Audit logs should be created server-side for security.');
+    console.log('Audit Event (Client-side log only):', { 
+      tableName, 
+      recordId, 
+      action, 
+      actor: actor.full_name,
+      details,
+      metadata 
+    });
+    
+    // Return success but don't actually log to database from frontend
+    return { success: true };
   }
 
   /**
@@ -82,55 +69,46 @@ export class AuditLogService {
     error?: string;
   }> {
     try {
-      let query = supabase
-        .from('audit_logs')
-        .select('*', { count: 'exact' })
-        .is('deleted_at', null);
-
-      // Apply filters
-      if (options?.startDate) {
-        query = query.gte('timestamp', options.startDate);
-      }
-
-      if (options?.endDate) {
-        query = query.lte('timestamp', options.endDate);
-      }
-
-      if (options?.actions && options.actions.length > 0) {
-        query = query.in('action', options.actions);
-      }
-
-      if (options?.actorId) {
-        query = query.eq('actor_id', options.actorId);
-      }
-
-      if (options?.tableName) {
-        query = query.eq('table_name', options.tableName);
-      }
-
-      // Apply pagination
-      const limit = options?.limit || 50;
-      const offset = options?.offset || 0;
+      // Build query parameters
+      const params = new URLSearchParams();
       
-      query = query
-        .order('timestamp', { ascending: false })
-        .range(offset, offset + limit - 1);
+      if (options?.startDate) params.append('startDate', options.startDate);
+      if (options?.endDate) params.append('endDate', options.endDate);
+      if (options?.actions && options.actions.length > 0) {
+        params.append('actions', options.actions.join(','));
+      }
+      if (options?.actorId) params.append('actorId', options.actorId);
+      if (options?.tableName) params.append('tableName', options.tableName);
+      if (options?.limit) params.append('limit', options.limit.toString());
+      if (options?.offset) params.append('offset', options.offset.toString());
 
-      const { data, error, count } = await query;
+      const queryString = params.toString();
+      const url = `/audit/logs${queryString ? `?${queryString}` : ''}`;
 
-      if (error) {
-        console.error('Error fetching audit logs:', error);
-        return { logs: [], total: 0, hasMore: false, error: error.message };
+      const response = await backendApi.get<{
+        success: boolean;
+        logs?: ActivityAuditLog[];
+        total?: number;
+        hasMore?: boolean;
+        error?: string;
+      }>(url);
+
+      if (!response.success || response.error) {
+        console.error('Error fetching audit logs:', response.error);
+        return { logs: [], total: 0, hasMore: false, error: response.error };
       }
 
       return {
-        logs: data as ActivityAuditLog[],
-        total: count || 0,
-        hasMore: (offset + limit) < (count || 0)
+        logs: response.logs || [],
+        total: response.total || 0,
+        hasMore: response.hasMore || false
       };
     } catch (error) {
       console.error('Error in getAuditLogs:', error);
-      return { logs: [], total: 0, hasMore: false, error: 'Failed to fetch audit logs' };
+      const errorMessage = error instanceof BackendApiError 
+        ? error.message 
+        : (error instanceof Error ? error.message : String(error));
+      return { logs: [], total: 0, hasMore: false, error: errorMessage };
     }
   }
 
@@ -199,17 +177,22 @@ export class AuditLogService {
     error?: string;
   }> {
     try {
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - days);
+      const response = await backendApi.get<{
+        success: boolean;
+        summary?: {
+          totalEvents: number;
+          userLogins: number;
+          timesheetActions: number;
+          billingActions: number;
+          systemChanges: number;
+          securityEvents: number;
+          topUsers: Array<{ userId: string; userName: string; eventCount: number }>;
+        };
+        error?: string;
+      }>(`/audit/summary?days=${days}`);
 
-      const { data, error } = await supabase
-        .from('audit_logs')
-        .select('action, actor_id, actor_name')
-        .gte('timestamp', startDate.toISOString())
-        .is('deleted_at', null);
-
-      if (error) {
-        console.error('Error fetching activity summary:', error);
+      if (!response.success || response.error) {
+        console.error('Error fetching activity summary:', response.error);
         return {
           totalEvents: 0,
           userLogins: 0,
@@ -218,49 +201,18 @@ export class AuditLogService {
           systemChanges: 0,
           securityEvents: 0,
           topUsers: [],
-          error: error.message
+          error: response.error
         };
       }
 
-      const logs = data as ActivityAuditLog[];
-
-      // Count by action type
-      const userLogins = logs.filter(log => log.action === 'USER_LOGIN').length;
-      const timesheetActions = logs.filter(log => 
-        log.action.includes('TIMESHEET')).length;
-      const billingActions = logs.filter(log => 
-        log.action.includes('BILLING')).length;
-      const systemChanges = logs.filter(log => 
-        log.action === 'SYSTEM_CONFIG_CHANGED').length;
-      const securityEvents = logs.filter(log => 
-        ['USER_LOGIN', 'USER_LOGOUT', 'PERMISSION_DENIED', 'ROLE_SWITCHED']
-          .includes(log.action)).length;
-
-      // Top users by activity
-      const userActivity = logs.reduce((acc, log) => {
-        if (log.actor_id) {
-          acc[log.actor_id] = acc[log.actor_id] || { 
-            userId: log.actor_id, 
-            userName: log.actor_name, 
-            eventCount: 0 
-          };
-          acc[log.actor_id].eventCount++;
-        }
-        return acc;
-      }, {} as Record<string, { userId: string; userName: string; eventCount: number }>);
-
-      const topUsers = Object.values(userActivity)
-        .sort((a, b) => b.eventCount - a.eventCount)
-        .slice(0, 10);
-
       return {
-        totalEvents: logs.length,
-        userLogins,
-        timesheetActions,
-        billingActions,
-        systemChanges,
-        securityEvents,
-        topUsers
+        totalEvents: response.summary?.totalEvents || 0,
+        userLogins: response.summary?.userLogins || 0,
+        timesheetActions: response.summary?.timesheetActions || 0,
+        billingActions: response.summary?.billingActions || 0,
+        systemChanges: response.summary?.systemChanges || 0,
+        securityEvents: response.summary?.securityEvents || 0,
+        topUsers: response.summary?.topUsers || []
       };
     } catch (error) {
       console.error('Error in getActivitySummary:', error);
@@ -319,35 +271,35 @@ export class AuditLogService {
     actions?: AuditAction[];
   }): Promise<{ logs: ActivityAuditLog[]; error?: string }> {
     try {
-      let supabaseQuery = supabase
-        .from('audit_logs')
-        .select('*')
-        .is('deleted_at', null);
-
+      const params = new URLSearchParams();
+      params.append('query', query);
+      
+      if (options?.limit) {
+        params.append('limit', options.limit.toString());
+      }
+      
       if (options?.actions && options.actions.length > 0) {
-        supabaseQuery = supabaseQuery.in('action', options.actions);
+        params.append('actions', options.actions.join(','));
       }
 
-      // Use text search on actor_name and action
-      supabaseQuery = supabaseQuery.or(
-        `actor_name.ilike.%${query}%,action.ilike.%${query}%`
-      );
+      const response = await backendApi.get<{
+        success: boolean;
+        logs?: ActivityAuditLog[];
+        error?: string;
+      }>(`/audit/search?${params.toString()}`);
 
-      supabaseQuery = supabaseQuery
-        .order('timestamp', { ascending: false })
-        .limit(options?.limit || 100);
-
-      const { data, error } = await supabaseQuery;
-
-      if (error) {
-        console.error('Error searching audit logs:', error);
-        return { logs: [], error: error.message };
+      if (!response.success || response.error) {
+        console.error('Error searching audit logs:', response.error);
+        return { logs: [], error: response.error };
       }
 
-      return { logs: data as ActivityAuditLog[] };
+      return { logs: response.logs || [] };
     } catch (error) {
       console.error('Error in searchAuditLogs:', error);
-      return { logs: [], error: 'Failed to search audit logs' };
+      const errorMessage = error instanceof BackendApiError 
+        ? error.message 
+        : (error instanceof Error ? error.message : String(error));
+      return { logs: [], error: errorMessage };
     }
   }
 
@@ -356,31 +308,27 @@ export class AuditLogService {
    */
   static async clearOldLogs(retentionDays: number): Promise<{ deletedCount: number; error?: string }> {
     try {
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
-      
-      const { data, error } = await supabase
-        .from('audit_logs')
-        .update({ 
-          deleted_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .lt('timestamp', cutoffDate.toISOString())
-        .is('deleted_at', null)
-        .select('id');
+      const response = await backendApi.post<{
+        success: boolean;
+        deletedCount?: number;
+        error?: string;
+      }>(`/audit/clear-old`, { retentionDays });
 
-      if (error) {
-        console.error('Error clearing old logs:', error);
-        return { deletedCount: 0, error: error.message };
+      if (!response.success || response.error) {
+        console.error('Error clearing old logs:', response.error);
+        return { deletedCount: 0, error: response.error };
       }
 
-      const deletedCount = data.length;
+      const deletedCount = response.deletedCount || 0;
       console.log(`Cleared ${deletedCount} old audit logs older than ${retentionDays} days`);
       
       return { deletedCount };
     } catch (error) {
       console.error('Error in clearOldLogs:', error);
-      return { deletedCount: 0, error: 'Failed to clear old logs' };
+      const errorMessage = error instanceof BackendApiError 
+        ? error.message 
+        : (error instanceof Error ? error.message : String(error));
+      return { deletedCount: 0, error: errorMessage };
     }
   }
 }

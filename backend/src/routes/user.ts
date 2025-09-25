@@ -40,10 +40,10 @@ router.post('/for-approval', requireManagement, createUserValidation, UserContro
 
 /**
  * @route GET /api/v1/users/pending-approvals
- * @desc Get pending user approvals (Super Admin only)
- * @access Private (Super Admin)
+ * @desc Get pending user approvals (Management and Super Admin)
+ * @access Private (Management+)
  */
-router.get('/pending-approvals', requireSuperAdmin, UserController.getPendingApprovals);
+router.get('/pending-approvals', requireManagement, UserController.getPendingApprovals);
 
 /**
  * @route GET /api/v1/users/by-role
