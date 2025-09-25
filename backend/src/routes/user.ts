@@ -7,7 +7,8 @@ import {
   setUserBillingValidation,
   updateUserValidation,
   getUsersByRoleValidation,
-  getUsersByRolesValidation
+  getUsersByRolesValidation,
+  setUserCredentialsValidation
 } from '@/controllers/UserController';
 import { requireAuth, requireManager, requireManagement, requireSuperAdmin } from '@/middleware/auth';
 
@@ -99,6 +100,13 @@ router.put('/:userId/status', requireSuperAdmin, setUserStatusValidation, UserCo
  * @access Private (Super Admin)
  */
 router.put('/:userId/billing', requireSuperAdmin, setUserBillingValidation, UserController.setUserBilling);
+
+/**
+ * @route PUT /api/v1/users/:userId/credentials
+ * @desc Set user login credentials (Super Admin only)
+ * @access Private (Super Admin)
+ */
+// router.put('/:userId/credentials', requireSuperAdmin, setUserCredentialsValidation, UserController.setUserCredentials);
 
 /**
  * @route GET /api/v1/users/:managerId/team-members

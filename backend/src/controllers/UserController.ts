@@ -407,6 +407,37 @@ export class UserController {
       users: result.users
     });
   });
+
+  /**
+   * Set user credentials (Super Admin only)
+   * PUT /api/v1/users/:userId/credentials
+   */
+  static readonly setUserCredentials = handleAsyncError(async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      throw new ValidationError(errors.array().map(err => err.msg).join(', '));
+    }
+
+    if (!req.user) {
+      throw new AuthorizationError('User not authenticated');
+    }
+
+    const { userId } = req.params;
+    const { password } = req.body;
+    const result = await UserService.setUserCredentials(userId, password, req.user);
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        error: result.error
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'User credentials set successfully'
+    });
+  });
 }
 
 // Validation middleware
@@ -489,4 +520,11 @@ export const getUsersByRolesValidation = [
       return roles.every((role: string) => validRoles.includes(role.trim()));
     })
     .withMessage('Invalid roles format. Use comma-separated valid roles.')
+];
+
+export const setUserCredentialsValidation = [
+  ...userIdValidation,
+  body('password')
+    .isLength({ min: 6 })
+    .withMessage('Password must be at least 6 characters long')
 ];

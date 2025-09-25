@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
 import User, { IUser, UserRole } from '@/models/User';
 import {
   ValidationError,
@@ -477,6 +478,45 @@ export class UserService {
       isValid: errors.length === 0,
       errors
     };
+  }
+
+  /**
+   * Set login credentials for user (Super Admin only)
+   */
+  static async setUserCredentials(userId: string, password: string, currentUser: AuthUser): Promise<{ success: boolean; error?: string }> {
+    try {
+      if (currentUser.role !== 'super_admin') {
+        throw new AuthorizationError('Only super admins can set user credentials');
+      }
+
+      if (!password || password.length < 6) {
+        throw new ValidationError('Password must be at least 6 characters long');
+      }
+
+      // Hash the password
+      const passwordHash = await bcrypt.hash(password, 10);
+
+      const result = await (User.updateOne as any)({
+        _id: userId,
+        deleted_at: { $exists: false }
+      }, {
+        password_hash: passwordHash,
+        updated_at: new Date()
+      });
+
+      if (result.matchedCount === 0) {
+        throw new NotFoundError('User not found');
+      }
+
+      console.log(`Set credentials for user: ${userId}`);
+      return { success: true };
+    } catch (error) {
+      console.error('Error in setUserCredentials:', error);
+      if (error instanceof AuthorizationError || error instanceof NotFoundError || error instanceof ValidationError) {
+        return { success: false, error: error.message };
+      }
+      return { success: false, error: 'Failed to set user credentials' };
+    }
   }
 
   // TODO: Implement complex project-role methods when ProjectService is migrated

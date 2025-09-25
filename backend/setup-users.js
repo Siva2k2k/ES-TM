@@ -119,11 +119,27 @@ async function setupInitialUsers() {
     await manager.save();
     console.log("✅ Created Test Manager:", manager.email);
 
+    // Create test management user
+    const managementPassword = await bcrypt.hash("Management123!", 10);
+    const management = new User({
+      email: "management@company.com",
+      password_hash: managementPassword,
+      full_name: "Test Management",
+      role: "management",
+      hourly_rate: 75,
+      is_active: true,
+      is_approved_by_super_admin: true, // Auto-approve for testing
+    });
+
+    await management.save();
+    console.log("✅ Created Test Management:", management.email);
+
     console.log("\n🎉 Initial users setup completed!");
     console.log("\nYou can now login with:");
     console.log("📧 Super Admin: admin@company.com / Admin123!");
     console.log("📧 Test Employee: test@company.com / Test123!");
     console.log("📧 Test Manager: manager@company.com / Manager123!");
+    console.log("📧 Test Management: management@company.com / Management123!");
   } catch (error) {
     console.error("❌ Error setting up users:", error);
   } finally {
