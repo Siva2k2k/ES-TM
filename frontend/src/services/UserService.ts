@@ -368,4 +368,87 @@ export class UserService {
       return { success: false, error: errorMessage };
     }
   }
+
+  /**
+   * Get team members with project-specific roles for multi-role users
+   * This is used for timesheet approval flow to understand project hierarchies
+   */
+  static async getTeamMembersWithProjectRoles(userId: string): Promise<{ 
+    users: User[]; 
+    userProjectRoles: Map<string, string[]>; 
+    userManagerProjects: Map<string, string[]>; 
+    error?: string 
+  }> {
+    try {
+      console.log('🔍 UserService.getTeamMembersWithProjectRoles called with userId:', userId);
+      
+      // For now, implement a simplified version using existing endpoints
+      // Step 1: Get user's projects to understand their management scope
+      const userProjectsResponse = await backendApi.get<{ success: boolean; projects?: { id: string; primary_manager_id: string; [key: string]: unknown }[]; error?: string }>(`/projects/user/${userId}`);
+      
+      if (!userProjectsResponse.success) {
+        console.error('Error fetching user projects:', userProjectsResponse.error);
+        return { users: [], userProjectRoles: new Map(), userManagerProjects: new Map(), error: userProjectsResponse.error };
+      }
+
+      const userProjects = userProjectsResponse.projects || [];
+      console.log('🔍 User projects:', userProjects);
+      
+      // Step 2: Get team members based on manager hierarchy
+      const teamMembersResponse = await this.getTeamMembers(userId);
+      
+      if (teamMembersResponse.error) {
+        console.error('Error fetching team members:', teamMembersResponse.error);
+        return { users: [], userProjectRoles: new Map(), userManagerProjects: new Map(), error: teamMembersResponse.error };
+      }
+
+      const teamMembers = teamMembersResponse.users;
+      console.log('🔍 Team members found:', teamMembers.length);
+
+      // Step 3: Build simplified role maps
+      // For now, assume all team members are employees and user manages them across all projects they manage
+      const userProjectRoles = new Map<string, string[]>();
+      const userManagerProjects = new Map<string, string[]>();
+
+      // Get projects where current user is primary manager
+      const managedProjects = userProjects.filter(project => project.primary_manager_id === userId);
+      const managedProjectIds = managedProjects.map(project => project.id);
+
+      console.log('🔍 Managed projects:', managedProjectIds);
+
+      // For each team member, assign basic role information
+      teamMembers.forEach(member => {
+        // Assume team members are employees (simplified for now)
+        userProjectRoles.set(member.id, ['employee']);
+        
+        // Assign all managed projects to this team member relationship
+        if (managedProjectIds.length > 0) {
+          userManagerProjects.set(member.id, managedProjectIds);
+        }
+      });
+
+      console.log('✅ Team members with project roles created:', {
+        userCount: teamMembers.length,
+        userProjectRoles: Object.fromEntries(userProjectRoles),
+        userManagerProjects: Object.fromEntries(userManagerProjects)
+      });
+
+      return { 
+        users: teamMembers, 
+        userProjectRoles, 
+        userManagerProjects 
+      };
+    } catch (error) {
+      console.error('Error in getTeamMembersWithProjectRoles:', error);
+      const errorMessage = (error as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error 
+        || (error as { message?: string })?.message 
+        || 'Failed to fetch team members with project roles';
+      return { 
+        users: [], 
+        userProjectRoles: new Map(), 
+        userManagerProjects: new Map(), 
+        error: errorMessage 
+      };
+    }
+  }
 }
