@@ -44,7 +44,10 @@ async function testFrontendTaskFixes() {
 
     if (projectsResponse.data.projects?.length > 0) {
       const project = projectsResponse.data.projects[0];
-      console.log(`  first project: ${project.name} (ID: ${project.id})`);
+      console.log(`  first project: ${project.name}`);
+      console.log(`  project.id: ${project.id}`);
+      console.log(`  project._id: ${project._id}`);
+      console.log(`  project keys:`, Object.keys(project));
       console.log(`  project has tasks: ${!!project.tasks}`);
       if (project.tasks) {
         console.log(`  embedded tasks count: ${project.tasks.length}`);

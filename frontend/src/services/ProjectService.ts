@@ -447,7 +447,48 @@ export class ProjectService {
       }
 
       console.log('🔍 ProjectService final projects:', response.projects);
-      return { projects: response.projects };
+      // Normalize projects: ensure each project has an `id` string and
+      // that embedded tasks (if any) have `assigned_to_user_id` as string
+      const projectsRaw = response.projects as unknown as Array<Record<string, unknown>>;
+      const normalized = (projectsRaw || []).map(projectRaw => {
+        const project = { ...projectRaw } as Record<string, unknown> & Partial<Project>;
+
+        // Ensure id exists (use virtual id or fallback to _id)
+        if (!project.id) {
+          const rawId = project._id as unknown;
+          if (rawId !== undefined && rawId !== null) {
+            project.id = typeof rawId === 'string' ? rawId : String(rawId);
+          }
+        }
+
+        // Normalize embedded tasks if present
+        if (Array.isArray(project.tasks)) {
+          project.tasks = project.tasks.map(taskRaw => {
+            const task = { ...taskRaw } as Record<string, unknown> & Partial<Task>;
+            const at = task.assigned_to_user_id as unknown;
+            let assigned: string | undefined = undefined;
+
+            if (at !== undefined && at !== null) {
+              if (typeof at === 'string') assigned = at;
+              else if (typeof at === 'object') {
+                const atObj = at as Record<string, unknown>;
+                if (atObj._id) assigned = String(atObj._id);
+                else if (atObj.id) assigned = String(atObj.id);
+                else assigned = String(atObj);
+              } else {
+                assigned = String(at);
+              }
+            }
+
+            (task as Partial<Task>).assigned_to_user_id = assigned;
+            return task as Task;
+          });
+        }
+
+        return project as Project;
+      });
+
+      return { projects: normalized };
     } catch (error) {
       console.error('Error in getUserProjects:', error);
       const errorMessage = error instanceof BackendApiError ? error.message : 'Failed to fetch user projects';
@@ -471,7 +512,7 @@ export class ProjectService {
     error?: string
   }> {
     try {
-      const response = await backendApi.get<{ success: boolean; data: any[]; message?: string }>(
+      const response = await backendApi.get<{ success: boolean; data: Array<Record<string, unknown>>; message?: string }>(
         `/projects/${projectId}/members`
       );
 
@@ -480,15 +521,29 @@ export class ProjectService {
       }
 
       // Transform the response data to match the expected format
-      const members = response.data?.map((member: any) => ({
-        id: member.id || member._id,
-        user_id: member.user_id,
-        project_role: member.project_role,
-        is_primary_manager: member.is_primary_manager,
-        is_secondary_manager: member.is_secondary_manager,
-        user_name: member.user?.full_name || member.user_name,
-        user_email: member.user?.email || member.user_email
-      })) || [];
+      const members = (response.data || []).map((member: Record<string, unknown>) => {
+        const m = member as {
+          id?: string;
+          _id?: string;
+          user_id?: string;
+          project_role?: string;
+          is_primary_manager?: boolean;
+          is_secondary_manager?: boolean;
+          user?: { full_name?: string; email?: string };
+          user_name?: string;
+          user_email?: string;
+        };
+
+        return {
+          id: m.id || m._id || '',
+          user_id: m.user_id || '',
+          project_role: m.project_role || '',
+          is_primary_manager: !!m.is_primary_manager,
+          is_secondary_manager: !!m.is_secondary_manager,
+          user_name: (m.user && m.user.full_name) || m.user_name || '',
+          user_email: (m.user && m.user.email) || m.user_email || ''
+        };
+      }) || [];
 
       return { members };
     } catch (error) {
@@ -628,21 +683,33 @@ export class ProjectService {
         return { tasks: [], error: projectsResult.error };
       }
 
-      // Get tasks for each project the user has access to
+      // Prefer embedded tasks from the projects response (backend now embeds tasks).
+      // Fall back to fetching per-project tasks only when tasks are not embedded.
       const allTasks: Task[] = [];
-      for (const project of projectsResult.projects) {
+      const projects = projectsResult.projects as Project[];
+      for (const project of projects) {
+        if (Array.isArray((project as unknown as { tasks?: unknown }).tasks) && (project as any).tasks?.length > 0) {
+          allTasks.push(...((project as unknown as { tasks?: Task[] }).tasks || []));
+          continue;
+        }
+
+        // Fallback: only attempt to fetch if we have a valid project id
+        const projId = project.id || (project as unknown as { _id?: string })._id;
+        if (!projId) {
+          console.warn('Skipping tasks fetch for project with missing id:', project);
+          continue;
+        }
+
         try {
           const tasksResponse = await backendApi.get<{ success: boolean; tasks: Task[]; message?: string }>(
-            `/projects/${project.id}/tasks`
+            `/projects/${projId}/tasks`
           );
-          
-          if (tasksResponse.success && tasksResponse.tasks) {
-            // Add all tasks from user's accessible projects
+
+          if (tasksResponse.success && Array.isArray(tasksResponse.tasks)) {
             allTasks.push(...tasksResponse.tasks);
           }
         } catch (error) {
-          console.warn(`Failed to fetch tasks for project ${project.id}:`, error);
-          // Continue with other projects even if one fails
+          console.warn(`Failed to fetch tasks for project ${projId}:`, error);
         }
       }
 

@@ -513,67 +513,113 @@ export class ProjectService {
         }
       }
 
-      // Populate tasks for each project
+      // Populate tasks for each project and transform to frontend format
       const projectsWithTasks = await Promise.all(
         deduplicatedProjects.map(async (project) => {
           const tasks = await (Task.find as any)({
             project_id: project._id,
             deleted_at: { $exists: false }
-          }).populate('assigned_to_user_id', 'full_name email')
-            .populate('created_by_user_id', 'full_name email');
+          });
           
-          return {
-            ...project.toObject(),
-            tasks
+          // Manually transform project to frontend format
+          const projectObj = project.toObject ? project.toObject() : project;
+          const transformedProject = {
+            id: projectObj._id.toString(),
+            name: projectObj.name,
+            client_id: projectObj.client_id,
+            primary_manager_id: projectObj.primary_manager_id,
+            status: projectObj.status,
+            start_date: projectObj.start_date,
+            end_date: projectObj.end_date,
+            budget: projectObj.budget,
+            description: projectObj.description,
+            is_billable: projectObj.is_billable,
+            created_at: projectObj.created_at,
+            updated_at: projectObj.updated_at
           };
+          
+          // Transform tasks to frontend format
+          const transformedTasks = tasks.map((task: any) => {
+            const taskObj = task.toObject ? task.toObject() : task;
+
+            // Normalize assigned_to_user_id to a string (or null). It might be:
+            // - null/undefined
+            // - a plain ObjectId instance
+            // - a populated user object with _id or id
+            // - already a string
+            let assignedToUserId: string | null = null;
+            const at = taskObj.assigned_to_user_id;
+            if (at !== null && at !== undefined) {
+              if (typeof at === 'string') {
+                assignedToUserId = at;
+              } else if (typeof at === 'object') {
+                if (at._id) {
+                  assignedToUserId = at._id.toString();
+                } else if (at.id) {
+                  assignedToUserId = at.id.toString();
+                } else if (typeof at.toString === 'function') {
+                  const s = at.toString();
+                  if (s && !s.includes('[object Object]')) assignedToUserId = s;
+                }
+              } else {
+                // fallback for ObjectId-like values
+                try {
+                  assignedToUserId = String(at);
+                } catch (e) {
+                  assignedToUserId = null;
+                }
+              }
+            }
+
+            // Normalize created_by_user_id similarly (may be populated)
+            let createdByUserId: string | null = null;
+            const cb = taskObj.created_by_user_id;
+            if (cb !== null && cb !== undefined) {
+              if (typeof cb === 'string') {
+                createdByUserId = cb;
+              } else if (typeof cb === 'object') {
+                if (cb._id) createdByUserId = cb._id.toString();
+                else if (cb.id) createdByUserId = cb.id.toString();
+                else createdByUserId = String(cb);
+              } else {
+                createdByUserId = String(cb);
+              }
+            }
+
+            return {
+              id: taskObj._id.toString(),
+              project_id: taskObj.project_id ? taskObj.project_id.toString() : null,
+              name: taskObj.name,
+              description: taskObj.description,
+              assigned_to_user_id: assignedToUserId,
+              status: taskObj.status,
+              estimated_hours: taskObj.estimated_hours,
+              is_billable: taskObj.is_billable,
+              created_by_user_id: createdByUserId,
+              created_at: taskObj.created_at,
+              updated_at: taskObj.updated_at
+            };
+          });
+          
+          const result = {
+            ...transformedProject,
+            tasks: transformedTasks
+          };
+          
+          console.log(`🔍 Transformed project: ${project.name} - ID: ${result.id}`);
+          console.log(`🔍 Project has ${transformedTasks.length} tasks`);
+          
+          return result;
         })
       );
 
-      return { projects: projectsWithTasks };
+      return { projects: projectsWithTasks as unknown as ProjectWithDetails[] };
     } catch (error) {
       console.error('Error in getUserProjects:', error);
       if (error instanceof AuthorizationError) {
         return { projects: [], error: error.message };
       }
       return { projects: [], error: 'Failed to fetch user projects' };
-    }
-  }
-
-  /**
-   * Get tasks assigned to a specific user across all projects
-   */
-  static async getUserTasks(userId: string, currentUser: AuthUser): Promise<{ tasks: any[]; error?: string }> {
-    try {
-      // Check authorization - users can view their own tasks, managers+ can view team member tasks
-      if (!canViewUserData(currentUser, userId)) {
-        throw new AuthorizationError('Access denied. You can only view your own tasks or manage users under your authority.');
-      }
-
-      // First get all projects the user has access to
-      const projectsResult = await this.getUserProjects(userId, currentUser);
-      if (projectsResult.error) {
-        return { tasks: [], error: projectsResult.error };
-      }
-
-      // Get all tasks from those projects and filter by assignment
-      const allTasks = [];
-      for (const project of projectsResult.projects) {
-        if (project.tasks) {
-          // Filter tasks assigned to the target user
-          const userTasks = project.tasks.filter(task => 
-            task.assigned_to_user_id && task.assigned_to_user_id.toString() === userId
-          );
-          allTasks.push(...userTasks);
-        }
-      }
-
-      return { tasks: allTasks };
-    } catch (error) {
-      console.error('Error in getUserTasks:', error);
-      if (error instanceof AuthorizationError) {
-        return { tasks: [], error: error.message };
-      }
-      return { tasks: [], error: 'Failed to fetch user tasks' };
     }
   }
 
