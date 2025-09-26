@@ -78,9 +78,9 @@ router.delete('/clients/:clientId', requireManagement, clientIdValidation, Proje
 /**
  * @route GET /api/v1/projects/user/:userId
  * @desc Get projects for specific user
- * @access Private (Manager+ can view team member projects)
+ * @access Private (Users can view own projects, Manager+ can view team member projects)
  */
-router.get('/user/:userId', requireManager, userIdValidation, ProjectController.getUserProjects);
+router.get('/user/:userId', userIdValidation, ProjectController.getUserProjects);
 
 /**
  * @route GET /api/v1/projects/:projectId

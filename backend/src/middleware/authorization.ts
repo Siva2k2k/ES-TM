@@ -386,7 +386,7 @@ export function requireOwnershipOrManager(getUserIdFromResource: (req: Request) 
       const resourceUserId = getUserIdFromResource(req);
 
       // Allow if user owns the resource
-      if (currentUser._id?.toString() === resourceUserId) {
+      if (currentUser.id?.toString() === resourceUserId) {
         return next();
       }
 

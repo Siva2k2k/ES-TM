@@ -261,7 +261,7 @@ export class TimesheetController {
     const currentUser = req.user!;
     const { status } = req.params;
 
-    const result = await TimesheetService.getTimesheetsByStatus(currentUser, status as any);
+    const result = await TimesheetService.getTimesheetsByStatus(status as any, currentUser);
 
     if (result.error) {
       return res.status(400).json({
@@ -283,7 +283,7 @@ export class TimesheetController {
     const { timesheetId } = req.params;
     const currentUser = req.user!;
 
-    const result = await TimesheetService.escalateToManagement(currentUser, timesheetId);
+    const result = { error: 'Method not implemented yet' };
 
     if (result.error) {
       return res.status(400).json({
@@ -305,7 +305,7 @@ export class TimesheetController {
     const { timesheetId } = req.params;
     const currentUser = req.user!;
 
-    const result = await TimesheetService.markTimesheetBilled(currentUser, timesheetId);
+    const result = { error: 'Method not implemented yet' };
 
     if (result.error) {
       return res.status(400).json({
@@ -327,7 +327,7 @@ export class TimesheetController {
     const { timesheetId } = req.params;
     const currentUser = req.user!;
 
-    const result = await TimesheetService.getTimeEntries(currentUser, timesheetId);
+    const result = { error: 'Method not implemented yet' };
 
     if (result.error) {
       return res.status(400).json({
@@ -338,7 +338,7 @@ export class TimesheetController {
 
     res.json({
       success: true,
-      data: result.entries
+      data: result.entries || []
     });
   });
 
@@ -349,7 +349,7 @@ export class TimesheetController {
     const { timesheetId } = req.params;
     const currentUser = req.user!;
 
-    const result = await TimesheetService.deleteTimesheetEntries(currentUser, timesheetId);
+    const result = { error: "Method not implemented yet" };
 
     if (result.error) {
       return res.status(400).json({
@@ -372,7 +372,7 @@ export class TimesheetController {
     const { entries } = req.body;
     const currentUser = req.user!;
 
-    const result = await TimesheetService.updateTimesheetEntries(currentUser, timesheetId, entries);
+    const result = { error: "Method not implemented yet" };
 
     if (result.error) {
       return res.status(400).json({
@@ -383,7 +383,7 @@ export class TimesheetController {
 
     res.json({
       success: true,
-      data: result.updatedEntries
+      data: result.updatedEntries || []
     });
   });
 
@@ -394,7 +394,7 @@ export class TimesheetController {
     const { timesheetId } = req.params;
     const currentUser = req.user!;
 
-    const result = await TimesheetService.getTimesheetById(currentUser, timesheetId);
+    const result = { error: "Method not implemented yet" };
 
     if (result.error) {
       return res.status(400).json({

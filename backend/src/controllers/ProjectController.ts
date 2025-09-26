@@ -173,6 +173,32 @@ export class ProjectController {
     });
   });
 
+  static getUserTasks = handleAsyncError(async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      throw new ValidationError(errors.array().map(err => err.msg).join(', '));
+    }
+
+    if (!req.user) {
+      throw new AuthorizationError('User not authenticated');
+    }
+
+    const { userId } = req.params;
+    const result = await ProjectService.getUserTasks(userId, req.user);
+
+    if (result.error) {
+      return res.status(403).json({
+        success: false,
+        error: result.error
+      });
+    }
+
+    res.json({
+      success: true,
+      tasks: result.tasks
+    });
+  });
+
   static getProjectsByStatus = handleAsyncError(async (req: AuthRequest, res: Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {

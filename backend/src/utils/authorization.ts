@@ -54,7 +54,7 @@ export class PermissionValidator {
 
   static canViewUser(currentUser: AuthUser, targetUserId: string): boolean {
     // Can view own profile
-    if (currentUser._id?.toString() === targetUserId) return true;
+    if (currentUser.id?.toString() === targetUserId) return true;
 
     // Role-based hierarchy access
     return canManageRoleHierarchy(currentUser.role, 'employee'); // Simplified check
@@ -62,7 +62,7 @@ export class PermissionValidator {
 
   static canUpdateUser(currentUser: AuthUser, targetUserId: string, targetRole?: UserRole): boolean {
     // Can update own profile
-    if (currentUser._id?.toString() === targetUserId) return true;
+    if (currentUser.id?.toString() === targetUserId) return true;
 
     // Role-based hierarchy for others
     if (targetRole) {
@@ -88,7 +88,7 @@ export class PermissionValidator {
 
   static canUpdateProject(currentUser: AuthUser, primaryManagerId?: string): boolean {
     // Primary manager can update their project
-    if (primaryManagerId && currentUser._id?.toString() === primaryManagerId) return true;
+    if (primaryManagerId && currentUser.id?.toString() === primaryManagerId) return true;
 
     // Management hierarchy access
     return ['super_admin', 'management', 'manager'].includes(currentUser.role);
@@ -101,7 +101,7 @@ export class PermissionValidator {
   // Timesheet permissions
   static canViewTimesheet(currentUser: AuthUser, timesheetUserId: string): boolean {
     // Can view own timesheet
-    if (currentUser._id?.toString() === timesheetUserId) return true;
+    if (currentUser.id?.toString() === timesheetUserId) return true;
 
     // Management hierarchy can view team timesheets
     return canManageRoleHierarchy(currentUser.role, 'employee');
@@ -109,7 +109,7 @@ export class PermissionValidator {
 
   static canCreateTimesheet(currentUser: AuthUser, targetUserId: string): boolean {
     // Can create own timesheet
-    if (currentUser._id?.toString() === targetUserId) return true;
+    if (currentUser.id?.toString() === targetUserId) return true;
 
     // IMPORTANT: Management CANNOT create timesheets (per migration.sql rules)
     if (currentUser.role === 'management') return false;
@@ -123,7 +123,7 @@ export class PermissionValidator {
     if (isFrozen || status === 'billed') return false;
 
     // Can edit own timesheet in draft/rejected states
-    if (currentUser._id?.toString() === timesheetUserId) {
+    if (currentUser.id?.toString() === timesheetUserId) {
       return ['draft', 'manager_rejected', 'management_rejected'].includes(status);
     }
 
@@ -156,7 +156,7 @@ export class PermissionValidator {
 
   static canSubmitTimesheet(currentUser: AuthUser, timesheetUserId: string): boolean {
     // Only timesheet owner can submit
-    if (currentUser._id?.toString() !== timesheetUserId) return false;
+    if (currentUser.id?.toString() !== timesheetUserId) return false;
 
     // Management cannot submit timesheets
     return currentUser.role !== 'management';
@@ -165,7 +165,7 @@ export class PermissionValidator {
   // Time entry permissions
   static canCreateTimeEntry(currentUser: AuthUser, timesheetUserId: string, timesheetStatus: string): boolean {
     // Can create entries in own timesheet
-    if (currentUser._id?.toString() === timesheetUserId) {
+    if (currentUser.id?.toString() === timesheetUserId) {
       return ['draft', 'manager_rejected', 'management_rejected'].includes(timesheetStatus);
     }
 
@@ -224,7 +224,7 @@ export function requireManagerOrAbove(currentUser: AuthUser): void {
 }
 
 export function requireTimesheetOwnershipOrManager(currentUser: AuthUser, timesheetUserId: string): void {
-  const isOwner = currentUser._id?.toString() === timesheetUserId;
+  const isOwner = currentUser.id?.toString() === timesheetUserId;
   const hasManagerAccess = canManageRoleHierarchy(currentUser.role, 'employee');
 
   if (!isOwner && !hasManagerAccess) {
@@ -233,7 +233,7 @@ export function requireTimesheetOwnershipOrManager(currentUser: AuthUser, timesh
 }
 
 export function requireResourceOwnership(currentUser: AuthUser, resourceUserId: string): void {
-  if (currentUser._id?.toString() !== resourceUserId) {
+  if (currentUser.id?.toString() !== resourceUserId) {
     throw new AuthorizationError('Access denied: You can only access your own resources');
   }
 }
@@ -241,7 +241,7 @@ export function requireResourceOwnership(currentUser: AuthUser, resourceUserId: 
 // Project membership validation (to be used with project data)
 export function requireProjectMembership(currentUser: AuthUser, projectMembers: any[]): void {
   const isMember = projectMembers.some(member =>
-    member.user_id?.toString() === currentUser._id?.toString() &&
+    member.user_id?.toString() === currentUser.id?.toString() &&
     !member.removed_at &&
     !member.deleted_at
   );

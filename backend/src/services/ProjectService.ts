@@ -355,10 +355,16 @@ export class ProjectService {
   }
 
   /**
-   * Get projects (alias for getAllProjects for controller compatibility)
+   * Get projects based on user role - Management sees all, others see their assigned projects
    */
   static async getProjects(currentUser: AuthUser): Promise<{ projects: ProjectWithDetails[]; error?: string }> {
-    return this.getAllProjects(currentUser);
+    // If management level, return all projects
+    if (['super_admin', 'management', 'manager'].includes(currentUser.role)) {
+      return this.getAllProjects(currentUser);
+    }
+    
+    // For employees and leads, return their assigned projects
+    return this.getUserProjects(currentUser.id, currentUser);
   }
 
   /**
@@ -507,13 +513,67 @@ export class ProjectService {
         }
       }
 
-      return { projects: deduplicatedProjects };
+      // Populate tasks for each project
+      const projectsWithTasks = await Promise.all(
+        deduplicatedProjects.map(async (project) => {
+          const tasks = await (Task.find as any)({
+            project_id: project._id,
+            deleted_at: { $exists: false }
+          }).populate('assigned_to_user_id', 'full_name email')
+            .populate('created_by_user_id', 'full_name email');
+          
+          return {
+            ...project.toObject(),
+            tasks
+          };
+        })
+      );
+
+      return { projects: projectsWithTasks };
     } catch (error) {
       console.error('Error in getUserProjects:', error);
       if (error instanceof AuthorizationError) {
         return { projects: [], error: error.message };
       }
       return { projects: [], error: 'Failed to fetch user projects' };
+    }
+  }
+
+  /**
+   * Get tasks assigned to a specific user across all projects
+   */
+  static async getUserTasks(userId: string, currentUser: AuthUser): Promise<{ tasks: any[]; error?: string }> {
+    try {
+      // Check authorization - users can view their own tasks, managers+ can view team member tasks
+      if (!canViewUserData(currentUser, userId)) {
+        throw new AuthorizationError('Access denied. You can only view your own tasks or manage users under your authority.');
+      }
+
+      // First get all projects the user has access to
+      const projectsResult = await this.getUserProjects(userId, currentUser);
+      if (projectsResult.error) {
+        return { tasks: [], error: projectsResult.error };
+      }
+
+      // Get all tasks from those projects and filter by assignment
+      const allTasks = [];
+      for (const project of projectsResult.projects) {
+        if (project.tasks) {
+          // Filter tasks assigned to the target user
+          const userTasks = project.tasks.filter(task => 
+            task.assigned_to_user_id && task.assigned_to_user_id.toString() === userId
+          );
+          allTasks.push(...userTasks);
+        }
+      }
+
+      return { tasks: allTasks };
+    } catch (error) {
+      console.error('Error in getUserTasks:', error);
+      if (error instanceof AuthorizationError) {
+        return { tasks: [], error: error.message };
+      }
+      return { tasks: [], error: 'Failed to fetch user tasks' };
     }
   }
 

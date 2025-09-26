@@ -90,28 +90,34 @@ const seedData = async (): Promise<void> => {
         name: 'Website Redesign',
         description: 'Complete website redesign and development',
         client_id: clients[0]._id,
+        primary_manager_id: users[1]._id, // Assign manager as primary manager
         status: 'active',
         start_date: new Date('2024-01-01'),
         end_date: new Date('2024-06-30'),
-        budget: 50000
+        budget: 50000,
+        is_billable: true
       },
       {
         name: 'Mobile App Development',
         description: 'Cross-platform mobile application',
         client_id: clients[0]._id,
+        primary_manager_id: users[1]._id, // Assign manager as primary manager
         status: 'active',
         start_date: new Date('2024-02-01'),
         end_date: new Date('2024-08-31'),
-        budget: 75000
+        budget: 75000,
+        is_billable: true
       },
       {
         name: 'SEO Campaign',
         description: 'Search engine optimization campaign',
         client_id: clients[1]._id,
+        primary_manager_id: users[1]._id, // Assign manager as primary manager
         status: 'active',
         start_date: new Date('2024-03-01'),
         end_date: new Date('2024-12-31'),
-        budget: 25000
+        budget: 25000,
+        is_billable: true
       }
     ]);
 
@@ -123,6 +129,7 @@ const seedData = async (): Promise<void> => {
         name: 'Frontend Development',
         description: 'Develop responsive frontend components',
         project_id: projects[0]._id,
+        created_by_user_id: users[1]._id, // Created by manager
         estimated_hours: 120,
         hourly_rate: 50,
         is_active: true
@@ -131,6 +138,7 @@ const seedData = async (): Promise<void> => {
         name: 'Backend API Development',
         description: 'Create REST API endpoints',
         project_id: projects[0]._id,
+        created_by_user_id: users[1]._id, // Created by manager
         estimated_hours: 80,
         hourly_rate: 60,
         is_active: true
@@ -139,6 +147,7 @@ const seedData = async (): Promise<void> => {
         name: 'UI/UX Design',
         description: 'Design user interface mockups',
         project_id: projects[1]._id,
+        created_by_user_id: users[1]._id, // Created by manager
         estimated_hours: 60,
         hourly_rate: 55,
         is_active: true
@@ -147,6 +156,7 @@ const seedData = async (): Promise<void> => {
         name: 'Database Design',
         description: 'Design and optimize database schema',
         project_id: projects[1]._id,
+        created_by_user_id: users[1]._id, // Created by manager
         estimated_hours: 40,
         hourly_rate: 65,
         is_active: true
@@ -155,6 +165,7 @@ const seedData = async (): Promise<void> => {
         name: 'Content Optimization',
         description: 'SEO content optimization',
         project_id: projects[2]._id,
+        created_by_user_id: users[1]._id, // Created by manager
         estimated_hours: 100,
         hourly_rate: 45,
         is_active: true
