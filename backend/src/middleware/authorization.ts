@@ -1,12 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { UserRole } from '@/models/User';
 import { AuthUser } from '@/utils/auth';
-import { AuthorizationError, ValidationError } from '@/utils/errors';
+import { AuthorizationError } from '@/utils/errors';
 import {
   PermissionValidator,
-  requireSuperAdmin,
   requireSuperAdminOrManagement,
-  requireManagerOrAbove,
   canManageRoleHierarchy
 } from '@/utils/authorization';
 

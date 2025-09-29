@@ -1,6 +1,6 @@
 import { AuditLog, IAuditLog, AuditAction } from '@/models/AuditLog';
-import { User, UserRole } from '@/models/User';
-import { ValidationError, AuthorizationError } from '@/utils/errors';
+import { UserRole } from '@/models/User';
+import { AuthorizationError } from '@/utils/errors';
 
 interface AuthUser {
   id: string;

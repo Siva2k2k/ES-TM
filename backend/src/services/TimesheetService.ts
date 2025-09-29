@@ -2,9 +2,6 @@ import mongoose from 'mongoose';
 import {
   Timesheet,
   TimeEntry,
-  User,
-  Project,
-  Task,
   ITimesheet,
   ITimeEntry,
   IUser,
@@ -19,12 +16,7 @@ import {
   AuthorizationError
 } from '@/utils/errors';
 import {
-  PermissionValidator,
-  requireSuperAdminOrManagement,
-  requireManagerOrAbove,
-  requireTimesheetOwnershipOrManager,
   canManageRoleHierarchy,
-  canTransitionTimesheetStatus
 } from '@/utils/authorization';
 import {
   AuthUser,

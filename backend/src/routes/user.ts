@@ -7,8 +7,7 @@ import {
   setUserBillingValidation,
   updateUserValidation,
   getUsersByRoleValidation,
-  getUsersByRolesValidation,
-  setUserCredentialsValidation
+  getUsersByRolesValidation
 } from '@/controllers/UserController';
 import { requireAuth, requireManager, requireManagement, requireSuperAdmin } from '@/middleware/auth';
 

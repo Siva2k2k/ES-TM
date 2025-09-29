@@ -11,18 +11,14 @@ import {
   Target,
   Play,
   Pause,
-  Plus,
-  Edit,
   Eye,
   ChevronDown,
   ChevronRight,
   AlertCircle,
   DollarSign,
   User,
-  FileText,
   Activity,
   Timer,
-  BarChart3,
   TrendingUp,
   X
 } from 'lucide-react';

@@ -1,9 +1,7 @@
 import { BillingSnapshot, IBillingSnapshot } from '@/models/BillingSnapshot';
 import { Timesheet } from '@/models/Timesheet';
-import { User, UserRole } from '@/models/User';
-import { TimeEntry } from '@/models/TimeEntry';
-import { Project } from '@/models/Project';
-import { ValidationError, NotFoundError, AuthorizationError } from '@/utils/errors';
+import { UserRole } from '@/models/User';
+import { ValidationError, AuthorizationError } from '@/utils/errors';
 
 interface AuthUser {
   id: string;

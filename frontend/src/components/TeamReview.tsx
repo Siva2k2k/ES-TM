@@ -202,7 +202,7 @@ const TeamReview: React.FC<TeamReviewProps> = ({ defaultView = 'list' }) => {
       console.log('👥 Available team members:', teamMembers.map(m => ({ id: m.id, name: m.full_name, role: m.role })));
       
       // Get timesheets based on role
-      let allTimesheets: TimesheetWithDetails[] = [];
+      const allTimesheets: TimesheetWithDetails[] = [];
       
       if (isLeadRole) {
         console.log('👁️ Lead: Loading employee timesheets with project-specific permissions');

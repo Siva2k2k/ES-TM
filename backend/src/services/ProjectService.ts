@@ -1,11 +1,9 @@
-import mongoose from 'mongoose';
 import {
   Project,
   ProjectMember,
   Client,
   Task,
   IProject,
-  IProjectMember,
   IClient,
   ITask,
   ProjectStatus
@@ -13,7 +11,6 @@ import {
 import {
   ValidationError,
   NotFoundError,
-  ConflictError,
   AuthorizationError
 } from '@/utils/errors';
 import {

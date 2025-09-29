@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import User, { UserRole } from '@/models/User';
 import { JWTUtils } from '@/utils/jwt';
-import { AuthenticationError } from '@/utils/errors';
 
 interface AuthUser {
   id: string;

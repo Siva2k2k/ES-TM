@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
-import User, { IUser, UserRole } from '@/models/User';
+import User, { UserRole } from '@/models/User';
 import { PasswordUtils } from '@/utils/password';
 import { JWTUtils, TokenPair } from '@/utils/jwt';
 import {
@@ -29,7 +29,7 @@ export class AuthController {
   /**
    * User registration
    */
-  static register = handleAsyncError(async (req: Request, res: Response) => {
+  static readonly register = handleAsyncError(async (req: Request, res: Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       throw new ValidationError(errors.array().map(err => err.msg).join(', '));
