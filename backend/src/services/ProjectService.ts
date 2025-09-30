@@ -1000,8 +1000,8 @@ export class ProjectService {
   /**
    * Add project member (alias for addUserToProject with simpler interface)
    */
-  static async addProjectMember(projectId: string, userId: string, projectRole: string, currentUser: AuthUser): Promise<{ success: boolean; error?: string }> {
-    return this.addUserToProject(projectId, userId, projectRole, false, false, currentUser);
+  static async addProjectMember(projectId: string, userId: string, projectRole: string, isPrimaryManager: boolean, isSecondaryManager: boolean,  currentUser: AuthUser): Promise<{ success: boolean; error?: string }> {
+    return this.addUserToProject(projectId, userId, projectRole, isPrimaryManager, isSecondaryManager, currentUser);
   }
 
   /**
@@ -1127,5 +1127,548 @@ export class ProjectService {
     });
 
     return !!membership;
+  }
+
+  // ========================================================================
+  // MULTI-PROJECT ROLE SYSTEM ENHANCEMENTS
+  // ========================================================================
+
+  /**
+   * Project-specific permission interface
+   */
+  static async getProjectPermissions(userId: string, projectId: string): Promise<{
+    projectRole: string | null;
+    hasManagerAccess: boolean;
+    canAddMembers: boolean;
+    canApproveTimesheets: boolean;
+    canViewAllTasks: boolean;
+    canAssignTasks: boolean;
+  }> {
+    try {
+      // Get user's system role first
+      const User = (await import('@/models/User')).default;
+      const user = await (User.findById as any)(userId);
+
+      if (!user) {
+        return {
+          projectRole: null,
+          hasManagerAccess: false,
+          canAddMembers: false,
+          canApproveTimesheets: false,
+          canViewAllTasks: false,
+          canAssignTasks: false
+        };
+      }
+
+      // Super admin and management have all permissions everywhere
+      if (['super_admin', 'management'].includes(user.role)) {
+        return {
+          projectRole: 'management',
+          hasManagerAccess: true,
+          canAddMembers: true,
+          canApproveTimesheets: true,
+          canViewAllTasks: true,
+          canAssignTasks: true
+        };
+      }
+
+      // Check if user is primary manager of the project
+      const project = await (Project.findOne as any)({
+        _id: projectId,
+        deleted_at: { $exists: false }
+      });
+
+      if (project && project.primary_manager_id.toString() === userId) {
+        return {
+          projectRole: 'manager',
+          hasManagerAccess: true,
+          canAddMembers: true,
+          canApproveTimesheets: true,
+          canViewAllTasks: true,
+          canAssignTasks: true
+        };
+      }
+
+      // Get project membership
+      const membership = await (ProjectMember.findOne as any)({
+        project_id: projectId,
+        user_id: userId,
+        removed_at: { $exists: false },
+        deleted_at: { $exists: false }
+      });
+
+      if (!membership) {
+        return {
+          projectRole: null,
+          hasManagerAccess: false,
+          canAddMembers: false,
+          canApproveTimesheets: false,
+          canViewAllTasks: false,
+          canAssignTasks: false
+        };
+      }
+
+      // Determine permissions based on project role and manager access flags
+      const hasManagerAccess = membership.is_primary_manager || membership.is_secondary_manager || membership.project_role === 'manager';
+      const isLead = membership.project_role === 'lead';
+      const isEmployee = membership.project_role === 'employee';
+
+      return {
+        projectRole: membership.project_role,
+        hasManagerAccess,
+        canAddMembers: hasManagerAccess,
+        canApproveTimesheets: hasManagerAccess,
+        canViewAllTasks: hasManagerAccess || isLead,
+        canAssignTasks: hasManagerAccess || isLead
+      };
+
+    } catch (error) {
+      console.error('Error getting project permissions:', error);
+      return {
+        projectRole: null,
+        hasManagerAccess: false,
+        canAddMembers: false,
+        canApproveTimesheets: false,
+        canViewAllTasks: false,
+        canAssignTasks: false
+      };
+    }
+  }
+
+  /**
+   * Check if user can add another user to a specific project
+   */
+  static async canAddToProject(
+    currentUserId: string,
+    projectId: string,
+    targetUserId: string,
+    targetRole: string
+  ): Promise<{ canAdd: boolean; reason?: string }> {
+    try {
+      // Get current user's permissions on this project
+      const permissions = await this.getProjectPermissions(currentUserId, projectId);
+
+      if (!permissions.canAddMembers) {
+        return {
+          canAdd: false,
+          reason: 'You do not have permission to add members to this project'
+        };
+      }
+
+      // Check if target user already exists in this project
+      const existingMembership = await (ProjectMember.findOne as any)({
+        project_id: projectId,
+        user_id: targetUserId,
+        removed_at: { $exists: false },
+        deleted_at: { $exists: false }
+      });
+
+      if (existingMembership) {
+        return {
+          canAdd: false,
+          reason: 'User is already a member of this project'
+        };
+      }
+
+      // Validate target role
+      const validRoles = ['employee', 'lead', 'manager'];
+      if (!validRoles.includes(targetRole)) {
+        return {
+          canAdd: false,
+          reason: 'Invalid project role specified'
+        };
+      }
+
+      // Additional role-based validation
+      const User = (await import('@/models/User')).default;
+      const currentUser = await (User.findById as any)(currentUserId);
+      const targetUser = await (User.findById as any)(targetUserId);
+
+      if (!currentUser || !targetUser) {
+        return {
+          canAdd: false,
+          reason: 'User not found'
+        };
+      }
+
+      // System role validation - can't assign higher project role than system allows
+      if (targetRole === 'manager' && !['manager', 'management', 'super_admin'].includes(targetUser.role)) {
+        return {
+          canAdd: false,
+          reason: 'User system role does not support manager project role'
+        };
+      }
+
+      return { canAdd: true };
+
+    } catch (error) {
+      console.error('Error checking add permission:', error);
+      return {
+        canAdd: false,
+        reason: 'Error validating permissions'
+      };
+    }
+  }
+
+  /**
+   * Enhanced add project member with role validation
+   */
+  static async addProjectMemberEnhanced(
+    projectId: string,
+    userId: string,
+    projectRole: string,
+    hasManagerAccess: boolean = false,
+    currentUser: AuthUser
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Validate permission to add
+      const canAddResult = await this.canAddToProject(currentUser.id, projectId, userId, projectRole);
+
+      if (!canAddResult.canAdd) {
+        return {
+          success: false,
+          error: canAddResult.reason || 'Cannot add user to project'
+        };
+      }
+
+      // Determine manager access flags
+      let isPrimaryManager = false;
+      let isSecondaryManager = false;
+
+      if (projectRole === 'manager') {
+        isPrimaryManager = true;
+      } else if (hasManagerAccess) {
+        isSecondaryManager = true;
+      }
+
+      // Create project membership
+      const projectMember = new ProjectMember({
+        project_id: projectId,
+        user_id: userId,
+        project_role: projectRole,
+        is_primary_manager: isPrimaryManager,
+        is_secondary_manager: isSecondaryManager,
+        assigned_at: new Date()
+      });
+
+      await projectMember.save();
+
+      console.log(`Added user ${userId} to project ${projectId} with role ${projectRole} (manager access: ${hasManagerAccess})`);
+      return { success: true };
+
+    } catch (error) {
+      console.error('Error in addProjectMemberEnhanced:', error);
+      return {
+        success: false,
+        error: 'Failed to add project member'
+      };
+    }
+  }
+
+  /**
+   * Update project member role and permissions
+   */
+  static async updateProjectMemberRole(
+    projectId: string,
+    userId: string,
+    newProjectRole: string,
+    hasManagerAccess: boolean = false,
+    currentUser: AuthUser
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Check if current user can manage members in this project
+      const permissions = await this.getProjectPermissions(currentUser.id, projectId);
+
+      if (!permissions.canAddMembers) {
+        return {
+          success: false,
+          error: 'You do not have permission to modify members in this project'
+        };
+      }
+
+      // Find existing membership
+      const membership = await (ProjectMember.findOne as any)({
+        project_id: projectId,
+        user_id: userId,
+        removed_at: { $exists: false },
+        deleted_at: { $exists: false }
+      });
+
+      if (!membership) {
+        return {
+          success: false,
+          error: 'User is not a member of this project'
+        };
+      }
+
+      // Validate new role
+      const validRoles = ['employee', 'lead', 'manager'];
+      if (!validRoles.includes(newProjectRole)) {
+        return {
+          success: false,
+          error: 'Invalid project role'
+        };
+      }
+
+      // Update membership
+      const updates: any = {
+        project_role: newProjectRole,
+        updated_at: new Date()
+      };
+
+      // Set manager access flags
+      if (newProjectRole === 'manager') {
+        updates.is_primary_manager = true;
+        updates.is_secondary_manager = false;
+      } else if (hasManagerAccess) {
+        updates.is_primary_manager = false;
+        updates.is_secondary_manager = true;
+      } else {
+        updates.is_primary_manager = false;
+        updates.is_secondary_manager = false;
+      }
+
+      await (ProjectMember.updateOne as any)({
+        project_id: projectId,
+        user_id: userId
+      }, updates);
+
+      console.log(`Updated user ${userId} in project ${projectId} to role ${newProjectRole} (manager access: ${hasManagerAccess})`);
+      return { success: true };
+
+    } catch (error) {
+      console.error('Error in updateProjectMemberRole:', error);
+      return {
+        success: false,
+        error: 'Failed to update project member role'
+      };
+    }
+  }
+
+  /**
+   * Get user's roles across all projects
+   */
+  static async getUserProjectRoles(userId: string, currentUser: AuthUser): Promise<{
+    userProjectRoles?: Array<{
+      projectId: string;
+      projectName: string;
+      projectRole: string;
+      hasManagerAccess: boolean;
+      isActive: boolean;
+    }>;
+    error?: string;
+  }> {
+    try {
+      // Check permission - users can see their own roles, managers+ can see others
+      if (userId !== currentUser.id && !canManageRoleHierarchy(currentUser.role, 'employee')) {
+        return {
+          error: 'You do not have permission to view this user\'s project roles'
+        };
+      }
+
+      const memberships = await (ProjectMember.find as any)({
+        user_id: userId,
+        removed_at: { $exists: false },
+        deleted_at: { $exists: false }
+      }).populate('project_id', 'name status');
+
+      const userProjectRoles = memberships.map((membership: any) => ({
+        projectId: membership.project_id._id.toString(),
+        projectName: membership.project_id.name,
+        projectRole: membership.project_role,
+        hasManagerAccess: membership.is_primary_manager || membership.is_secondary_manager,
+        isActive: membership.project_id.status === 'active'
+      }));
+
+      return { userProjectRoles };
+
+    } catch (error) {
+      console.error('Error in getUserProjectRoles:', error);
+      return {
+        error: 'Failed to fetch user project roles'
+      };
+    }
+  }
+
+  /**
+   * Get available users for a project (filtered by current user's permissions)
+   */
+  static async getAvailableUsersForProject(
+    projectId: string,
+    currentUser: AuthUser
+  ): Promise<{
+    users?: Array<{
+      id: string;
+      email: string;
+      full_name: string;
+      role: string;
+      currentProjectRoles: Array<{
+        projectId: string;
+        projectName: string;
+        projectRole: string;
+      }>;
+    }>;
+    error?: string;
+  }> {
+    try {
+      // Check if user can add members to this project
+      const permissions = await this.getProjectPermissions(currentUser.id, projectId);
+
+      if (!permissions.canAddMembers) {
+        return {
+          error: 'You do not have permission to view available users for this project'
+        };
+      }
+
+      const User = (await import('@/models/User')).default;
+
+      // Get all active users
+      let userQuery: any = {
+        is_active: true,
+        is_approved_by_super_admin: true,
+        deleted_at: { $exists: false }
+      };
+
+      const users = await (User.find as any)(userQuery);
+
+      // Get current project members to exclude them
+      const currentMembers = await (ProjectMember.find as any)({
+        project_id: projectId,
+        removed_at: { $exists: false },
+        deleted_at: { $exists: false }
+      });
+
+      const currentMemberIds = currentMembers.map((m: any) => m.user_id.toString());
+
+      // Filter out current members and get project roles for remaining users
+      const availableUsersPromises = users
+        .filter((user: any) => !currentMemberIds.includes(user._id.toString()))
+        .map(async (user: any) => {
+          // Get user's roles in other projects
+          const otherMemberships = await (ProjectMember.find as any)({
+            user_id: user._id,
+            project_id: { $ne: projectId },
+            removed_at: { $exists: false },
+            deleted_at: { $exists: false }
+          }).populate('project_id', 'name');
+
+          const currentProjectRoles = otherMemberships.map((membership: any) => ({
+            projectId: membership.project_id._id.toString(),
+            projectName: membership.project_id.name,
+            projectRole: membership.project_role
+          }));
+
+          return {
+            id: user._id.toString(),
+            email: user.email,
+            full_name: user.full_name,
+            role: user.role,
+            currentProjectRoles
+          };
+        });
+
+      const availableUsers = await Promise.all(availableUsersPromises);
+
+      return { users: availableUsers };
+
+    } catch (error) {
+      console.error('Error in getAvailableUsersForProject:', error);
+      return {
+        error: 'Failed to fetch available users'
+      };
+    }
+  }
+
+  /**
+   * Check if user has manager-level access on project
+   */
+  static async hasManagerAccessOnProject(userId: string, projectId: string): Promise<boolean> {
+    try {
+      const permissions = await this.getProjectPermissions(userId, projectId);
+      return permissions.hasManagerAccess;
+    } catch (error) {
+      console.error('Error checking manager access:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get enhanced project members with detailed role information
+   */
+  static async getProjectMembersEnhanced(projectId: string, currentUser: AuthUser): Promise<{
+    members?: Array<{
+      id: string;
+      user_id: string;
+      user_name: string;
+      user_email: string;
+      user_system_role: string;
+      project_role: string;
+      has_manager_access: boolean;
+      is_primary_manager: boolean;
+      is_secondary_manager: boolean;
+      assigned_at: Date;
+      other_project_roles: Array<{
+        projectId: string;
+        projectName: string;
+        projectRole: string;
+      }>;
+    }>;
+    error?: string;
+  }> {
+    try {
+      // Check project access
+      const hasAccess = await this.checkProjectAccess(projectId, currentUser);
+      if (!hasAccess) {
+        return { error: 'You do not have access to this project' };
+      }
+
+      // Get project members with user details
+      const members = await (ProjectMember.find as any)({
+        project_id: projectId,
+        removed_at: { $exists: false },
+        deleted_at: { $exists: false }
+      }).populate('user_id', 'full_name email role');
+
+      const User = (await import('@/models/User')).default;
+
+      // Enhance members data with additional role information
+      const enhancedMembersPromises = members.map(async (member: any) => {
+        // Get user's roles in other projects
+        const otherMemberships = await (ProjectMember.find as any)({
+          user_id: member.user_id._id,
+          project_id: { $ne: projectId },
+          removed_at: { $exists: false },
+          deleted_at: { $exists: false }
+        }).populate('project_id', 'name');
+
+        const otherProjectRoles = otherMemberships.map((membership: any) => ({
+          projectId: membership.project_id._id.toString(),
+          projectName: membership.project_id.name,
+          projectRole: membership.project_role
+        }));
+
+        return {
+          id: member._id.toString(),
+          user_id: member.user_id._id.toString(),
+          user_name: member.user_id.full_name,
+          user_email: member.user_id.email,
+          user_system_role: member.user_id.role,
+          project_role: member.project_role,
+          has_manager_access: member.is_primary_manager || member.is_secondary_manager,
+          is_primary_manager: member.is_primary_manager,
+          is_secondary_manager: member.is_secondary_manager,
+          assigned_at: member.assigned_at,
+          other_project_roles: otherProjectRoles
+        };
+      });
+
+      const enhancedMembers = await Promise.all(enhancedMembersPromises);
+
+      return { members: enhancedMembers };
+
+    } catch (error) {
+      console.error('Error in getProjectMembersEnhanced:', error);
+      return { error: 'Failed to fetch project members' };
+    }
   }
 }

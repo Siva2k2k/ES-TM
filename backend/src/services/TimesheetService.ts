@@ -66,8 +66,8 @@ export class TimesheetService {
 
   /**
    * Get all timesheets (Super Admin and Management)
-   */
-  static async getAllTimesheets(currentUser: AuthUser): Promise<{ timesheets: ITimesheet[]; error?: string }> {
+   */l
+  static async getAlTimesheets(currentUser: AuthUser): Promise<{ timesheets: ITimesheet[]; error?: string }> {
     try {
       // Check permissions
       if (!['super_admin', 'management'].includes(currentUser.role)) {

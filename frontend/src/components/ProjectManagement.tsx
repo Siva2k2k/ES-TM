@@ -260,19 +260,30 @@ export const ProjectManagement: React.FC = () => {
 
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!selectedProject) return;
+
+    // Validate task name length
+    if (taskForm.name.trim().length < 2) {
+      alert('Task name must be at least 2 characters long');
+      return;
+    }
+
+    if (taskForm.name.trim().length > 200) {
+      alert('Task name must be less than 200 characters');
+      return;
+    }
 
     try {
       const result = await ProjectService.createTask({
         project_id: selectedProject.id,
-        name: taskForm.name,
-        description: taskForm.description,
+        name: taskForm.name.trim(),
+        description: taskForm.description?.trim(),
         assigned_to_user_id: taskForm.assigned_to_user_id || undefined,
         status: taskForm.status,
         estimated_hours: taskForm.estimated_hours,
         is_billable: taskForm.is_billable,
-        created_by_user_id: '' // Will be set by RLS
+        created_by_user_id: currentUser?.id || ''
       });
 
       if (result.error) {
@@ -374,6 +385,7 @@ export const ProjectManagement: React.FC = () => {
   const loadProjectMembers = async (projectId: string) => {
     try {
       const result = await ProjectService.getProjectMembers(projectId);
+      // console.log(result);
       if (!result.error) {
         setProjectMembersList(result.members);
       }
@@ -409,13 +421,24 @@ export const ProjectManagement: React.FC = () => {
   // Handle edit task form submission
   const handleEditTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!editingTask) return;
+
+    // Validate task name length
+    if (taskForm.name.trim().length < 2) {
+      alert('Task name must be at least 2 characters long');
+      return;
+    }
+
+    if (taskForm.name.trim().length > 200) {
+      alert('Task name must be less than 200 characters');
+      return;
+    }
 
     try {
       const result = await ProjectService.updateTask(editingTask.id, {
-        name: taskForm.name,
-        description: taskForm.description,
+        name: taskForm.name.trim(),
+        description: taskForm.description?.trim(),
         assigned_to_user_id: taskForm.assigned_to_user_id || undefined,
         status: taskForm.status,
         estimated_hours: taskForm.estimated_hours,
@@ -446,7 +469,20 @@ export const ProjectManagement: React.FC = () => {
     if (!selectedMemberProject || !selectedUserId) return;
 
     try {
-      await ProjectService.addProjectMember(selectedMemberProject.id, selectedUserId, selectedRole);
+      const isSecondaryManager = selectedRole === 'manager';
+      const isPrimaryManager = false;
+      const res = await ProjectService.addUserToProject(
+        selectedMemberProject.id, 
+        selectedUserId, 
+        selectedRole, 
+        isPrimaryManager, 
+        isSecondaryManager);
+
+      if (!res.success) {
+        alert(`Error adding member: ${res.error || 'Unknown error'}`);
+        console.error('addUserToProject failed:', res.error);
+        return;
+      }
       alert('Employee added successfully!');
       setShowAddMember(false);
       setSelectedUserId('');
@@ -662,6 +698,34 @@ export const ProjectManagement: React.FC = () => {
                       {project.description && (
                         <p className="text-gray-600 text-sm mb-4 line-clamp-3">{project.description}</p>
                       )}
+
+                      {/* Client Information */}
+                      {project.client_name && (
+                        <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                          <h4 className="text-sm font-semibold text-blue-900 mb-2 flex items-center">
+                            <Building2 className="h-4 w-4 mr-2" />
+                            Client Details
+                          </h4>
+                          <div className="space-y-1">
+                            <div className="flex items-center text-sm text-blue-800">
+                              <span className="font-medium">{project.client_name}</span>
+                            </div>
+                            {project.client_contact_person && (
+                              <div className="flex items-center text-sm text-blue-700">
+                                <span className="text-blue-600">Contact:</span>
+                                <span className="ml-2">{project.client_contact_person}</span>
+                              </div>
+                            )}
+                            {project.client_contact_email && (
+                              <div className="flex items-center text-sm text-blue-700">
+                                <span className="text-blue-600">Email:</span>
+                                <span className="ml-2">{project.client_contact_email}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
                       <div className="space-y-2">
                         <div className="flex items-center text-sm text-gray-500">
                           <Calendar className="h-4 w-4 mr-2" />
@@ -676,28 +740,91 @@ export const ProjectManagement: React.FC = () => {
                         )}
                         <hr />
                         <div>
-                          <h4 className="text-md font-semibold text-gray-900">
-                            Tasks ({userTasks.filter((task) => task.project_id === project.id).length})
-                          </h4>
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-md font-semibold text-gray-900 flex items-center">
+                              <CheckSquare className="h-4 w-4 mr-2" />
+                              Tasks ({userTasks.filter((task) => task.project_id === project.id).length})
+                            </h4>
+                            {actualUserRole === 'lead' && (
+                              <button
+                                onClick={() => {
+                                  setSelectedProject(project);
+                                  setShowCreateTask(true);
+                                }}
+                                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                title="Add new task"
+                              >
+                                + Add Task
+                              </button>
+                            )}
+                          </div>
+
                           {userTasks.filter((task) => task.project_id === project.id).length > 0 ? (
-                            <div className='mt-3 space-y-1'>
+                            <div className='mt-3 space-y-2'>
                               {userTasks.filter((task) => task.project_id === project.id).map((task) => (
-                                <div key={task.id} className="text-sm font-light text-gray-600 flex items-center justify-between">
-                                  <span>{task.name}</span>
-                                  <span className={`px-2 py-1 text-xs rounded-full ${
-                                    task.status === 'completed'
-                                      ? 'bg-green-100 text-green-800'
-                                      : task.status === 'in_progress'
-                                      ? 'bg-blue-100 text-blue-800'
-                                      : 'bg-gray-100 text-gray-800'
-                                  }`}>
-                                    {task.status.replace('_', ' ')}
-                                  </span>
+                                <div key={task.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                  <div className="flex items-start justify-between mb-2">
+                                    <div className="flex-1">
+                                      <h5 className="text-sm font-medium text-gray-900">{task.name}</h5>
+                                      {task.description && (
+                                        <p className="text-xs text-gray-600 mt-1 line-clamp-2">{task.description}</p>
+                                      )}
+                                    </div>
+                                    <span className={`px-2 py-1 text-xs rounded-full ml-2 ${
+                                      task.status === 'completed'
+                                        ? 'bg-green-100 text-green-800'
+                                        : task.status === 'in_progress'
+                                        ? 'bg-blue-100 text-blue-800'
+                                        : task.status === 'pending'
+                                        ? 'bg-yellow-100 text-yellow-800'
+                                        : 'bg-gray-100 text-gray-800'
+                                    }`}>
+                                      {task.status.replace('_', ' ')}
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center justify-between text-xs text-gray-500">
+                                    <div className="flex items-center space-x-3">
+                                      {task.estimated_hours && (
+                                        <span className="flex items-center">
+                                          <Clock className="h-3 w-3 mr-1" />
+                                          {task.estimated_hours}h est.
+                                        </span>
+                                      )}
+                                      {task.is_billable && (
+                                        <span className="text-green-600 font-medium">Billable</span>
+                                      )}
+                                    </div>
+
+                                    {task.assigned_to_user_id === currentUser?.id && task.status !== 'completed' && (
+                                      <button
+                                        onClick={() => handleUpdateTaskStatus(task.id, 'completed')}
+                                        className="text-blue-600 hover:text-blue-800 font-medium"
+                                        title="Mark as completed"
+                                      >
+                                        Mark Complete
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                               ))}
                             </div>
-                          ):(
-                            <div className="mt-3 text-sm font-light text-gray-600">No Tasks available</div>
+                          ) : (
+                            <div className="mt-3 p-4 bg-gray-50 rounded-lg text-center">
+                              <CheckSquare className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                              <p className="text-sm text-gray-600">No tasks assigned yet</p>
+                              {actualUserRole === 'lead' && (
+                                <button
+                                  onClick={() => {
+                                    setSelectedProject(project);
+                                    setShowCreateTask(true);
+                                  }}
+                                  className="mt-2 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                >
+                                  Create First Task
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>
@@ -709,6 +836,176 @@ export const ProjectManagement: React.FC = () => {
                   <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">No Projects Assigned</h3>
                   <p className="text-gray-600">You don't have any projects assigned to you yet.</p>
+                </div>
+              )}
+            </div>
+
+            {/* All Tasks Overview Section */}
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                <CheckSquare className="h-5 w-5 mr-2" />
+                All My Tasks ({userTasks.length})
+              </h2>
+
+              {userTasks.length > 0 ? (
+                <div className="space-y-4">
+                  {/* Task Summary Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                      <div className="flex items-center">
+                        <div className="p-2 bg-blue-100 rounded-lg">
+                          <CheckSquare className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-medium text-gray-600">Total Tasks</p>
+                          <p className="text-xl font-bold text-gray-900">{userTasks.length}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                      <div className="flex items-center">
+                        <div className="p-2 bg-yellow-100 rounded-lg">
+                          <Clock className="h-5 w-5 text-yellow-600" />
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-medium text-gray-600">Pending</p>
+                          <p className="text-xl font-bold text-gray-900">
+                            {userTasks.filter(task => task.status === 'pending').length}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                      <div className="flex items-center">
+                        <div className="p-2 bg-blue-100 rounded-lg">
+                          <Target className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-medium text-gray-600">In Progress</p>
+                          <p className="text-xl font-bold text-gray-900">
+                            {userTasks.filter(task => task.status === 'in_progress').length}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                      <div className="flex items-center">
+                        <div className="p-2 bg-green-100 rounded-lg">
+                          <CheckCircle className="h-5 w-5 text-green-600" />
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-medium text-gray-600">Completed</p>
+                          <p className="text-xl font-bold text-gray-900">
+                            {userTasks.filter(task => task.status === 'completed').length}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Tasks List */}
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                    <div className="px-6 py-4 border-b border-gray-200">
+                      <h3 className="text-lg font-semibold text-gray-900">Task Details</h3>
+                    </div>
+                    <div className="divide-y divide-gray-200">
+                      {userTasks.map((task) => {
+                        const project = userProjects.find(p => p.id === task.project_id);
+                        return (
+                          <div key={task.id} className="p-6 hover:bg-gray-50">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-start space-x-4">
+                                  <div className="flex-1">
+                                    <h4 className="text-lg font-medium text-gray-900 mb-2">{task.name}</h4>
+                                    {task.description && (
+                                      <p className="text-gray-600 text-sm mb-3">{task.description}</p>
+                                    )}
+
+                                    <div className="flex items-center space-x-4 text-sm text-gray-500 mb-3">
+                                      {project && (
+                                        <div className="flex items-center">
+                                          <Building2 className="h-4 w-4 mr-1" />
+                                          <span className="font-medium">{project.name}</span>
+                                          {project.client_name && (
+                                            <span className="ml-2 text-blue-600">({project.client_name})</span>
+                                          )}
+                                        </div>
+                                      )}
+                                      {task.estimated_hours && (
+                                        <div className="flex items-center">
+                                          <Clock className="h-4 w-4 mr-1" />
+                                          <span>{task.estimated_hours}h estimated</span>
+                                        </div>
+                                      )}
+                                      {task.is_billable && (
+                                        <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                                          Billable
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center space-x-3 ml-4">
+                                <span className={`px-3 py-1 text-sm font-medium rounded-full ${
+                                  task.status === 'completed'
+                                    ? 'bg-green-100 text-green-800'
+                                    : task.status === 'in_progress'
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : task.status === 'pending'
+                                    ? 'bg-yellow-100 text-yellow-800'
+                                    : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {task.status.replace('_', ' ')}
+                                </span>
+
+                                {task.assigned_to_user_id === currentUser?.id && task.status !== 'completed' && (
+                                  <button
+                                    onClick={() => handleUpdateTaskStatus(task.id, 'completed')}
+                                    className="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                  >
+                                    Complete
+                                  </button>
+                                )}
+
+                                {actualUserRole === 'lead' && (
+                                  <button
+                                    onClick={() => {
+                                      setEditingTask(task);
+                                      setTaskForm({
+                                        name: task.name,
+                                        description: task.description || '',
+                                        assigned_to_user_id: task.assigned_to_user_id,
+                                        status: task.status,
+                                        estimated_hours: task.estimated_hours || 0,
+                                        is_billable: task.is_billable
+                                      });
+                                      setShowEditTask(true);
+                                    }}
+                                    className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
+                                    title="Edit task"
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+                  <CheckSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Tasks Assigned</h3>
+                  <p className="text-gray-600">You don't have any tasks assigned yet.</p>
                 </div>
               )}
             </div>

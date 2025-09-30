@@ -56,6 +56,10 @@ export interface Project {
   created_at: string;
   updated_at: string;
   deleted_at?: string;
+  // Populated client information (from joins/lookups)
+  client_name?: string;
+  client_contact_person?: string;
+  client_contact_email?: string;
 }
 
 export interface ProjectMember {

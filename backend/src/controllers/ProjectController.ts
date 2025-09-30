@@ -232,10 +232,12 @@ export class ProjectController {
     if (!req.user) {
       throw new AuthorizationError('User not authenticated');
     }
-
+    
     const { projectId } = req.params;
     const { userId, projectRole } = req.body;
-    const result = await ProjectService.addProjectMember(projectId, userId, projectRole || 'member', req.user);
+    const isPrimaryManager = Boolean(req.body.is_primary_manager ?? req.body.isPrimaryManager ?? false);
+    const isSecondaryManager = Boolean(req.body.is_secondary_manager ?? req.body.isSecondaryManager ?? false);
+    const result = await ProjectService.addProjectMember(projectId, userId, projectRole || 'member', isPrimaryManager, isSecondaryManager, req.user);
 
     if (!result.success) {
       return res.status(400).json({
@@ -298,7 +300,7 @@ export class ProjectController {
 
     res.json({
       success: true,
-      members: result.members
+      data: result.members
     });
   });
 
@@ -531,6 +533,193 @@ export class ProjectController {
       client: result.client
     });
   });
+
+  // ========================================================================
+  // MULTI-PROJECT ROLE SYSTEM ENDPOINTS
+  // ========================================================================
+
+  /**
+   * Get project permissions for current user
+   */
+  static getProjectPermissions = handleAsyncError(async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      throw new ValidationError(errors.array().map(err => err.msg).join(', '));
+    }
+
+    if (!req.user) {
+      throw new AuthorizationError('User not authenticated');
+    }
+
+    const { projectId } = req.params;
+    const permissions = await ProjectService.getProjectPermissions(req.user.id, projectId);
+
+    res.json({
+      success: true,
+      permissions
+    });
+  });
+
+  /**
+   * Add project member with enhanced role validation
+   */
+  static addProjectMemberEnhanced = handleAsyncError(async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      throw new ValidationError(errors.array().map(err => err.msg).join(', '));
+    }
+
+    if (!req.user) {
+      throw new AuthorizationError('User not authenticated');
+    }
+
+    const { projectId } = req.params;
+    const { userId, projectRole, hasManagerAccess } = req.body;
+
+    const result = await ProjectService.addProjectMemberEnhanced(
+      projectId,
+      userId,
+      projectRole,
+      hasManagerAccess || false,
+      req.user
+    );
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        error: result.error
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Project member added successfully'
+    });
+  });
+
+  /**
+   * Update project member role and permissions
+   */
+  static updateProjectMemberRole = handleAsyncError(async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      throw new ValidationError(errors.array().map(err => err.msg).join(', '));
+    }
+
+    if (!req.user) {
+      throw new AuthorizationError('User not authenticated');
+    }
+
+    const { projectId, userId } = req.params;
+    const { projectRole, hasManagerAccess } = req.body;
+
+    const result = await ProjectService.updateProjectMemberRole(
+      projectId,
+      userId,
+      projectRole,
+      hasManagerAccess || false,
+      req.user
+    );
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        error: result.error
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Project member role updated successfully'
+    });
+  });
+
+  /**
+   * Get user's roles across all projects
+   */
+  static getUserProjectRoles = handleAsyncError(async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      throw new ValidationError(errors.array().map(err => err.msg).join(', '));
+    }
+
+    if (!req.user) {
+      throw new AuthorizationError('User not authenticated');
+    }
+
+    const { userId } = req.params;
+    const result = await ProjectService.getUserProjectRoles(userId, req.user);
+
+    if (result.error) {
+      return res.status(403).json({
+        success: false,
+        error: result.error
+      });
+    }
+
+    res.json({
+      success: true,
+      userProjectRoles: result.userProjectRoles
+    });
+  });
+
+  /**
+   * Get available users for project
+   */
+  static getAvailableUsersForProject = handleAsyncError(async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      throw new ValidationError(errors.array().map(err => err.msg).join(', '));
+    }
+
+    if (!req.user) {
+      throw new AuthorizationError('User not authenticated');
+    }
+
+    const { projectId } = req.params;
+    const result = await ProjectService.getAvailableUsersForProject(projectId, req.user);
+
+    if (result.error) {
+      return res.status(403).json({
+        success: false,
+        error: result.error
+      });
+    }
+
+    res.json({
+      success: true,
+      users: result.users
+    });
+  });
+
+  /**
+   * Get enhanced project members with detailed role information
+   */
+  static getProjectMembersEnhanced = handleAsyncError(async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      throw new ValidationError(errors.array().map(err => err.msg).join(', '));
+    }
+
+    if (!req.user) {
+      throw new AuthorizationError('User not authenticated');
+    }
+
+    const { projectId } = req.params;
+    const result = await ProjectService.getProjectMembersEnhanced(projectId, req.user);
+
+    if (result.error) {
+      return res.status(403).json({
+        success: false,
+        error: result.error
+      });
+    }
+
+    res.json({
+      success: true,
+      members: result.members
+    });
+  });
 }
 
 // Validation middleware
@@ -732,4 +921,40 @@ export const clientIdValidation = [
       return mongoIdPattern.test(value) || uuidPattern.test(value);
     })
     .withMessage('Invalid client ID format (must be ObjectId or UUID)')
+];
+
+// ========================================================================
+// MULTI-PROJECT ROLE SYSTEM VALIDATIONS
+// ========================================================================
+
+export const addProjectMemberEnhancedValidation = [
+  ...projectIdValidation,
+  body('userId')
+    .custom((value) => {
+      if (!value) return false; // User ID is required
+      // Accept both MongoDB ObjectId (24 char hex) and UUID formats
+      const mongoIdPattern = /^[0-9a-fA-F]{24}$/;
+      const uuidPattern = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+      return mongoIdPattern.test(value) || uuidPattern.test(value);
+    })
+    .withMessage('Invalid user ID format (must be ObjectId or UUID)'),
+  body('projectRole')
+    .isIn(['employee', 'lead', 'manager'])
+    .withMessage('Project role must be one of: employee, lead, manager'),
+  body('hasManagerAccess')
+    .optional()
+    .isBoolean()
+    .withMessage('hasManagerAccess must be a boolean')
+];
+
+export const updateProjectMemberRoleValidation = [
+  ...projectIdValidation,
+  ...userIdValidation,
+  body('projectRole')
+    .isIn(['employee', 'lead', 'manager'])
+    .withMessage('Project role must be one of: employee, lead, manager'),
+  body('hasManagerAccess')
+    .optional()
+    .isBoolean()
+    .withMessage('hasManagerAccess must be a boolean')
 ];

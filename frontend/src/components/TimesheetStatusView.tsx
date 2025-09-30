@@ -265,7 +265,7 @@ const TimesheetStatusView = () => {
                     <div className="text-sm text-gray-700">Non-billable Hours</div>
                   </div>
                   <div className="bg-blue-50 p-4 rounded-lg">
-                    <div className="text-2xl font-bold text-blue-600">{selectedTimesheet.entries.length}</div>
+                    <div className="text-2xl font-bold text-blue-600">{selectedTimesheet.entries?.length || 0}</div>
                     <div className="text-sm text-blue-700">Time Entries</div>
                   </div>
                 </div>
@@ -275,7 +275,7 @@ const TimesheetStatusView = () => {
               <div className="lg:col-span-2">
                 <h4 className="font-semibold text-slate-900 mb-4">Project Breakdown</h4>
                 <div className="space-y-3">
-                  {selectedTimesheet.projectBreakdown.map((project, index) => (
+                  {(selectedTimesheet.projectBreakdown || []).map((project, index) => (
                     <div key={index} className="bg-slate-50 p-4 rounded-lg">
                       <div className="flex justify-between items-start mb-2">
                         <div>
@@ -300,7 +300,7 @@ const TimesheetStatusView = () => {
                 {/* Time Entries */}
                 <h4 className="font-semibold text-slate-900 mt-6 mb-4">Time Entries</h4>
                 <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {selectedTimesheet.entries.map((entry) => (
+                  {(selectedTimesheet.entries || []).map((entry) => (
                     <div key={entry.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg text-sm">
                       <div className="flex-1">
                         <div className="font-medium text-slate-900">
@@ -558,7 +558,7 @@ const TimesheetStatusView = () => {
                     <div className="flex items-center space-x-4 text-sm text-slate-600">
                       <span>{timesheet.total_hours}h total</span>
                       <span className="text-green-600">{timesheet.billableHours}h billable</span>
-                      <span>{timesheet.entries.length} entries</span>
+                      <span>{timesheet.entries?.length || 0} entries</span>
                       <span>Updated {new Date(timesheet.updated_at).toLocaleDateString()}</span>
                     </div>
                   </div>
@@ -601,7 +601,7 @@ const TimesheetStatusView = () => {
                   <div>
                     <h5 className="font-medium text-slate-900 mb-2">Project Breakdown</h5>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {timesheet.projectBreakdown.map((project, index) => (
+                      {(timesheet.projectBreakdown || []).map((project, index) => (
                         <div key={index} className="bg-slate-50 p-3 rounded-lg">
                           <div className="flex justify-between items-center">
                             <div>
@@ -622,7 +622,7 @@ const TimesheetStatusView = () => {
                   <div>
                     <h5 className="font-medium text-slate-900 mb-2">Recent Entries</h5>
                     <div className="space-y-2">
-                      {timesheet.entries.slice(0, 3).map((entry) => (
+                      {(timesheet.entries || []).slice(0, 3).map((entry) => (
                         <div key={entry.id} className="flex items-center justify-between text-sm bg-slate-50 p-2 rounded">
                           <div>
                             <span className="font-medium">{new Date(entry.date).toLocaleDateString()}</span>
@@ -640,9 +640,9 @@ const TimesheetStatusView = () => {
                           </div>
                         </div>
                       ))}
-                      {timesheet.entries.length > 3 && (
+                      {(timesheet.entries?.length || 0) > 3 && (
                         <div className="text-sm text-slate-500 text-center py-1">
-                          +{timesheet.entries.length - 3} more entries
+                          +{(timesheet.entries?.length || 0) - 3} more entries
                         </div>
                       )}
                     </div>

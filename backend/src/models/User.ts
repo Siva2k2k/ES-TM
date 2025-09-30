@@ -2,7 +2,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export type UserRole = 'super_admin' | 'management' | 'manager' | 'lead' | 'employee';
 
-export interface IUser extends Document {
+export interface  IUser extends Document {
   _id: mongoose.Types.ObjectId;
   email: string;
   full_name: string;

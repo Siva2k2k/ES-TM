@@ -1,11 +1,36 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRoleManager } from '../hooks/useRoleManager';
-import { BarChart3, Download, Calendar, Shield, TrendingUp, FileText, Users, DollarSign } from 'lucide-react';
+import { useAuth } from '../store/contexts/AuthContext';
+import { BillingService } from '../services/BillingService';
+import { ProjectService } from '../services/ProjectService';
+import { UserService } from '../services/UserService';
+import {
+  BarChart3,
+  Download,
+  Calendar,
+  Shield,
+  TrendingUp,
+  FileText,
+  Users,
+  DollarSign,
+  Clock,
+  Building,
+  Filter,
+  Search,
+  PieChart,
+  LineChart,
+  Activity,
+  Target
+} from 'lucide-react';
+import type { Project, User } from '../types';
 
 export const Reports: React.FC = () => {
-  const { canExportReports, currentRole } = useRoleManager();
+  const { canExportReports, hasPermission, currentRole } = useRoleManager();
 
-  if (!canExportReports()) {
+  // Check if user can access reports (broader permission check)
+  const canAccessReports = hasPermission('reports_all');
+
+  if (!canAccessReports) {
     return (
       <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
         <div className="bg-white rounded-lg shadow p-8 text-center">

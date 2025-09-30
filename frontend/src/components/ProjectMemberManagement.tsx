@@ -1,27 +1,53 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Trash2, AlertCircle, CheckCircle, User, Mail, Shield, X, Search } from 'lucide-react';
+import {
+  Users, Plus, Trash2, AlertCircle, CheckCircle, User, Mail, Shield, X, Search,
+  Crown, Star, Settings, Eye, UserPlus, Edit3, Badge, ChevronDown, ChevronUp
+} from 'lucide-react';
 
-interface ProjectMember {
+interface EnhancedProjectMember {
   id: string;
   user_id: string;
-  project_role: string;
-  is_primary_manager: boolean;
-  is_secondary_manager: boolean;
   user_name: string;
   user_email: string;
+  user_system_role: string;
+  project_role: string;
+  has_manager_access: boolean;
+  is_primary_manager: boolean;
+  is_secondary_manager: boolean;
+  assigned_at: Date;
+  other_project_roles: Array<{
+    projectId: string;
+    projectName: string;
+    projectRole: string;
+  }>;
 }
 
-interface User {
+interface AvailableUser {
   id: string;
   email: string;
   full_name: string;
   role: string;
+  currentProjectRoles: Array<{
+    projectId: string;
+    projectName: string;
+    projectRole: string;
+  }>;
+}
+
+interface ProjectPermissions {
+  projectRole: string | null;
+  hasManagerAccess: boolean;
+  canAddMembers: boolean;
+  canApproveTimesheets: boolean;
+  canViewAllTasks: boolean;
+  canAssignTasks: boolean;
 }
 
 interface ProjectMemberManagementProps {
   projectId: string;
   projectName: string;
   currentUserRole: string;
+  currentUserId: string;
   onUpdate?: () => void;
 }
 
@@ -29,33 +55,60 @@ export const ProjectMemberManagement: React.FC<ProjectMemberManagementProps> = (
   projectId,
   projectName,
   currentUserRole,
+  currentUserId,
   onUpdate
 }) => {
-  const [members, setMembers] = useState<ProjectMember[]>([]);
-  const [availableUsers, setAvailableUsers] = useState<User[]>([]);
+  const [members, setMembers] = useState<EnhancedProjectMember[]>([]);
+  const [availableUsers, setAvailableUsers] = useState<AvailableUser[]>([]);
+  const [permissions, setPermissions] = useState<ProjectPermissions | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<string>('');
   const [selectedRole, setSelectedRole] = useState<string>('employee');
+  const [hasManagerAccess, setHasManagerAccess] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [expandedMembers, setExpandedMembers] = useState<Set<string>>(new Set());
+  const [editingMember, setEditingMember] = useState<string | null>(null);
 
-  const canManageMembers = ['manager', 'management', 'super_admin'].includes(currentUserRole);
+  const canManageMembers = permissions?.canAddMembers || false;
 
   useEffect(() => {
+    loadPermissions();
     loadMembers();
+  }, [projectId]);
+
+  useEffect(() => {
     if (canManageMembers) {
       loadAvailableUsers();
     }
-  }, [projectId]);
+  }, [canManageMembers]);
+
+  const loadPermissions = async () => {
+    try {
+      const response = await fetch(`/api/v1/projects/${projectId}/permissions`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        }
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setPermissions(data.permissions);
+      }
+    } catch (err) {
+      console.error('Failed to load permissions:', err);
+    }
+  };
 
   const loadMembers = async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const response = await fetch(`/api/projects/${projectId}/members`, {
+      const response = await fetch(`/api/v1/projects/${projectId}/members/enhanced`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
         }
@@ -64,7 +117,7 @@ export const ProjectMemberManagement: React.FC<ProjectMemberManagementProps> = (
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to load project members');
+        throw new Error(data.error || 'Failed to load project members');
       }
 
       setMembers(data.members || []);
@@ -77,7 +130,7 @@ export const ProjectMemberManagement: React.FC<ProjectMemberManagementProps> = (
 
   const loadAvailableUsers = async () => {
     try {
-      const response = await fetch('/api/users', {
+      const response = await fetch(`/api/v1/projects/${projectId}/available-users`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
         }
@@ -86,12 +139,9 @@ export const ProjectMemberManagement: React.FC<ProjectMemberManagementProps> = (
       const data = await response.json();
 
       if (response.ok && data.users) {
-        // Filter out users who are already members
-        const currentMemberIds = members.map(member => member.user_id);
-        const available = data.users.filter((user: User) =>
-          !currentMemberIds.includes(user.id)
-        );
-        setAvailableUsers(available);
+        setAvailableUsers(data.users);
+      } else {
+        console.error('Failed to load available users:', data.error);
       }
     } catch (err) {
       console.error('Error loading available users:', err);

@@ -5,6 +5,23 @@ import type { BillingSnapshot } from '../types';
  * Billing Management Service - Backend API Integration
  * Handles all billing-related operations with MongoDB backend
  */
+interface BillingSummary {
+  total_revenue: number;
+  total_hours: number;
+  billable_hours: number;
+  non_billable_hours: number;
+  average_rate: number;
+  entries: Array<{
+    id: string;
+    name: string;
+    hours: number;
+    billable_hours: number;
+    revenue: number;
+    week_start: string;
+    is_editable: boolean;
+  }>;
+}
+
 export class BillingService {
   /**
    * Generate weekly billing snapshot (Management)
@@ -16,7 +33,7 @@ export class BillingService {
     try {
       console.log(`Management generating weekly billing snapshot for week of ${weekStartDate}`);
 
-      const response = await backendApi.post('/api/v1/billing/snapshots/generate', {
+      const response = await backendApi.post('/billing/snapshots/generate', {
         weekStartDate
       });
 
@@ -37,7 +54,7 @@ export class BillingService {
    */
   static async getAllBillingSnapshots(): Promise<{ snapshots: BillingSnapshot[]; error?: string }> {
     try {
-      const response = await backendApi.get('/api/v1/billing/snapshots');
+      const response = await backendApi.get('/billing/snapshots');
 
       if (response.success && response.data) {
         return { snapshots: response.data as BillingSnapshot[] };
@@ -217,6 +234,62 @@ export class BillingService {
       errors
     };
   }
+
+  /**
+   * Get billing summary with filters
+   */
+  static async getBillingSummary(
+    period: 'weekly' | 'monthly',
+    filterType: 'project' | 'employee',
+    filterId?: string,
+    startDate?: string,
+    endDate?: string
+  ): Promise<{ summary?: BillingSummary; error?: string }> {
+    try {
+      const params = new URLSearchParams({
+        period,
+        filterType,
+        ...(filterId && { filterId }),
+        ...(startDate && { startDate }),
+        ...(endDate && { endDate })
+      });
+
+      const response = await backendApi.get(`/billing/summary?${params}`);
+
+      if (response.success && response.data) {
+        return { summary: response.data as BillingSummary };
+      } else {
+        return { error: response.message || 'Failed to fetch billing summary' };
+      }
+    } catch (error: any) {
+      console.error('Error in getBillingSummary:', error);
+      return { error: error.message || 'Failed to fetch billing summary' };
+    }
+  }
+
+  /**
+   * Update billable hours
+   */
+  static async updateBillableHours(
+    entryId: string,
+    newHours: number
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await backendApi.patch(`/billing/hours/${entryId}`, {
+        hours: newHours
+      });
+
+      if (response.success) {
+        return { success: true };
+      } else {
+        return { success: false, error: response.message || 'Failed to update billable hours' };
+      }
+    } catch (error: any) {
+      console.error('Error in updateBillableHours:', error);
+      return { success: false, error: error.message || 'Failed to update billable hours' };
+    }
+  }
+
 }
 
 export default BillingService;

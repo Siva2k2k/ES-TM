@@ -131,6 +131,13 @@ export class BackendApiClient {
     return this.request(endpoint, { method: 'DELETE' });
   }
 
+  async patch<T>(endpoint: string, data?: any): Promise<T> {
+    return this.request(endpoint, {
+      method: 'PATCH',
+      body: data ? JSON.stringify(data) : undefined
+    });
+  }
+
   /**
    * Health check
    */
@@ -387,6 +394,132 @@ export class BackendApiClient {
    */
   async createWeeklyBillingSnapshot(weekStartDate: string): Promise<any> {
     return this.post('/billing/snapshots/weekly', { weekStartDate });
+  }
+
+  // === CLIENT SERVICE METHODS ===
+
+  /**
+   * Create client
+   */
+  async createClient(clientData: any): Promise<any> {
+    return this.post('/clients', clientData);
+  }
+
+  /**
+   * Get all clients
+   */
+  async getAllClients(includeInactive?: boolean): Promise<any> {
+    const queryParams = includeInactive ? '?includeInactive=true' : '';
+    return this.get(`/clients${queryParams}`);
+  }
+
+  /**
+   * Get client by ID
+   */
+  async getClientById(clientId: string): Promise<any> {
+    return this.get(`/clients/${clientId}`);
+  }
+
+  /**
+   * Update client
+   */
+  async updateClient(clientId: string, updates: any): Promise<any> {
+    return this.put(`/clients/${clientId}`, updates);
+  }
+
+  /**
+   * Delete client
+   */
+  async deleteClient(clientId: string): Promise<any> {
+    return this.delete(`/clients/${clientId}`);
+  }
+
+  /**
+   * Deactivate client
+   */
+  async deactivateClient(clientId: string): Promise<any> {
+    return this.patch(`/clients/${clientId}/deactivate`);
+  }
+
+  /**
+   * Reactivate client
+   */
+  async reactivateClient(clientId: string): Promise<any> {
+    return this.patch(`/clients/${clientId}/reactivate`);
+  }
+
+  /**
+   * Get client statistics
+   */
+  async getClientStats(): Promise<any> {
+    return this.get('/clients/stats');
+  }
+
+  // === DASHBOARD SERVICE METHODS ===
+
+  /**
+   * Get role-specific dashboard
+   */
+  async getRoleSpecificDashboard(): Promise<any> {
+    return this.get('/dashboard');
+  }
+
+  /**
+   * Get Super Admin dashboard
+   */
+  async getSuperAdminDashboard(): Promise<any> {
+    return this.get('/dashboard/super-admin');
+  }
+
+  /**
+   * Get Management dashboard
+   */
+  async getManagementDashboard(): Promise<any> {
+    return this.get('/dashboard/management');
+  }
+
+  /**
+   * Get Manager dashboard
+   */
+  async getManagerDashboard(): Promise<any> {
+    return this.get('/dashboard/manager');
+  }
+
+  /**
+   * Get Lead dashboard
+   */
+  async getLeadDashboard(): Promise<any> {
+    return this.get('/dashboard/lead');
+  }
+
+  /**
+   * Get Employee dashboard
+   */
+  async getEmployeeDashboard(): Promise<any> {
+    return this.get('/dashboard/employee');
+  }
+
+  // === ENHANCED BILLING SERVICE METHODS ===
+
+  /**
+   * Get billing summary
+   */
+  async getBillingSummary(params: {
+    period: 'weekly' | 'monthly';
+    filterType: 'project' | 'employee';
+    filterId?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<any> {
+    const searchParams = new URLSearchParams(params as any);
+    return this.get(`/billing/summary?${searchParams}`);
+  }
+
+  /**
+   * Update billable hours
+   */
+  async updateBillableHours(entryId: string, hours: number): Promise<any> {
+    return this.patch(`/billing/hours/${entryId}`, { hours });
   }
 }
 

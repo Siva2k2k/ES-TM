@@ -6,7 +6,7 @@ import { ForgotPasswordModal } from '../ForgotPasswordModal';
 const LoginForm: React.FC = () => {
   const { signIn, isLoading } = useAuth();
   const [email, setEmail] = useState('admin@company.com');
-  const [password, setPassword] = useState('Admin123!');
+  const [password, setPassword] = useState('admin123');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);

@@ -10,12 +10,16 @@ import { EmployeeTimesheet } from './components/EmployeeTimesheet';
 import { UserManagement } from './components/UserManagement';
 import { ProjectManagement } from './components/ProjectManagement';
 import { BillingManagement } from './components/BillingManagement';
+import { EnhancedBillingManagement } from './components/EnhancedBillingManagement';
 import { AuditLogs } from './components/AuditLogs';
 import { Reports } from './components/Reports';
-import { 
-  Users, 
-  Clock, 
-  FileText, 
+import { EnhancedReports } from './components/EnhancedReports';
+import { ClientManagement } from './components/ClientManagement';
+import { RoleSpecificDashboard } from './components/RoleSpecificDashboard';
+import {
+  Users,
+  Clock,
+  FileText,
   ChevronDown,
   LogOut,
   Shield,
@@ -26,7 +30,8 @@ import {
   Home,
   CheckSquare,
   TrendingUp,
-  Activity
+  Activity,
+  UserCheck
 } from 'lucide-react';
 
 interface SubItem {
@@ -120,9 +125,10 @@ const App: React.FC = () => {
       baseItems.push(
         { id: 'users', label: 'User Management', icon: Users, subItems: [] },
         { id: 'projects', label: 'Project Management', icon: Building2, subItems: [] },
-        { 
-          id: 'timesheet', 
-          label: 'Timesheet Overview', 
+        { id: 'clients', label: 'Client Management', icon: UserCheck, subItems: [] },
+        {
+          id: 'timesheet',
+          label: 'Timesheet Overview',
           icon: Clock,
           subItems: [
             { id: 'timesheet-view', label: 'View Data (Read-Only)' },
@@ -130,9 +136,10 @@ const App: React.FC = () => {
           ]
         },
         { id: 'reports', label: 'Reports & Analytics', icon: TrendingUp, subItems: [] },
-        { id: 'billing', label: 'Billing Overview', icon: FileText, subItems: [
-          { id: 'billing-view', label: 'View Data (Read-Only)' },
-          { id: 'billing-reports', label: 'Billing Reports' }
+        { id: 'billing', label: 'Billing Management', icon: FileText, subItems: [
+          { id: 'billing-dashboard', label: 'Dashboard' },
+          { id: 'billing-summaries', label: 'Summaries' },
+          { id: 'billing-reports', label: 'Reports' }
         ]},
         { id: 'audit', label: 'Audit Logs', icon: Activity, subItems: [
           { id: 'audit-logs', label: 'View Logs' },
@@ -146,12 +153,13 @@ const App: React.FC = () => {
       baseItems.push(
         { id: 'users', label: 'User Management', icon: Users, subItems: []},
         { id: 'projects', label: 'Project Management', icon: Building2, subItems: []},
+        { id: 'clients', label: 'Client Management', icon: UserCheck, subItems: [] },
         { id: 'timesheet-team', label: 'Team Review', icon: Users, subItems: [] },
         { id: 'reports', label: 'Reports & Analytics', icon: TrendingUp, subItems: [] },
         { id: 'billing', label: 'Billing Management', icon: FileText, subItems: [
-          { id: 'billing-snapshots', label: 'Generate Snapshots' },
-          { id: 'billing-approval', label: 'Monthly Approvals' },
-          { id: 'billing-provisions', label: 'Billing Provisions' }
+          { id: 'billing-dashboard', label: 'Dashboard' },
+          { id: 'billing-summaries', label: 'Summaries' },
+          { id: 'billing-reports', label: 'Reports' }
         ]}
       );
     }
@@ -161,9 +169,10 @@ const App: React.FC = () => {
       baseItems.push(
         { id: 'users', label: 'Team Management', icon: Users, subItems: [] },
         { id: 'projects', label: 'Project Management', icon: Building2, subItems: [] },
-        { 
-          id: 'timesheet', 
-          label: 'My Timesheet', 
+        { id: 'clients', label: 'Client Management', icon: UserCheck, subItems: [] },
+        {
+          id: 'timesheet',
+          label: 'My Timesheet',
           icon: Clock,
           subItems: [
             { id: 'timesheet-list', label: 'List View' },
@@ -171,7 +180,6 @@ const App: React.FC = () => {
           ]
         },
         { id: 'timesheet-team', label: 'Team Review', icon: Users, subItems: [] },
-        // { id: 'timesheet-status', label: 'Timesheet Status', icon: FileText, subItems: [] },
         { id: 'reports', label: 'Reports & Analytics', icon: TrendingUp, subItems: [] }
       );
     }
@@ -181,9 +189,9 @@ const App: React.FC = () => {
       baseItems.push(
         { id: 'tasks', label: 'My Tasks', icon: CheckSquare, subItems: [] },
         { id: 'projects', label: 'My Projects', icon: Building2, subItems: [] },
-        { 
-          id: 'timesheet', 
-          label: 'My Timesheet', 
+        {
+          id: 'timesheet',
+          label: 'My Timesheet',
           icon: Clock,
           subItems: [
             { id: 'timesheet-list', label: 'List View' },
@@ -201,9 +209,9 @@ const App: React.FC = () => {
       baseItems.push(
         { id: 'tasks', label: 'My Tasks', icon: CheckSquare, subItems: [] },
         { id: 'projects', label: 'My Projects', icon: Building2, subItems: [] },
-        { 
-          id: 'timesheet', 
-          label: 'My Timesheet', 
+        {
+          id: 'timesheet',
+          label: 'My Timesheet',
           icon: Clock,
           subItems: [
             { id: 'timesheet-list', label: 'List View' },
@@ -312,7 +320,9 @@ const App: React.FC = () => {
         case 'billing-snapshots':
         case 'billing-approval':
         case 'billing-provisions':
-          return <BillingManagement />;
+        case 'billing-dashboard':
+        case 'billing-summaries':
+          return <EnhancedBillingManagement />;
         
         // Timesheet Status Sub-sections
         case 'timesheet-view':
@@ -348,12 +358,14 @@ const App: React.FC = () => {
         return <UserManagement />;
       case 'projects':
         return <ProjectManagement />;
+      case 'clients':
+        return <ClientManagement />;
       case 'billing':
-        return <BillingManagement />;
+        return <EnhancedBillingManagement />;
       case 'audit':
         return <AuditLogs />;
       case 'reports':
-        return <Reports />;
+        return <EnhancedReports />;
       case 'tasks':
         // Handle My Tasks section for employee and lead
         if (currentUserRole === 'employee' || currentUserRole === 'lead') {
@@ -363,11 +375,7 @@ const App: React.FC = () => {
       case 'dashboard':
       default:
         // Return appropriate dashboard based on role
-        if (currentUserRole === 'super_admin' || currentUserRole === 'management' || currentUserRole === 'manager') {
-          return <ManagementDashboard />;
-        } else {
-          return <EmployeeDashboard activeSection={activeSection} setActiveSection={setActiveSection} />;
-        }
+        return <RoleSpecificDashboard />;
     }
   };
 

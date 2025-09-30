@@ -84,7 +84,7 @@ export class UserService {
 
       // Send welcome email with credentials
       try {
-        const loginUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const loginUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
         const emailSent = await EmailService.sendWelcomeEmail({
           fullName: user.full_name,
           email: user.email,
@@ -192,6 +192,53 @@ export class UserService {
 
       if (result.matchedCount === 0) {
         throw new NotFoundError('User not found');
+      }
+
+      try {
+        // Fetch the user after approval
+        const user: any = await (User.findById as any)(userId);
+
+        if (user) {
+          console.log("Email sending is in process....")
+          // If the user has no credentials yet (Management-created), generate them
+          
+            const temporaryPassword = PasswordSecurity.generateTemporaryPassword(16);
+            const passwordExpiry = PasswordSecurity.generatePasswordExpiry(48);
+            const hashedTempPassword = await PasswordSecurity.hashPassword(temporaryPassword);
+
+            // Update user with secure credentials
+            user.password_hash = hashedTempPassword;
+            user.temporary_password = hashedTempPassword;
+            user.password_expires_at = passwordExpiry;
+            user.is_temporary_password = true;
+            user.force_password_change = true;
+            user.failed_login_attempts = 0;
+
+            await user.save();
+        
+
+          // Send welcome/approval email
+          const loginUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+          const emailSent = await EmailService.sendWelcomeEmail({
+            fullName: user.full_name,
+            email: user.email,
+            temporaryPassword: temporaryPassword,
+            loginUrl: `${loginUrl}/login`,
+            expirationTime: (user.password_expires_at || new Date()).toLocaleString()
+          });
+
+          if (emailSent) {
+            logger.info(`Approval email sent successfully to ${user.email}`);
+          } else {
+            logger.warn(`Failed to send approval email to ${user.email}`);
+          }
+        }
+        else {
+          console.log('No such User exists')
+        }
+      } catch (emailError) {
+        logger.error('Error sending approval email:', emailError);
+        // Do not fail the approval process if email fails
       }
 
       console.log(`Super Admin approved user: ${userId}`);

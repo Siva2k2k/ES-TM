@@ -1,7 +1,28 @@
 import React from 'react';
 import { useRoleManager } from '../hooks/useRoleManager';
+import { useAuth } from '../store/contexts/AuthContext';
 import { BillingService } from '../services/BillingService';
-import { DollarSign, Download, Calendar, Shield, TrendingUp, FileText, CreditCard } from 'lucide-react';
+import { ProjectService } from '../services/ProjectService';
+import { UserService } from '../services/UserService';
+import {
+  DollarSign,
+  Download,
+  Calendar,
+  Shield,
+  TrendingUp,
+  FileText,
+  CreditCard,
+  Filter,
+  Search,
+  Clock,
+  Users,
+  Building,
+  Edit3,
+  Save,
+  X,
+  BarChart3
+} from 'lucide-react';
+import type { Project, User } from '../types';
 
 export const BillingManagement: React.FC = () => {
   const { canAccessBilling, hasPermission } = useRoleManager();

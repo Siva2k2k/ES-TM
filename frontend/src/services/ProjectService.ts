@@ -516,6 +516,8 @@ export class ProjectService {
         `/projects/${projectId}/members`
       );
 
+      console.log("Data", response);
+
       if (!response.success) {
         return { members: [], error: response.message || 'Failed to fetch project members' };
       }
@@ -577,37 +579,54 @@ export class ProjectService {
   /**
    * Add user to project
    */
-  static async addUserToProject(
+  static async addProjectMember(
     projectId: string,
     userId: string,
-    projectRole: string,
+    projectRole: string = 'employee',
     isPrimaryManager = false,
     isSecondaryManager = false
   ): Promise<{ success: boolean; error?: string }> {
     try {
       const payload = {
+        // include both formats to be resilient to backend validation
+        userId,
         user_id: userId,
+        projectRole,
         project_role: projectRole,
+        isPrimaryManager,
         is_primary_manager: isPrimaryManager,
+        isSecondaryManager,
         is_secondary_manager: isSecondaryManager
       };
+
+      console.log("Payload being sent:", payload);
 
       const response = await backendApi.post<{ success: boolean; message?: string }>(
         `/projects/${projectId}/members`,
         payload
       );
 
-      if (!response.success) {
-        return { success: false, error: response.message || 'Failed to add user to project' };
+      if (!response || !response.success) {
+        return { success: false, error: response?.message || 'Failed to add user to project' };
       }
 
-      console.log(`Added user ${userId} to project ${projectId} with role ${projectRole}`);
       return { success: true };
-    } catch (error) {
-      console.error('Error in addUserToProject:', error);
-      const errorMessage = error instanceof BackendApiError ? error.message : 'Failed to add user to project';
+    } catch (err: any) {
+      console.error('ProjectService.addProjectMember error:', err);
+      const errorMessage = err?.message || err?.response?.message || 'Failed to add user to project';
       return { success: false, error: errorMessage };
     }
+  }
+
+  // backward-compatible alias used by other code
+  static async addUserToProject(
+    projectId: string,
+    userId: string,
+    projectRole: string = 'employee',
+    isPrimaryManager = false,
+    isSecondaryManager = false
+  ) {
+    return this.addProjectMember(projectId, userId, projectRole, isPrimaryManager, isSecondaryManager);
   }
 
   /**
@@ -781,15 +800,15 @@ export class ProjectService {
   /**
    * Add a member to a project
    */
-  static async addProjectMember(projectId: string, userId: string, role: string): Promise<{ success: boolean; error?: string }> {
-    return this.addUserToProject(
-      projectId,
-      userId,
-      role,
-      false,
-      role === 'manager'
-    );
-  }
+  // static async addProjectMember(projectId: string, userId: string, role: string): Promise<{ success: boolean; error?: string }> {
+  //   return this.addUserToProject(
+  //     projectId,
+  //     userId,
+  //     role,
+  //     false,
+  //     role === 'manager'
+  //   );
+  // }
 
   /**
    * Remove a member from a project

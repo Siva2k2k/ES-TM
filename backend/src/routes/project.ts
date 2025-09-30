@@ -9,7 +9,9 @@ import {
   createTaskValidation,
   taskIdValidation,
   createClientValidation,
-  clientIdValidation
+  clientIdValidation,
+  addProjectMemberEnhancedValidation,
+  updateProjectMemberRoleValidation
 } from '@/controllers/ProjectController';
 import { requireAuth, requireManager, requireManagement } from '@/middleware/auth';
 
@@ -153,5 +155,51 @@ router.put('/tasks/:taskId', taskIdValidation, createTaskValidation, ProjectCont
  * @access Private (Manager+)
  */
 router.delete('/tasks/:taskId', requireManager, taskIdValidation, ProjectController.deleteTask);
+
+// ========================================================================
+// MULTI-PROJECT ROLE SYSTEM ROUTES
+// ========================================================================
+
+/**
+ * @route GET /api/v1/projects/:projectId/permissions
+ * @desc Get project permissions for current user
+ * @access Private
+ */
+// router.get('/:projectId/permissions', projectIdValidation, ProjectController.getProjectPermissions);
+
+/**
+ * @route POST /api/v1/projects/:projectId/members/enhanced
+ * @desc Add project member with enhanced role validation (Manager+ only)
+ * @access Private (Manager+)
+ */
+router.post('/:projectId/members/enhanced', requireManager, addProjectMemberEnhancedValidation, ProjectController.addProjectMemberEnhanced);
+
+/**
+ * @route PUT /api/v1/projects/:projectId/members/:userId/role
+ * @desc Update project member role and permissions (Manager+ only)
+ * @access Private (Manager+)
+ */
+router.put('/:projectId/members/:userId/role', requireManager, updateProjectMemberRoleValidation, ProjectController.updateProjectMemberRole);
+
+/**
+ * @route GET /api/v1/projects/users/:userId/roles
+ * @desc Get user's roles across all projects
+ * @access Private (Users can view own, Manager+ can view others)
+ */
+router.get('/users/:userId/roles', userIdValidation, ProjectController.getUserProjectRoles);
+
+/**
+ * @route GET /api/v1/projects/:projectId/available-users
+ * @desc Get available users for project (filtered by permissions)
+ * @access Private (Manager+ only)
+ */
+router.get('/:projectId/available-users', requireManager, projectIdValidation, ProjectController.getAvailableUsersForProject);
+
+/**
+ * @route GET /api/v1/projects/:projectId/members/enhanced
+ * @desc Get enhanced project members with detailed role information
+ * @access Private
+ */
+router.get('/:projectId/members/enhanced', projectIdValidation, ProjectController.getProjectMembersEnhanced);
 
 export default router;
