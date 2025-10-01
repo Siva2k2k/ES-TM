@@ -3,7 +3,7 @@
  * Handles communication with the Node.js/MongoDB backend with optional Supabase auth
  */
 
-const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/';
+const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 export class BackendApiError extends Error {
   constructor(

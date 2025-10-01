@@ -160,32 +160,57 @@ export class ReportService {
   }> {
     try {
       // Use fetch for blob response
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}/api/v1/reports/generate`, {
+      const token = localStorage.getItem('accessToken');
+      // Convert dates to ISO8601 format as required by backend validation
+      const requestPayload = {
+        ...request,
+        date_range: {
+          start: new Date(request.date_range.start).toISOString(),
+          end: new Date(request.date_range.end).toISOString()
+        }
+      };
+      
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/reports/generate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': token ? `Bearer ${token}` : ''
         },
-        body: JSON.stringify(request)
+        body: JSON.stringify(requestPayload)
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        return { success: false, error: errorData.error || 'Failed to generate report' };
+        let errorMessage = 'Failed to generate report';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch {
+          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        }
+        return { success: false, error: errorMessage };
       }
+
+      // Check content type
+      const contentType = response.headers.get('content-type');
+      console.log('Report response content-type:', contentType);
 
       // Get filename from Content-Disposition header
       const contentDisposition = response.headers.get('Content-Disposition');
       let filename = `report_${Date.now()}.${request.format}`;
       if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
-        if (filenameMatch) {
-          filename = filenameMatch[1];
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1].replace(/['"]/g, '');
         }
       }
 
       const blob = await response.blob();
+      console.log('Report blob size:', blob.size, 'type:', blob.type);
+
+      // Validate blob content
+      if (blob.size === 0) {
+        return { success: false, error: 'Empty file received' };
+      }
 
       return { success: true, blob, filename };
     } catch (error) {
@@ -201,14 +226,39 @@ export class ReportService {
    * Download generated report blob
    */
   static downloadReport(blob: Blob, filename: string): void {
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
+    try {
+      console.log('Downloading file:', filename, 'Size:', blob.size, 'Type:', blob.type);
+      
+      // Create blob URL
+      const url = window.URL.createObjectURL(blob);
+      
+      // Create download link
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.style.display = 'none';
+      
+      // Add to DOM, click, then remove
+      document.body.appendChild(a);
+      a.click();
+      
+      // Clean up
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+      
+      console.log('Download initiated successfully');
+    } catch (error) {
+      console.error('Download failed:', error);
+      // Fallback: try opening in new window
+      try {
+        const url = window.URL.createObjectURL(blob);
+        window.open(url);
+      } catch (fallbackError) {
+        console.error('Fallback download also failed:', fallbackError);
+      }
+    }
   }
 
   /**
