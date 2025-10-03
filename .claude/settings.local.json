@@ -12,7 +12,8 @@
       "Bash(for:*)",
       "Bash(do echo \"Processing: $file\")",
       "Bash(done)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(tree:*)"
     ],
     "deny": [],
     "ask": []
