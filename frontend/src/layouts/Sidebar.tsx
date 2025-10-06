@@ -132,13 +132,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
       });
     }
 
-    // Billing (Manager+)
+    // Enhanced Billing System (Manager+)
     if (permissions.canManageBilling) {
       items.push({
         id: 'billing',
-        label: 'Billing',
+        label: 'Enhanced Billing System',
         icon: FileText,
-        path: '/billing',
+        children: [
+          { id: 'billing-dashboard', label: 'Enhanced Dashboard', path: '/billing' },
+          { id: 'billing-invoices', label: 'Invoice Workflow', path: '/billing/invoices' },
+          { id: 'billing-rates', label: 'Rate Management', path: '/billing/rates' },
+          { id: 'billing-snapshots', label: 'Billing Snapshots', path: '/billing/snapshots' },
+          { id: 'billing-reports', label: 'Financial Reports', path: '/billing/reports' },
+        ],
       });
     }
 

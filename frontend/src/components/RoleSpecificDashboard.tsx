@@ -264,10 +264,10 @@ export const RoleSpecificDashboard: React.FC = () => {
 
   if (!currentUser) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <Shield className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600">Please log in to view your dashboard</p>
+          <Shield className="h-12 w-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+          <p className="text-gray-600 dark:text-gray-400">Please log in to view your dashboard</p>
         </div>
       </div>
     );
@@ -275,10 +275,10 @@ export const RoleSpecificDashboard: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading your dashboard...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Loading your dashboard...</p>
         </div>
       </div>
     );
@@ -286,14 +286,14 @@ export const RoleSpecificDashboard: React.FC = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Dashboard Error</h2>
-          <p className="text-gray-600 mb-4">{error}</p>
+          <AlertCircle className="h-12 w-12 text-red-500 dark:text-red-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">Dashboard Error</h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">{error}</p>
           <button
             onClick={handleRefresh}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600"
           >
             Try Again
           </button>
@@ -303,23 +303,23 @@ export const RoleSpecificDashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-              <p className="text-gray-600 mt-1">
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Dashboard</h1>
+              <p className="text-gray-600 dark:text-gray-400 mt-1">
                 Welcome back, {currentUser.full_name}
-                <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
                   {currentUserRole?.replace('_', ' ').toUpperCase()}
                 </span>
               </p>
             </div>
             <button
               onClick={handleRefresh}
-              className="flex items-center px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              className="flex items-center px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
             >
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
@@ -350,9 +350,9 @@ export const RoleSpecificDashboard: React.FC = () => {
 
         {!dashboardData && (
           <div className="text-center py-12">
-            <Building2 className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No Dashboard Data</h3>
-            <p className="text-gray-600">Unable to load dashboard data for your role.</p>
+            <Building2 className="h-16 w-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No Dashboard Data</h3>
+            <p className="text-gray-600 dark:text-gray-400">Unable to load dashboard data for your role.</p>
           </div>
         )}
       </div>
@@ -399,72 +399,72 @@ const SuperAdminDashboard: React.FC<{ data: SuperAdminDashboardData }> = ({ data
 
     {/* Timesheet & Financial Metrics */}
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Timesheet Metrics</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-6 border border-transparent dark:border-gray-700">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Timesheet Metrics</h3>
         <div className="space-y-4">
           <div className="flex justify-between">
-            <span className="text-gray-600">Total Timesheets</span>
-            <span className="font-semibold">{data.timesheet_metrics.total_timesheets}</span>
+            <span className="text-gray-600 dark:text-gray-400">Total Timesheets</span>
+            <span className="font-semibold text-gray-900 dark:text-gray-100">{data.timesheet_metrics.total_timesheets}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-600">Pending Approval</span>
-            <span className="font-semibold text-yellow-600">{data.timesheet_metrics.pending_approval}</span>
+            <span className="text-gray-600 dark:text-gray-400">Pending Approval</span>
+            <span className="font-semibold text-yellow-600 dark:text-yellow-400">{data.timesheet_metrics.pending_approval}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-600">Frozen Timesheets</span>
-            <span className="font-semibold text-blue-600">{data.timesheet_metrics.frozen_timesheets}</span>
+            <span className="text-gray-600 dark:text-gray-400">Frozen Timesheets</span>
+            <span className="font-semibold text-blue-600 dark:text-blue-400">{data.timesheet_metrics.frozen_timesheets}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-600">Avg. Hours/Week</span>
-            <span className="font-semibold">{data.timesheet_metrics.average_hours_per_week.toFixed(1)}</span>
+            <span className="text-gray-600 dark:text-gray-400">Avg. Hours/Week</span>
+            <span className="font-semibold text-gray-900 dark:text-gray-100">{data.timesheet_metrics.average_hours_per_week.toFixed(1)}</span>
           </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Financial Overview</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-6 border border-transparent dark:border-gray-700">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Financial Overview</h3>
         <div className="space-y-4">
           <div className="flex justify-between">
-            <span className="text-gray-600">Total Revenue</span>
-            <span className="font-semibold text-green-600">${data.financial_overview.total_revenue.toLocaleString()}</span>
+            <span className="text-gray-600 dark:text-gray-400">Total Revenue</span>
+            <span className="font-semibold text-green-600 dark:text-green-400">${data.financial_overview.total_revenue.toLocaleString()}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-600">Monthly Revenue</span>
-            <span className="font-semibold">${data.financial_overview.monthly_revenue.toLocaleString()}</span>
+            <span className="text-gray-600 dark:text-gray-400">Monthly Revenue</span>
+            <span className="font-semibold text-gray-900 dark:text-gray-100">${data.financial_overview.monthly_revenue.toLocaleString()}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-600">Billable Hours</span>
-            <span className="font-semibold">{data.financial_overview.billable_hours.toFixed(1)}</span>
+            <span className="text-gray-600 dark:text-gray-400">Billable Hours</span>
+            <span className="font-semibold text-gray-900 dark:text-gray-100">{data.financial_overview.billable_hours.toFixed(1)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-600">Avg. Hourly Rate</span>
-            <span className="font-semibold">${data.financial_overview.average_hourly_rate.toFixed(2)}</span>
+            <span className="text-gray-600 dark:text-gray-400">Avg. Hourly Rate</span>
+            <span className="font-semibold text-gray-900 dark:text-gray-100">${data.financial_overview.average_hourly_rate.toFixed(2)}</span>
           </div>
         </div>
       </div>
     </div>
 
     {/* User Activity */}
-    <div className="bg-white rounded-lg shadow">
-      <div className="px-6 py-4 border-b border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-900">Recent User Activity</h3>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 border border-transparent dark:border-gray-700">
+      <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Recent User Activity</h3>
       </div>
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <thead className="bg-gray-50 dark:bg-gray-900">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Timesheet</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">User</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Role</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Last Timesheet</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
             {data.user_activity.map((user, index) => (
               <tr key={index}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{user.user_name}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.role}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.last_timesheet}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">{user.user_name}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{user.role}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{user.last_timesheet}</td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <StatusBadge status={user.status} />
                 </td>
@@ -509,43 +509,43 @@ const ManagementDashboard: React.FC<{ data: ManagementDashboardData }> = ({ data
     </div>
 
     {/* Billing Metrics */}
-    <div className="bg-white rounded-lg shadow p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Financial Performance</h3>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-6 border border-transparent dark:border-gray-700">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Financial Performance</h3>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="text-center">
-          <div className="text-2xl font-bold text-green-600">${data.billing_metrics.monthly_revenue.toLocaleString()}</div>
-          <div className="text-sm text-gray-600">Monthly Revenue</div>
+          <div className="text-2xl font-bold text-green-600 dark:text-green-400">${data.billing_metrics.monthly_revenue.toLocaleString()}</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400">Monthly Revenue</div>
         </div>
         <div className="text-center">
-          <div className="text-2xl font-bold text-yellow-600">${data.billing_metrics.pending_billing.toLocaleString()}</div>
-          <div className="text-sm text-gray-600">Pending Billing</div>
+          <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">${data.billing_metrics.pending_billing.toLocaleString()}</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400">Pending Billing</div>
         </div>
         <div className="text-center">
-          <div className="text-2xl font-bold text-blue-600">{data.billing_metrics.total_billable_hours.toFixed(1)}</div>
-          <div className="text-sm text-gray-600">Billable Hours</div>
+          <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{data.billing_metrics.total_billable_hours.toFixed(1)}</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400">Billable Hours</div>
         </div>
         <div className="text-center">
-          <div className="text-2xl font-bold text-purple-600">{data.billing_metrics.revenue_growth.toFixed(1)}%</div>
-          <div className="text-sm text-gray-600">Revenue Growth</div>
+          <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{data.billing_metrics.revenue_growth.toFixed(1)}%</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400">Revenue Growth</div>
         </div>
       </div>
     </div>
 
     {/* Project Health & Team Performance */}
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">Project Health</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 border border-transparent dark:border-gray-700">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Project Health</h3>
         </div>
         <div className="p-6 space-y-4">
           {data.project_health.slice(0, 5).map((project, index) => (
             <div key={index} className="flex items-center justify-between">
               <div>
-                <div className="font-medium text-gray-900">{project.project_name}</div>
-                <div className="text-sm text-gray-500">{project.team_size} team members</div>
+                <div className="font-medium text-gray-900 dark:text-gray-100">{project.project_name}</div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">{project.team_size} team members</div>
               </div>
               <div className="text-right">
-                <div className="text-sm font-medium text-gray-900">{project.completion_percentage.toFixed(0)}%</div>
+                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{project.completion_percentage.toFixed(0)}%</div>
                 <StatusBadge status={project.status} />
               </div>
             </div>
@@ -553,20 +553,20 @@ const ManagementDashboard: React.FC<{ data: ManagementDashboardData }> = ({ data
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">Team Performance</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 border border-transparent dark:border-gray-700">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Team Performance</h3>
         </div>
         <div className="p-6 space-y-4">
           {data.team_performance.slice(0, 5).map((manager, index) => (
             <div key={index} className="flex items-center justify-between">
               <div>
-                <div className="font-medium text-gray-900">{manager.manager_name}</div>
-                <div className="text-sm text-gray-500">{manager.team_size} team members</div>
+                <div className="font-medium text-gray-900 dark:text-gray-100">{manager.manager_name}</div>
+                <div className="text-sm text-gray-500 dark:text-gray-400">{manager.team_size} team members</div>
               </div>
               <div className="text-right">
-                <div className="text-sm text-gray-900">{manager.active_timesheets} active</div>
-                <div className="text-sm text-yellow-600">{manager.pending_approvals} pending</div>
+                <div className="text-sm text-gray-900 dark:text-gray-100">{manager.active_timesheets} active</div>
+                <div className="text-sm text-yellow-600 dark:text-yellow-400">{manager.pending_approvals} pending</div>
               </div>
             </div>
           ))}
@@ -609,18 +609,18 @@ const ManagerDashboard: React.FC<{ data: ManagerDashboardData }> = ({ data }) =>
 
     {/* Project Status & Team Members */}
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">Project Status</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 border border-transparent dark:border-gray-700">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Project Status</h3>
         </div>
         <div className="p-6 space-y-4">
           {data.project_status.map((project, index) => (
-            <div key={index} className="border rounded-lg p-4">
+            <div key={index} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
               <div className="flex justify-between items-start mb-2">
-                <h4 className="font-medium text-gray-900">{project.project_name}</h4>
+                <h4 className="font-medium text-gray-900 dark:text-gray-100">{project.project_name}</h4>
                 <StatusBadge status={project.status} />
               </div>
-              <div className="text-sm text-gray-600 space-y-1">
+              <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
                 <div>{project.team_members} team members</div>
                 <div>{project.completion_percentage.toFixed(0)}% complete</div>
                 <div className="flex items-center">
@@ -632,19 +632,19 @@ const ManagerDashboard: React.FC<{ data: ManagerDashboardData }> = ({ data }) =>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">Team Members</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 border border-transparent dark:border-gray-700">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Team Members</h3>
         </div>
         <div className="p-6 space-y-4">
           {data.team_members.map((member, index) => (
-            <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div key={index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
               <div>
-                <div className="font-medium text-gray-900">{member.user_name}</div>
-                <div className="text-sm text-gray-600">{member.current_projects} projects</div>
+                <div className="font-medium text-gray-900 dark:text-gray-100">{member.user_name}</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">{member.current_projects} projects</div>
               </div>
               <div className="text-right">
-                <div className="text-sm text-gray-900">{member.weekly_hours.toFixed(1)}h/week</div>
+                <div className="text-sm text-gray-900 dark:text-gray-100">{member.weekly_hours.toFixed(1)}h/week</div>
                 <StatusBadge status={member.status} />
               </div>
             </div>
@@ -654,27 +654,27 @@ const ManagerDashboard: React.FC<{ data: ManagerDashboardData }> = ({ data }) =>
     </div>
 
     {/* Timesheet Approvals */}
-    <div className="bg-white rounded-lg shadow">
-      <div className="px-6 py-4 border-b border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-900">Pending Approvals</h3>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 border border-transparent dark:border-gray-700">
+      <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Pending Approvals</h3>
       </div>
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <thead className="bg-gray-50 dark:bg-gray-900">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Week</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hours</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Employee</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Week</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Hours</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Priority</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
             {data.timesheet_approvals.map((approval, index) => (
               <tr key={index}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{approval.user_name}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{approval.week_start}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{approval.total_hours}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">{approval.user_name}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{approval.week_start}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{approval.total_hours}</td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <StatusBadge status={approval.status} />
                 </td>
@@ -723,20 +723,20 @@ const LeadDashboard: React.FC<{ data: LeadDashboardData }> = ({ data }) => (
 
     {/* Project Coordination & Team Collaboration */}
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">Project Coordination</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 border border-transparent dark:border-gray-700">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Project Coordination</h3>
         </div>
         <div className="p-6 space-y-4">
           {data.project_coordination.map((project, index) => (
-            <div key={index} className="border rounded-lg p-4">
+            <div key={index} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
               <div className="flex justify-between items-start mb-2">
-                <h4 className="font-medium text-gray-900">{project.project_name}</h4>
-                <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                <h4 className="font-medium text-gray-900 dark:text-gray-100">{project.project_name}</h4>
+                <span className="px-2 py-1 text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full">
                   {project.my_role}
                 </span>
               </div>
-              <div className="text-sm text-gray-600 space-y-1">
+              <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
                 <div>{project.team_size} team members</div>
                 <div>{project.active_tasks} active tasks</div>
                 <div>{project.completion_percentage.toFixed(0)}% complete</div>
@@ -746,20 +746,20 @@ const LeadDashboard: React.FC<{ data: LeadDashboardData }> = ({ data }) => (
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">Team Collaboration</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 border border-transparent dark:border-gray-700">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Team Collaboration</h3>
         </div>
         <div className="p-6 space-y-4">
           {data.team_collaboration.map((member, index) => (
-            <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div key={index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
               <div>
-                <div className="font-medium text-gray-900">{member.user_name}</div>
-                <div className="text-sm text-gray-600">{member.shared_projects} shared projects</div>
+                <div className="font-medium text-gray-900 dark:text-gray-100">{member.user_name}</div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">{member.shared_projects} shared projects</div>
               </div>
               <div className="text-right">
-                <div className="text-sm text-gray-900">{member.pending_tasks} pending</div>
-                <div className="text-sm text-green-600">{member.collaboration_score}/100</div>
+                <div className="text-sm text-gray-900 dark:text-gray-100">{member.pending_tasks} pending</div>
+                <div className="text-sm text-green-600 dark:text-green-400">{member.collaboration_score}/100</div>
               </div>
             </div>
           ))}
@@ -801,31 +801,31 @@ const EmployeeDashboard: React.FC<{ data: EmployeeDashboardData }> = ({ data }) 
     </div>
 
     {/* Timesheet Status */}
-    <div className="bg-white rounded-lg shadow p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">Current Timesheet Status</h3>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-6 border border-transparent dark:border-gray-700">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Current Timesheet Status</h3>
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="text-center">
-          <div className="text-sm text-gray-600 mb-1">Week</div>
-          <div className="font-semibold">{data.timesheet_status.current_week}</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Week</div>
+          <div className="font-semibold text-gray-900 dark:text-gray-100">{data.timesheet_status.current_week}</div>
         </div>
         <div className="text-center">
-          <div className="text-sm text-gray-600 mb-1">Status</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Status</div>
           <StatusBadge status={data.timesheet_status.status} />
         </div>
         <div className="text-center">
-          <div className="text-sm text-gray-600 mb-1">Total Hours</div>
-          <div className="font-semibold">{data.timesheet_status.total_hours.toFixed(1)}</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Hours</div>
+          <div className="font-semibold text-gray-900 dark:text-gray-100">{data.timesheet_status.total_hours.toFixed(1)}</div>
         </div>
         <div className="text-center">
-          <div className="text-sm text-gray-600 mb-1">Billable Hours</div>
-          <div className="font-semibold text-green-600">{data.timesheet_status.billable_hours.toFixed(1)}</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Billable Hours</div>
+          <div className="font-semibold text-green-600 dark:text-green-400">{data.timesheet_status.billable_hours.toFixed(1)}</div>
         </div>
         <div className="text-center">
-          <div className="text-sm text-gray-600 mb-1">Action</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">Action</div>
           {data.timesheet_status.can_submit ? (
-            <span className="text-blue-600 font-medium">Can Submit</span>
+            <span className="text-blue-600 dark:text-blue-400 font-medium">Can Submit</span>
           ) : (
-            <span className="text-gray-500">Submitted</span>
+            <span className="text-gray-500 dark:text-gray-400">Submitted</span>
           )}
         </div>
       </div>
@@ -833,27 +833,27 @@ const EmployeeDashboard: React.FC<{ data: EmployeeDashboardData }> = ({ data }) 
 
     {/* Project Assignments & Recent Activity */}
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">Project Assignments</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 border border-transparent dark:border-gray-700">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Project Assignments</h3>
         </div>
         <div className="p-6 space-y-4">
           {data.project_assignments.map((assignment, index) => (
-            <div key={index} className="border rounded-lg p-4">
+            <div key={index} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
               <div className="flex justify-between items-start mb-2">
-                <h4 className="font-medium text-gray-900">{assignment.project_name}</h4>
+                <h4 className="font-medium text-gray-900 dark:text-gray-100">{assignment.project_name}</h4>
                 <div className="flex items-center space-x-2">
-                  <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                  <span className="px-2 py-1 text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full">
                     {assignment.role}
                   </span>
                   {assignment.is_billable && (
-                    <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+                    <span className="px-2 py-1 text-xs font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded-full">
                       Billable
                     </span>
                   )}
                 </div>
               </div>
-              <div className="text-sm text-gray-600 space-y-1">
+              <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
                 <div>{assignment.active_tasks} active tasks</div>
                 <div>{assignment.hours_logged.toFixed(1)} hours logged</div>
               </div>
@@ -862,17 +862,17 @@ const EmployeeDashboard: React.FC<{ data: EmployeeDashboardData }> = ({ data }) 
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 border border-transparent dark:border-gray-700">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Recent Activity</h3>
         </div>
         <div className="p-6 space-y-4">
           {data.recent_activity.map((activity, index) => (
             <div key={index} className="flex items-start space-x-3">
-              <div className="flex-shrink-0 w-2 h-2 bg-blue-600 rounded-full mt-2"></div>
+              <div className="flex-shrink-0 w-2 h-2 bg-blue-600 dark:bg-blue-400 rounded-full mt-2"></div>
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-gray-900">{activity.description}</div>
-                <div className="text-xs text-gray-500 mt-1">
+                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{activity.description}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   {activity.date} • {activity.activity_type}
                   {activity.project_name && ` • ${activity.project_name}`}
                 </div>
@@ -894,29 +894,29 @@ const MetricCard: React.FC<{
   trend?: 'up' | 'down' | 'neutral';
 }> = ({ title, value, icon: Icon, color, trend }) => {
   const colorClasses = {
-    blue: 'bg-blue-100 text-blue-600',
-    green: 'bg-green-100 text-green-600',
-    yellow: 'bg-yellow-100 text-yellow-600',
-    purple: 'bg-purple-100 text-purple-600',
-    red: 'bg-red-100 text-red-600',
-    indigo: 'bg-indigo-100 text-indigo-600'
+    blue: 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400',
+    green: 'bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400',
+    yellow: 'bg-yellow-100 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-400',
+    purple: 'bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-400',
+    red: 'bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-400',
+    indigo: 'bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400'
   };
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-6 border border-transparent dark:border-gray-700">
       <div className="flex items-center">
         <div className={`p-2 rounded-lg ${colorClasses[color]}`}>
           <Icon className="h-6 w-6" />
         </div>
         <div className="ml-4 flex-1">
-          <p className="text-sm font-medium text-gray-600">{title}</p>
+          <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{title}</p>
           <div className="flex items-center">
-            <p className="text-2xl font-bold text-gray-900">{value}</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{value}</p>
             {trend && (
               <div className="ml-2">
-                {trend === 'up' && <ArrowUp className="h-4 w-4 text-green-500" />}
-                {trend === 'down' && <ArrowDown className="h-4 w-4 text-red-500" />}
-                {trend === 'neutral' && <Minus className="h-4 w-4 text-gray-400" />}
+                {trend === 'up' && <ArrowUp className="h-4 w-4 text-green-500 dark:text-green-400" />}
+                {trend === 'down' && <ArrowDown className="h-4 w-4 text-red-500 dark:text-red-400" />}
+                {trend === 'neutral' && <Minus className="h-4 w-4 text-gray-400 dark:text-gray-500" />}
               </div>
             )}
           </div>
@@ -932,15 +932,15 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
       case 'active':
       case 'completed':
       case 'approved':
-        return 'bg-green-100 text-green-800';
+        return 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200';
       case 'pending':
       case 'submitted':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200';
       case 'inactive':
       case 'rejected':
-        return 'bg-red-100 text-red-800';
+        return 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200';
     }
   };
 
@@ -953,9 +953,9 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
 
 const BudgetStatusBadge: React.FC<{ status: 'under' | 'on_track' | 'over' }> = ({ status }) => {
   const colorMap = {
-    under: 'bg-green-100 text-green-800',
-    on_track: 'bg-blue-100 text-blue-800',
-    over: 'bg-red-100 text-red-800'
+    under: 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200',
+    on_track: 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200',
+    over: 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
   };
 
   const labelMap = {
@@ -973,9 +973,9 @@ const BudgetStatusBadge: React.FC<{ status: 'under' | 'on_track' | 'over' }> = (
 
 const PriorityBadge: React.FC<{ priority: 'high' | 'medium' | 'low' }> = ({ priority }) => {
   const colorMap = {
-    high: 'bg-red-100 text-red-800',
-    medium: 'bg-yellow-100 text-yellow-800',
-    low: 'bg-green-100 text-green-800'
+    high: 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200',
+    medium: 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200',
+    low: 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
   };
 
   return (

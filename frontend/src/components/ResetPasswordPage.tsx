@@ -105,7 +105,7 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({
     setError(null);
 
     try {
-      const response = await fetch('/api/auth/reset-password', {
+      const response = await fetch('http://localhost:3001/api/v1/auth/reset-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -119,7 +119,7 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to reset password');
+        throw new Error(data.error || data.message || 'Failed to reset password');
       }
 
       setSuccess(true);

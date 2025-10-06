@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, DollarSign, Shield, Save } from 'lucide-react';
+import { User, Mail, DollarSign, Shield, Save, Loader2, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../store/contexts/AuthContext';
+import { backendApi } from '../../services/BackendAPI';
+import { useToast } from '../../hooks/useToast';
 
 interface ProfileSettingsProps {
   onSettingsChange: () => void;
@@ -17,50 +19,99 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
   onSettingsChange,
   onSettingsSaved
 }) => {
-  const { currentUser } = useAuth();
+  const { currentUser, refreshUser } = useAuth();
+  const toast = useToast();
   const [formData, setFormData] = useState<ProfileFormData>({
     full_name: '',
     email: '',
     hourly_rate: 0
   });
+  const [initialData, setInitialData] = useState<ProfileFormData>({
+    full_name: '',
+    email: '',
+    hourly_rate: 0
+  });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
     if (currentUser) {
-      setFormData({
+      const data = {
         full_name: currentUser.full_name || '',
         email: currentUser.email || '',
         hourly_rate: currentUser.hourly_rate || 0
-      });
+      };
+      setFormData(data);
+      setInitialData(data);
+      setHasChanges(false);
     }
   }, [currentUser]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
-    setSuccess(null);
-    onSettingsChange();
+
+    const loadingToast = toast.loading('Updating profile...');
 
     try {
-      // Here you would call your user update API
-      // For now, just simulate success
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      setSuccess('Profile updated successfully');
-      onSettingsSaved();
-    } catch {
-      setError('Failed to update profile');
+      // Prepare update payload - only include hourly_rate if it's greater than 0
+      const updatePayload: any = {
+        full_name: formData.full_name.trim()
+      };
+
+      // Only include hourly_rate if it's valid (>= 0.01)
+      if (formData.hourly_rate > 0) {
+        updatePayload.hourly_rate = formData.hourly_rate;
+      }
+
+      // Call the auth profile update API
+      const response = await backendApi.put<{ success: boolean; user?: any; error?: string }>(
+        '/auth/profile',
+        updatePayload
+      );
+
+      if (response.success) {
+        toast.update(loadingToast, {
+          render: 'Profile updated successfully!',
+          type: 'success',
+          isLoading: false,
+          autoClose: 3000
+        });
+        setInitialData(formData);
+        setHasChanges(false);
+        onSettingsSaved();
+
+        // Refresh user data in auth context
+        if (refreshUser) {
+          await refreshUser();
+        }
+      } else {
+        throw new Error(response.error || 'Failed to update profile');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update profile';
+      toast.update(loadingToast, {
+        render: errorMessage,
+        type: 'error',
+        isLoading: false,
+        autoClose: 5000
+      });
     } finally {
       setLoading(false);
     }
   };
 
   const handleInputChange = (field: keyof ProfileFormData, value: string | number) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    onSettingsChange();
+    const newData = { ...formData, [field]: value };
+    setFormData(newData);
+
+    // Check if there are changes
+    const changed = JSON.stringify(newData) !== JSON.stringify(initialData);
+    setHasChanges(changed);
+
+    if (changed) {
+      onSettingsChange();
+    }
   };
 
   return (
@@ -72,18 +123,6 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
         </h3>
         <p className="text-sm text-gray-500">Update your personal information and contact details.</p>
       </div>
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-md p-4">
-          <p className="text-red-700">{error}</p>
-        </div>
-      )}
-
-      {success && (
-        <div className="bg-green-50 border border-green-200 rounded-md p-4">
-          <p className="text-green-700">{success}</p>
-        </div>
-      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -176,14 +215,34 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
           </div>
         </div>
 
-        <div className="flex justify-end space-x-3">
+        <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+          <button
+            type="button"
+            onClick={() => {
+              setFormData(initialData);
+              setHasChanges(false);
+            }}
+            disabled={loading || !hasChanges}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Reset
+          </button>
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !hasChanges}
             className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Save className="h-4 w-4 mr-2" />
-            {loading ? 'Saving...' : 'Save Changes'}
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-2" />
+                Save Changes
+              </>
+            )}
           </button>
         </div>
       </form>

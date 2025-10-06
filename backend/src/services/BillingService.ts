@@ -2,6 +2,8 @@ import { BillingSnapshot, IBillingSnapshot } from '@/models/BillingSnapshot';
 import { Timesheet } from '@/models/Timesheet';
 import { UserRole } from '@/models/User';
 import { ValidationError, AuthorizationError } from '@/utils/errors';
+import { BillingRateService } from './BillingRateService';
+import { InvoiceWorkflowService } from './InvoiceWorkflowService';
 
 interface AuthUser {
   id: string;
@@ -89,7 +91,10 @@ export class BillingService {
         deleted_at: null
       }).populate('user_id', 'full_name hourly_rate').populate({
         path: 'time_entries',
-        select: 'hours is_billable'
+        populate: {
+          path: 'project_id',
+          select: 'name client_id'
+        }
       })) as any[];
 
       if (!timesheets || timesheets.length === 0) {
@@ -103,6 +108,35 @@ export class BillingService {
           .filter((entry: any) => entry.is_billable)
           .reduce((sum: number, entry: any) => sum + entry.hours, 0);
 
+        // Use enhanced rate calculation for more accurate billing
+        let effectiveRate = timesheet.user_id.hourly_rate;
+        let calculatedAmount = billableHours * effectiveRate;
+        
+        try {
+          // Calculate smart rate if we have project context
+          const projectEntry = timesheet.time_entries.find((entry: any) => 
+            entry.project_id && entry.is_billable
+          );
+          
+          if (projectEntry) {
+            const rateCalculation = await BillingRateService.getEffectiveRate({
+              user_id: timesheet.user_id._id,
+              project_id: projectEntry.project_id._id,
+              client_id: projectEntry.project_id.client_id,
+              date: new Date(weekStartDate),
+              hours: billableHours,
+              day_of_week: new Date(weekStartDate).getDay(),
+              is_holiday: false // Could be enhanced to detect holidays
+            });
+            
+            effectiveRate = rateCalculation.effective_rate;
+            calculatedAmount = rateCalculation.calculated_amount;
+          }
+        } catch (rateError) {
+          // Fall back to user's base rate if smart calculation fails
+          console.warn('Smart rate calculation failed, using base rate:', rateError);
+        }
+
         const snapshotData = {
           timesheet_id: timesheet._id,
           user_id: timesheet.user_id._id,
@@ -110,14 +144,16 @@ export class BillingService {
           week_end_date: weekEndDateStr,
           total_hours: timesheet.total_hours,
           billable_hours: billableHours,
-          hourly_rate: timesheet.user_id.hourly_rate,
-          total_amount: timesheet.total_hours * timesheet.user_id.hourly_rate,
-          billable_amount: billableHours * timesheet.user_id.hourly_rate,
+          hourly_rate: effectiveRate,
+          total_amount: timesheet.total_hours * effectiveRate,
+          billable_amount: calculatedAmount,
           snapshot_data: {
             generated_at: new Date().toISOString(),
             timesheet_status: timesheet.status,
             user_name: timesheet.user_id.full_name,
-            generated_by: currentUser.id
+            generated_by: currentUser.id,
+            smart_rate_applied: effectiveRate !== timesheet.user_id.hourly_rate,
+            base_user_rate: timesheet.user_id.hourly_rate
           }
         };
 

@@ -26,7 +26,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
     setError(null);
 
     try {
-      const response = await fetch('/api/auth/forgot-password', {
+      const response = await fetch('http://localhost:3001/api/v1/auth/forgot-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -37,7 +37,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to send reset email');
+        throw new Error(data.error || data.message || 'Failed to send reset email');
       }
 
       setSuccess(true);

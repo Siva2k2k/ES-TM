@@ -40,12 +40,12 @@ export interface TimesheetCalendarProps {
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
 const DEFAULT_COLORS = [
-  'bg-blue-100 text-blue-800 border-blue-300',
-  'bg-purple-100 text-purple-800 border-purple-300',
-  'bg-green-100 text-green-800 border-green-300',
-  'bg-yellow-100 text-yellow-800 border-yellow-300',
-  'bg-pink-100 text-pink-800 border-pink-300',
-  'bg-indigo-100 text-indigo-800 border-indigo-300',
+  'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 border-blue-300 dark:border-blue-700',
+  'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 border-purple-300 dark:border-purple-700',
+  'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 border-green-300 dark:border-green-700',
+  'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 border-yellow-300 dark:border-yellow-700',
+  'bg-pink-100 dark:bg-pink-900 text-pink-800 dark:text-pink-200 border-pink-300 dark:border-pink-700',
+  'bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200 border-indigo-300 dark:border-indigo-700',
 ];
 
 export const TimesheetCalendar: React.FC<TimesheetCalendarProps> = ({
@@ -119,26 +119,26 @@ export const TimesheetCalendar: React.FC<TimesheetCalendarProps> = ({
   };
 
   const getDayTotalColor = (hours: number): string => {
-    if (hours === 0) return 'text-gray-400';
-    if (hours < 8) return 'text-yellow-600';
-    if (hours > 10) return 'text-red-600';
-    return 'text-green-600';
+    if (hours === 0) return 'text-gray-400 dark:text-gray-500';
+    if (hours < 8) return 'text-yellow-600 dark:text-yellow-400';
+    if (hours > 10) return 'text-red-600 dark:text-red-400';
+    return 'text-green-600 dark:text-green-400';
   };
 
   return (
-    <Card className="w-full">
-      <CardHeader>
+    <Card className="w-full bg-white dark:bg-gray-800 border-slate-200 dark:border-gray-700">
+      <CardHeader className="border-b dark:border-gray-700">
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-slate-900 dark:text-gray-100">
             <CalendarIcon className="h-5 w-5" />
             Weekly Calendar
           </CardTitle>
           <div className="flex items-center gap-4">
             <div className="text-right">
-              <p className="text-sm text-gray-500">Week Total</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Week Total</p>
               <p className={`text-xl font-bold ${
-                weeklyTotal > 56 ? 'text-red-600' :
-                weeklyTotal >= 40 ? 'text-green-600' : 'text-yellow-600'
+                weeklyTotal > 56 ? 'text-red-600 dark:text-red-400' :
+                weeklyTotal >= 40 ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'
               }`}>
                 {formatDuration(weeklyTotal)}
               </p>
@@ -150,8 +150,9 @@ export const TimesheetCalendar: React.FC<TimesheetCalendarProps> = ({
                 onClick={handlePreviousWeek}
                 icon={ChevronLeft}
                 aria-label="Previous week"
+                className="dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
               />
-              <span className="text-sm font-medium min-w-[200px] text-center">
+              <span className="text-sm font-medium min-w-[200px] text-center text-slate-900 dark:text-gray-100">
                 {formatDate(weekStartDate, 'MMM DD')} - {formatDate(weekDates[4], 'MMM DD, YYYY')}
               </span>
               <Button
@@ -160,6 +161,7 @@ export const TimesheetCalendar: React.FC<TimesheetCalendarProps> = ({
                 onClick={handleNextWeek}
                 icon={ChevronRight}
                 aria-label="Next week"
+                className="dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-600"
               />
             </div>
           </div>
@@ -177,16 +179,16 @@ export const TimesheetCalendar: React.FC<TimesheetCalendarProps> = ({
             return (
               <div
                 key={dateStr}
-                className={`border rounded-lg overflow-hidden ${
-                  isToday ? 'ring-2 ring-blue-500' : ''
+                className={`border border-slate-200 dark:border-gray-700 rounded-lg overflow-hidden ${
+                  isToday ? 'ring-2 ring-blue-500 dark:ring-blue-400' : ''
                 }`}
               >
                 {/* Day Header */}
-                <div className={`p-3 ${isToday ? 'bg-blue-50' : 'bg-gray-50'} border-b`}>
-                  <p className="text-sm font-semibold text-gray-700">{WEEKDAYS[dayIndex]}</p>
-                  <p className="text-xs text-gray-500">{formatDate(date, 'MMM DD')}</p>
+                <div className={`p-3 ${isToday ? 'bg-blue-50 dark:bg-blue-900' : 'bg-gray-50 dark:bg-gray-900'} border-b border-slate-200 dark:border-gray-700`}>
+                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{WEEKDAYS[dayIndex]}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{formatDate(date, 'MMM DD')}</p>
                   <div className="flex items-center gap-1 mt-1">
-                    <Clock className="h-3 w-3 text-gray-400" />
+                    <Clock className="h-3 w-3 text-gray-400 dark:text-gray-500" />
                     <p className={`text-sm font-bold ${getDayTotalColor(dayTotal)}`}>
                       {dayTotal}h
                     </p>
@@ -195,12 +197,12 @@ export const TimesheetCalendar: React.FC<TimesheetCalendarProps> = ({
 
                 {/* Day Entries */}
                 <div
-                  className="p-2 min-h-[200px] space-y-2 cursor-pointer hover:bg-gray-50"
+                  className="p-2 min-h-[200px] space-y-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
                   onClick={() => onDayClick?.(dateStr)}
                 >
                   {dayEntries.length === 0 ? (
                     <div className="flex items-center justify-center h-full">
-                      <p className="text-xs text-gray-400">No entries</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">No entries</p>
                     </div>
                   ) : (
                     dayEntries.map((entry, idx) => (
@@ -209,7 +211,7 @@ export const TimesheetCalendar: React.FC<TimesheetCalendarProps> = ({
                         className={`p-2 rounded border cursor-pointer hover:shadow-md transition-shadow ${
                           entry.project_id
                             ? projectColors[entry.project_id]
-                            : 'bg-gray-100 text-gray-800 border-gray-300'
+                            : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600'
                         }`}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -240,14 +242,14 @@ export const TimesheetCalendar: React.FC<TimesheetCalendarProps> = ({
         </div>
 
         {/* Week Summary */}
-        <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+        <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
           <div className="grid grid-cols-5 gap-4 text-center">
             {weekDates.map((date, idx) => {
               const dateStr = date.toISOString().split('T')[0];
               const total = dailyTotals[dateStr] || 0;
               return (
                 <div key={dateStr}>
-                  <p className="text-xs text-gray-500 mb-1">{WEEKDAYS[idx]}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{WEEKDAYS[idx]}</p>
                   <p className={`text-lg font-bold ${getDayTotalColor(total)}`}>
                     {total}h
                   </p>
@@ -259,8 +261,8 @@ export const TimesheetCalendar: React.FC<TimesheetCalendarProps> = ({
 
         {/* Legend */}
         {projects.length > 0 && (
-          <div className="mt-4 pt-4 border-t">
-            <p className="text-xs text-gray-500 mb-2">Projects:</p>
+          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Projects:</p>
             <div className="flex flex-wrap gap-2">
               {projects.map(project => (
                 <div

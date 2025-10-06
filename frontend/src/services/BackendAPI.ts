@@ -3,9 +3,7 @@
  * Provides a simple interface for making API calls to the backend
  */
 
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? '/api/v1' // Production backend URL
-  : 'http://localhost:3001/api/v1'; // Development backend URL
+const API_BASE_URL = '/api/v1'; // Always use proxy in development and production
 
 class BackendAPI {
   private getAuthHeaders(): Record<string, string> {

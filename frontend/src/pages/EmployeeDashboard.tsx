@@ -311,36 +311,36 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
   const getTaskStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case 'completed':
-        return 'bg-green-100 text-green-800 border-green-200';
+        return 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 border-green-200 dark:border-green-700';
       case 'in_progress':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
+        return 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 border-blue-200 dark:border-blue-700';
       case 'pending':
       case 'open':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+        return 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 border-yellow-200 dark:border-yellow-700';
       default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+        return 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-200 dark:border-gray-600';
     }
   };
 
   const getProjectStatusColor = (status: string) => {
     switch (status) {
       case 'active':
-        return 'bg-green-100 text-green-800';
+        return 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200';
       case 'completed':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200';
       case 'archived':
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200';
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
-        <div className="bg-white rounded-lg shadow p-8 text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading {activeSection === 'projects' ? 'projects' : 'tasks'}...</p>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6 flex items-center justify-center">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-8 text-center border border-transparent dark:border-gray-700">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Loading {activeSection === 'projects' ? 'projects' : 'tasks'}...</p>
         </div>
       </div>
     );
@@ -348,14 +348,14 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
-        <div className="bg-white rounded-lg shadow p-8 text-center">
-          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Error Loading Data</h2>
-          <p className="text-gray-600 mb-4">{error}</p>
-          <button 
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6 flex items-center justify-center">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-8 text-center border border-transparent dark:border-gray-700">
+          <AlertCircle className="h-12 w-12 text-red-500 dark:text-red-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">Error Loading Data</h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">{error}</p>
+          <button
             onClick={() => setRefreshTrigger(prev => prev + 1)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600"
           >
             Retry
           </button>
@@ -375,17 +375,17 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
         {/* Header */}
         <div className="flex justify-between items-center">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">My Projects</h2>
-            <p className="text-gray-600 mt-1">
-              {currentUserRole === 'lead' 
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">My Projects</h2>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">
+              {currentUserRole === 'lead'
                 ? 'Projects you lead and coordinate'
                 : 'Projects you are assigned to'
               }
             </p>
           </div>
-          <button 
+          <button
             onClick={() => setRefreshTrigger(prev => prev + 1)}
-            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
             title="Refresh"
           >
             <Activity className="w-5 h-5" />
@@ -394,52 +394,52 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
 
         {/* Project Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-6 border border-transparent dark:border-gray-700">
             <div className="flex items-center">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Building2 className="h-6 w-6 text-blue-600" />
+              <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                <Building2 className="h-6 w-6 text-blue-600 dark:text-blue-400" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Total Projects</p>
-                <p className="text-2xl font-bold text-gray-900">{projects.length}</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Projects</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{projects.length}</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-6 border border-transparent dark:border-gray-700">
             <div className="flex items-center">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <Target className="h-6 w-6 text-green-600" />
+              <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
+                <Target className="h-6 w-6 text-green-600 dark:text-green-400" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Active Projects</p>
-                <p className="text-2xl font-bold text-gray-900">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Active Projects</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                   {projects.filter(p => p.status === 'active').length}
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-6 border border-transparent dark:border-gray-700">
             <div className="flex items-center">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <CheckSquare className="h-6 w-6 text-purple-600" />
+              <div className="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg">
+                <CheckSquare className="h-6 w-6 text-purple-600 dark:text-purple-400" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Total Tasks</p>
-                <p className="text-2xl font-bold text-gray-900">{totalTasks}</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Tasks</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{totalTasks}</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-6 border border-transparent dark:border-gray-700">
             <div className="flex items-center">
-              <div className="p-2 bg-yellow-100 rounded-lg">
-                <TrendingUp className="h-6 w-6 text-yellow-600" />
+              <div className="p-2 bg-yellow-100 dark:bg-yellow-900 rounded-lg">
+                <TrendingUp className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Completion</p>
-                <p className="text-2xl font-bold text-gray-900">{completionRate.toFixed(0)}%</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Completion</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{completionRate.toFixed(0)}%</p>
               </div>
             </div>
           </div>
@@ -454,14 +454,14 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
               : 0;
 
             return (
-              <div key={project.id} className="bg-white rounded-lg shadow border border-gray-200">
+              <div key={project.id} className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 border border-gray-200 dark:border-gray-700">
                 {/* Project Header */}
                 <div className="p-6">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-4 flex-1">
                       <button
                         onClick={() => toggleProjectExpansion(project.id)}
-                        className="text-gray-400 hover:text-gray-600 transition-colors"
+                        className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                       >
                         {isExpanded ? (
                           <ChevronDown className="w-5 h-5" />
@@ -469,16 +469,16 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
                           <ChevronRight className="w-5 h-5" />
                         )}
                       </button>
-                      
+
                       <div className="flex-1">
                         <div className="flex items-center space-x-3 mb-2">
-                          <h3 className="text-lg font-semibold text-gray-900">{project.name}</h3>
+                          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{project.name}</h3>
                           <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getProjectStatusColor(project.status)}`}>
                             {project.status}
                           </span>
                         </div>
-                        
-                        <div className="flex items-center space-x-4 text-sm text-gray-600">
+
+                        <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400">
                           <span className="flex items-center">
                             <Building2 className="w-4 h-4 mr-1" />
                             {project.client_name || 'Unknown Client'}
@@ -502,12 +502,12 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
                     </div>
 
                     <div className="text-right">
-                      <div className="text-sm font-medium text-gray-900 mb-1">
+                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">
                         {project.task_stats.completed}/{project.task_stats.total} completed
                       </div>
-                      <div className="w-32 bg-gray-200 rounded-full h-2">
-                        <div 
-                          className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                      <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div
+                          className="bg-blue-500 dark:bg-blue-400 h-2 rounded-full transition-all duration-300"
                           style={{ width: `${progressPercentage}%` }}
                         />
                       </div>
@@ -516,7 +516,7 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
 
                   {/* Project Description */}
                   {project.description && (
-                    <div className="mt-4 text-sm text-gray-600">
+                    <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
                       {project.description}
                     </div>
                   )}
@@ -524,54 +524,54 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
 
                 {/* Expanded Project Details */}
                 {isExpanded && (
-                  <div className="border-t border-gray-200 p-6 bg-gray-50">
+                  <div className="border-t border-gray-200 dark:border-gray-700 p-6 bg-gray-50 dark:bg-gray-900">
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                       {/* Project Info */}
                       <div>
-                        <h4 className="font-semibold text-gray-900 mb-3">Project Details</h4>
+                        <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Project Details</h4>
                         <div className="space-y-2 text-sm">
                           <div className="flex justify-between">
-                            <span className="text-gray-600">Start Date:</span>
-                            <span className="text-gray-900">{new Date(project.start_date).toLocaleDateString()}</span>
+                            <span className="text-gray-600 dark:text-gray-400">Start Date:</span>
+                            <span className="text-gray-900 dark:text-gray-100">{new Date(project.start_date).toLocaleDateString()}</span>
                           </div>
                           {project.end_date && (
                             <div className="flex justify-between">
-                              <span className="text-gray-600">End Date:</span>
-                              <span className="text-gray-900">{new Date(project.end_date).toLocaleDateString()}</span>
+                              <span className="text-gray-600 dark:text-gray-400">End Date:</span>
+                              <span className="text-gray-900 dark:text-gray-100">{new Date(project.end_date).toLocaleDateString()}</span>
                             </div>
                           )}
                           {currentUserRole === 'lead' && project.budget && (
                             <div className="flex justify-between">
-                              <span className="text-gray-600">Budget:</span>
-                              <span className="text-gray-900">${project.budget.toLocaleString()}</span>
+                              <span className="text-gray-600 dark:text-gray-400">Budget:</span>
+                              <span className="text-gray-900 dark:text-gray-100">${project.budget.toLocaleString()}</span>
                             </div>
                           )}
                           <div className="flex justify-between">
-                            <span className="text-gray-600">Billable:</span>
-                            <span className="text-gray-900">{project.is_billable ? 'Yes' : 'No'}</span>
+                            <span className="text-gray-600 dark:text-gray-400">Billable:</span>
+                            <span className="text-gray-900 dark:text-gray-100">{project.is_billable ? 'Yes' : 'No'}</span>
                           </div>
                         </div>
                       </div>
 
                       {/* Task Stats */}
                       <div>
-                        <h4 className="font-semibold text-gray-900 mb-3">Task Overview</h4>
+                        <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Task Overview</h4>
                         <div className="space-y-3">
                           <div className="flex items-center justify-between">
-                            <span className="text-sm text-gray-600">Pending</span>
-                            <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-sm font-medium">
+                            <span className="text-sm text-gray-600 dark:text-gray-400">Pending</span>
+                            <span className="bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 px-2 py-1 rounded text-sm font-medium">
                               {project.task_stats.pending}
                             </span>
                           </div>
                           <div className="flex items-center justify-between">
-                            <span className="text-sm text-gray-600">In Progress</span>
-                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm font-medium">
+                            <span className="text-sm text-gray-600 dark:text-gray-400">In Progress</span>
+                            <span className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded text-sm font-medium">
                               {project.task_stats.in_progress}
                             </span>
                           </div>
                           <div className="flex items-center justify-between">
-                            <span className="text-sm text-gray-600">Completed</span>
-                            <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-sm font-medium">
+                            <span className="text-sm text-gray-600 dark:text-gray-400">Completed</span>
+                            <span className="bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 px-2 py-1 rounded text-sm font-medium">
                               {project.task_stats.completed}
                             </span>
                           </div>
@@ -580,28 +580,28 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
 
                       {/* Quick Actions */}
                       <div>
-                        <h4 className="font-semibold text-gray-900 mb-3">Quick Actions</h4>
+                        <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Quick Actions</h4>
                         <div className="space-y-2">
-                          <button 
+                          <button
                             onClick={() => {
                               setActiveSection('tasks');
                               // Filter tasks for this project
                             }}
-                            className="w-full text-left px-3 py-2 text-sm bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
+                            className="w-full text-left px-3 py-2 text-sm bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-200 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-800 transition-colors"
                           >
                             View All Tasks
                           </button>
-                          <button 
+                          <button
                             onClick={() => {
                               setActiveSection('timesheet');
                               // Navigate to timesheet with project filter
                             }}
-                            className="w-full text-left px-3 py-2 text-sm bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors"
+                            className="w-full text-left px-3 py-2 text-sm bg-green-50 dark:bg-green-900 text-green-700 dark:text-green-200 rounded-lg hover:bg-green-100 dark:hover:bg-green-800 transition-colors"
                           >
                             Log Time
                           </button>
                           {currentUserRole === 'lead' && (
-                            <button className="w-full text-left px-3 py-2 text-sm bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors">
+                            <button className="w-full text-left px-3 py-2 text-sm bg-purple-50 dark:bg-purple-900 text-purple-700 dark:text-purple-200 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-800 transition-colors">
                               Manage Team
                             </button>
                           )}
@@ -612,7 +612,7 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
                     {/* Project Tasks */}
                     {project.tasks.length > 0 && (
                       <div className="mt-6">
-                        <h4 className="font-semibold text-gray-900 mb-3">
+                        <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">
                           {currentUserRole === 'employee' ? 'My Tasks' : 'Project Tasks'} ({project.tasks.length})
                         </h4>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -620,20 +620,20 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
                             .filter(task => currentUserRole === 'lead' || task.assigned_to_user_id === currentUser?.id)
                             .slice(0, 6)
                             .map((task) => (
-                            <div key={task.id} className="bg-white p-4 rounded-lg border border-gray-200">
+                            <div key={task.id} className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
                               <div className="flex items-start justify-between mb-2">
-                                <h5 className="font-medium text-gray-900 text-sm">{task.name}</h5>
+                                <h5 className="font-medium text-gray-900 dark:text-gray-100 text-sm">{task.name}</h5>
                                 <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getTaskStatusColor(task.status)}`}>
                                   {task.status}
                                 </span>
                               </div>
-                              
+
                               {task.description && (
-                                <p className="text-xs text-gray-600 mb-3 line-clamp-2">{task.description}</p>
+                                <p className="text-xs text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">{task.description}</p>
                               )}
-                              
+
                               <div className="flex items-center justify-between">
-                                <div className="flex items-center space-x-2 text-xs text-gray-500">
+                                <div className="flex items-center space-x-2 text-xs text-gray-500 dark:text-gray-400">
                                   {task.estimated_hours && (
                                     <span className="flex items-center">
                                       <Clock className="w-3 h-3 mr-1" />
@@ -641,15 +641,15 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
                                     </span>
                                   )}
                                   {task.is_billable && (
-                                    <span className="bg-green-100 text-green-700 px-1 py-0.5 rounded text-xs">
+                                    <span className="bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 px-1 py-0.5 rounded text-xs">
                                       Billable
                                     </span>
                                   )}
                                 </div>
-                                
+
                                 <button
                                   onClick={() => viewTaskDetails({ ...task, project })}
-                                  className="text-blue-600 hover:text-blue-800 text-xs font-medium"
+                                  className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-xs font-medium"
                                 >
                                   View Details
                                 </button>
@@ -657,12 +657,12 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
                             </div>
                           ))}
                         </div>
-                        
+
                         {project.tasks.length > 6 && (
                           <div className="mt-4 text-center">
-                            <button 
+                            <button
                               onClick={() => setActiveSection('tasks')}
-                              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                              className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm font-medium"
                             >
                               View all {project.tasks.length} tasks →
                             </button>
@@ -677,10 +677,10 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
           })}
 
           {projects.length === 0 && (
-            <div className="bg-white rounded-lg shadow p-12 text-center">
-              <Building2 className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Projects Assigned</h3>
-              <p className="text-gray-600">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-12 text-center border border-transparent dark:border-gray-700">
+              <Building2 className="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No Projects Assigned</h3>
+              <p className="text-gray-600 dark:text-gray-400">
                 You are not currently assigned to any projects. Contact your manager for project assignments.
               </p>
             </div>
@@ -700,9 +700,9 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
         {/* Header */}
         <div className="flex justify-between items-center">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">My Tasks</h2>
-            <p className="text-gray-600 mt-1">
-              {currentUserRole === 'lead' 
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">My Tasks</h2>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">
+              {currentUserRole === 'lead'
                 ? 'Tasks assigned to you and your team'
                 : 'Tasks assigned to you across all projects'
               }
@@ -710,14 +710,14 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
           </div>
           <div className="flex items-center space-x-3">
             {activeTimer && (
-              <div className="bg-blue-100 text-blue-800 px-3 py-2 rounded-lg flex items-center space-x-2">
+              <div className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-3 py-2 rounded-lg flex items-center space-x-2">
                 <Timer className="w-4 h-4" />
                 <span className="font-mono text-sm">{formatTime(timerSeconds)}</span>
               </div>
             )}
-            <button 
+            <button
               onClick={() => setRefreshTrigger(prev => prev + 1)}
-              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
               title="Refresh"
             >
               <Activity className="w-5 h-5" />
@@ -727,40 +727,40 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
 
         {/* Task Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-6 border border-transparent dark:border-gray-700">
             <div className="flex items-center">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <CheckSquare className="h-6 w-6 text-blue-600" />
+              <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                <CheckSquare className="h-6 w-6 text-blue-600 dark:text-blue-400" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">My Tasks</p>
-                <p className="text-2xl font-bold text-gray-900">{myTasks.length}</p>
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">My Tasks</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{myTasks.length}</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-6 border border-transparent dark:border-gray-700">
             <div className="flex items-center">
-              <div className="p-2 bg-yellow-100 rounded-lg">
-                <Clock className="h-6 w-6 text-yellow-600" />
+              <div className="p-2 bg-yellow-100 dark:bg-yellow-900 rounded-lg">
+                <Clock className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">In Progress</p>
-                <p className="text-2xl font-bold text-gray-900">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">In Progress</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                   {myTasks.filter(t => t.status === 'in_progress').length}
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-6 border border-transparent dark:border-gray-700">
             <div className="flex items-center">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <Target className="h-6 w-6 text-green-600" />
+              <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
+                <Target className="h-6 w-6 text-green-600 dark:text-green-400" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Completed</p>
-                <p className="text-2xl font-bold text-gray-900">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Completed</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                   {myTasks.filter(t => t.status === 'completed').length}
                 </p>
               </div>
@@ -768,14 +768,14 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
           </div>
 
           {currentUserRole === 'lead' && (
-            <div className="bg-white rounded-lg shadow p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-6 border border-transparent dark:border-gray-700">
               <div className="flex items-center">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <Users className="h-6 w-6 text-purple-600" />
+                <div className="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg">
+                  <Users className="h-6 w-6 text-purple-600 dark:text-purple-400" />
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Team Tasks</p>
-                  <p className="text-2xl font-bold text-gray-900">{teamTasks.length}</p>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Team Tasks</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{teamTasks.length}</p>
                 </div>
               </div>
             </div>
@@ -783,31 +783,31 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
         </div>
 
         {/* My Tasks Section */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-              <User className="w-5 h-5 mr-2 text-blue-600" />
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 border border-transparent dark:border-gray-700">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center">
+              <User className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" />
               My Tasks ({myTasks.length})
             </h3>
           </div>
-          
+
           <div className="p-6">
             {myTasks.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {myTasks.map((task) => (
-                  <div key={task.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                  <div key={task.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md dark:hover:shadow-gray-900/50 transition-shadow bg-white dark:bg-gray-800">
                     <div className="flex items-start justify-between mb-3">
-                      <h4 className="font-medium text-gray-900 text-sm">{task.name}</h4>
+                      <h4 className="font-medium text-gray-900 dark:text-gray-100 text-sm">{task.name}</h4>
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getTaskStatusColor(task.status)}`}>
                         {task.status}
                       </span>
                     </div>
-                    
+
                     {task.description && (
-                      <p className="text-sm text-gray-600 mb-3 line-clamp-2">{task.description}</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">{task.description}</p>
                     )}
-                    
-                    <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
+
+                    <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-3">
                       <span className="flex items-center">
                         <Building2 className="w-3 h-3 mr-1" />
                         {task.project_name || 'Unknown Project'}
@@ -828,8 +828,8 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
                             onClick={() => handleStartTimer(task.id)}
                             className={`flex items-center px-2 py-1 text-xs rounded transition-colors ${
                               activeTimer === task.id
-                                ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                                : 'bg-green-100 text-green-700 hover:bg-green-200'
+                                ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 hover:bg-red-200 dark:hover:bg-red-800'
+                                : 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 hover:bg-green-200 dark:hover:bg-green-800'
                             }`}
                           >
                             {activeTimer === task.id ? (
@@ -844,35 +844,35 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
                               </>
                             )}
                           </button>
-                          
+
                           {task.status === 'open' && (
                             <button
                               onClick={() => handleTaskStatusUpdate(task.id, 'in_progress')}
-                              className="flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                              className="flex items-center px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 rounded hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
                             >
                               Start Work
                             </button>
                           )}
-                          
+
                           {task.status === 'in_progress' && (
                             <button
                               onClick={() => handleTaskStatusUpdate(task.id, 'completed')}
-                              className="flex items-center px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
+                              className="flex items-center px-2 py-1 text-xs bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 rounded hover:bg-green-200 dark:hover:bg-green-800 transition-colors"
                             >
                               Complete
                             </button>
                           )}
                         </>
                       )}
-                      
+
                       <button
                         onClick={() => viewTaskDetails(task)}
-                        className="flex items-center px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+                        className="flex items-center px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                       >
                         <Eye className="w-3 h-3 mr-1" />
                         Details
                       </button>
-                      
+
                       {activeTimer === task.id && (
                         <button
                           onClick={() => {
@@ -881,7 +881,7 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
                               handleLogTime(task.id, hours);
                             }
                           }}
-                          className="flex items-center px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors"
+                          className="flex items-center px-2 py-1 text-xs bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-200 rounded hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors"
                         >
                           Log Time
                         </button>
@@ -891,10 +891,10 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
                 ))}
               </div>
             ) : (
-              <div className="text-center py-8 text-gray-500">
-                <CheckSquare className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                <p className="text-lg font-medium">No tasks assigned</p>
-                <p>You don't have any tasks assigned to you yet.</p>
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                <CheckSquare className="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
+                <p className="text-lg font-medium text-gray-900 dark:text-gray-100">No tasks assigned</p>
+                <p className="text-gray-600 dark:text-gray-400">You don't have any tasks assigned to you yet.</p>
               </div>
             )}
           </div>
@@ -902,31 +902,31 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
 
         {/* Team Tasks Section (Lead only) */}
         {currentUserRole === 'lead' && (
-          <div className="bg-white rounded-lg shadow">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                <Users className="w-5 h-5 mr-2 text-purple-600" />
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 border border-transparent dark:border-gray-700">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center">
+                <Users className="w-5 h-5 mr-2 text-purple-600 dark:text-purple-400" />
                 Team Tasks ({teamTasks.length})
               </h3>
             </div>
-            
+
             <div className="p-6">
               {teamTasks.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {teamTasks.map((task) => (
-                    <div key={task.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div key={task.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md dark:hover:shadow-gray-900/50 transition-shadow bg-white dark:bg-gray-800">
                       <div className="flex items-start justify-between mb-3">
-                        <h4 className="font-medium text-gray-900 text-sm">{task.name}</h4>
+                        <h4 className="font-medium text-gray-900 dark:text-gray-100 text-sm">{task.name}</h4>
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getTaskStatusColor(task.status)}`}>
                           {task.status}
                         </span>
                       </div>
-                      
+
                       {task.description && (
-                        <p className="text-sm text-gray-600 mb-3 line-clamp-2">{task.description}</p>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">{task.description}</p>
                       )}
-                      
-                      <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
+
+                      <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-3">
                         <span className="flex items-center">
                           <Building2 className="w-3 h-3 mr-1" />
                           {task.project_name || 'Unknown Project'}
@@ -943,16 +943,16 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={() => viewTaskDetails(task)}
-                          className="flex items-center px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+                          className="flex items-center px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                         >
                           <Eye className="w-3 h-3 mr-1" />
                           Review
                         </button>
-                        
+
                         {task.status !== 'completed' && (
                           <button
                             onClick={() => handleTaskStatusUpdate(task.id, 'completed')}
-                            className="flex items-center px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
+                            className="flex items-center px-2 py-1 text-xs bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 rounded hover:bg-green-200 dark:hover:bg-green-800 transition-colors"
                           >
                             Mark Complete
                           </button>
@@ -962,10 +962,10 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <Users className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                  <p className="text-lg font-medium">No team tasks</p>
-                  <p>Your team doesn't have any tasks assigned yet.</p>
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  <Users className="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
+                  <p className="text-lg font-medium text-gray-900 dark:text-gray-100">No team tasks</p>
+                  <p className="text-gray-600 dark:text-gray-400">Your team doesn't have any tasks assigned yet.</p>
                 </div>
               )}
             </div>
@@ -993,90 +993,90 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
 
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-6 border border-transparent dark:border-gray-700">
           <div className="flex items-center">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Building2 className="h-6 w-6 text-blue-600" />
+            <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+              <Building2 className="h-6 w-6 text-blue-600 dark:text-blue-400" />
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">My Projects</p>
-              <p className="text-2xl font-bold text-gray-900">{projects.length}</p>
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">My Projects</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{projects.length}</p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-6 border border-transparent dark:border-gray-700">
           <div className="flex items-center">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <CheckSquare className="h-6 w-6 text-green-600" />
+            <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
+              <CheckSquare className="h-6 w-6 text-green-600 dark:text-green-400" />
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">My Tasks</p>
-              <p className="text-2xl font-bold text-gray-900">
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">My Tasks</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 {tasks.filter(t => t.assigned_to_user_id === currentUser?.id).length}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-6 border border-transparent dark:border-gray-700">
           <div className="flex items-center">
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <Clock className="h-6 w-6 text-purple-600" />
+            <div className="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg">
+              <Clock className="h-6 w-6 text-purple-600 dark:text-purple-400" />
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">This Week</p>
-              <p className="text-2xl font-bold text-gray-900">32.5h</p>
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">This Week</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">32.5h</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Quick Actions */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-900/50 p-6 border border-transparent dark:border-gray-700">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Quick Actions</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <button 
+          <button
             onClick={() => setActiveSection('projects')}
-            className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            className="flex items-center p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
           >
-            <Building2 className="h-5 w-5 text-blue-600 mr-3" />
+            <Building2 className="h-5 w-5 text-blue-600 dark:text-blue-400 mr-3" />
             <div className="text-left">
-              <p className="font-medium text-gray-900">View Projects</p>
-              <p className="text-sm text-gray-600">See all assigned projects</p>
+              <p className="font-medium text-gray-900 dark:text-gray-100">View Projects</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">See all assigned projects</p>
             </div>
           </button>
-          
-          <button 
+
+          <button
             onClick={() => setActiveSection('tasks')}
-            className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            className="flex items-center p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
           >
-            <CheckSquare className="h-5 w-5 text-green-600 mr-3" />
+            <CheckSquare className="h-5 w-5 text-green-600 dark:text-green-400 mr-3" />
             <div className="text-left">
-              <p className="font-medium text-gray-900">View Tasks</p>
-              <p className="text-sm text-gray-600">Manage your task list</p>
+              <p className="font-medium text-gray-900 dark:text-gray-100">View Tasks</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Manage your task list</p>
             </div>
           </button>
-          
-          <button 
+
+          <button
             onClick={() => setActiveSection('timesheet')}
-            className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            className="flex items-center p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
           >
-            <Clock className="h-5 w-5 text-purple-600 mr-3" />
+            <Clock className="h-5 w-5 text-purple-600 dark:text-purple-400 mr-3" />
             <div className="text-left">
-              <p className="font-medium text-gray-900">Log Time</p>
-              <p className="text-sm text-gray-600">Track your hours</p>
+              <p className="font-medium text-gray-900 dark:text-gray-100">Log Time</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Track your hours</p>
             </div>
           </button>
-          
-          <button 
+
+          <button
             onClick={() => setActiveSection('timesheet-status')}
-            className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            className="flex items-center p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
           >
-            <Activity className="h-5 w-5 text-yellow-600 mr-3" />
+            <Activity className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mr-3" />
             <div className="text-left">
-              <p className="font-medium text-gray-900">View Status</p>
-              <p className="text-sm text-gray-600">Check timesheet status</p>
+              <p className="font-medium text-gray-900 dark:text-gray-100">View Status</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Check timesheet status</p>
             </div>
           </button>
         </div>
@@ -1089,13 +1089,13 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
     if (!showTaskModal || !selectedTask) return null;
 
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-hidden">
-          <div className="p-6 border-b border-gray-200">
+      <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50">
+        <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-2xl max-h-[90vh] overflow-hidden border border-transparent dark:border-gray-700 shadow-xl dark:shadow-gray-900/50">
+          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
             <div className="flex justify-between items-start">
               <div>
-                <h3 className="text-xl font-semibold text-gray-900">{selectedTask.name}</h3>
-                <p className="text-gray-600 mt-1">
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{selectedTask.name}</h3>
+                <p className="text-gray-600 dark:text-gray-400 mt-1">
                   {selectedTask.project_name || selectedTask.project?.name || 'Unknown Project'}
                 </p>
               </div>
@@ -1105,7 +1105,7 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
                 </span>
                 <button
                   onClick={() => setShowTaskModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                 >
                   <X className="w-6 h-6" />
                 </button>
@@ -1118,53 +1118,53 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
               {/* Task Description */}
               {selectedTask.description && (
                 <div>
-                  <h4 className="font-semibold text-gray-900 mb-2">Description</h4>
-                  <p className="text-gray-700">{selectedTask.description}</p>
+                  <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">Description</h4>
+                  <p className="text-gray-700 dark:text-gray-300">{selectedTask.description}</p>
                 </div>
               )}
 
               {/* Task Details */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <h4 className="font-semibold text-gray-900 mb-3">Task Details</h4>
+                  <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Task Details</h4>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Status:</span>
-                      <span className="text-gray-900 capitalize">{selectedTask.status}</span>
+                      <span className="text-gray-600 dark:text-gray-400">Status:</span>
+                      <span className="text-gray-900 dark:text-gray-100 capitalize">{selectedTask.status}</span>
                     </div>
                     {selectedTask.estimated_hours && (
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Estimated Hours:</span>
-                        <span className="text-gray-900">{selectedTask.estimated_hours}h</span>
+                        <span className="text-gray-600 dark:text-gray-400">Estimated Hours:</span>
+                        <span className="text-gray-900 dark:text-gray-100">{selectedTask.estimated_hours}h</span>
                       </div>
                     )}
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Billable:</span>
-                      <span className="text-gray-900">{selectedTask.is_billable ? 'Yes' : 'No'}</span>
+                      <span className="text-gray-600 dark:text-gray-400">Billable:</span>
+                      <span className="text-gray-900 dark:text-gray-100">{selectedTask.is_billable ? 'Yes' : 'No'}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Created:</span>
-                      <span className="text-gray-900">{new Date(selectedTask.created_at).toLocaleDateString()}</span>
+                      <span className="text-gray-600 dark:text-gray-400">Created:</span>
+                      <span className="text-gray-900 dark:text-gray-100">{new Date(selectedTask.created_at).toLocaleDateString()}</span>
                     </div>
                   </div>
                 </div>
 
                 <div>
-                  <h4 className="font-semibold text-gray-900 mb-3">Project Info</h4>
+                  <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Project Info</h4>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Project:</span>
-                      <span className="text-gray-900">{selectedTask.project_name || selectedTask.project?.name}</span>
+                      <span className="text-gray-600 dark:text-gray-400">Project:</span>
+                      <span className="text-gray-900 dark:text-gray-100">{selectedTask.project_name || selectedTask.project?.name}</span>
                     </div>
                     {selectedTask.project && (
                       <>
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Client:</span>
-                          <span className="text-gray-900">{selectedTask.client_name || 'Unknown'}</span>
+                          <span className="text-gray-600 dark:text-gray-400">Client:</span>
+                          <span className="text-gray-900 dark:text-gray-100">{selectedTask.client_name || 'Unknown'}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-600">Project Status:</span>
-                          <span className="text-gray-900 capitalize">{selectedTask.project.status}</span>
+                          <span className="text-gray-600 dark:text-gray-400">Project Status:</span>
+                          <span className="text-gray-900 dark:text-gray-100 capitalize">{selectedTask.project.status}</span>
                         </div>
                       </>
                     )}
@@ -1174,17 +1174,17 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
             </div>
           </div>
 
-          <div className="p-6 border-t border-gray-200 bg-gray-50">
+          <div className="p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
             <div className="flex justify-between items-center">
               <div className="flex items-center space-x-3">
                 {activeTimer === selectedTask.id && (
-                  <div className="bg-blue-100 text-blue-800 px-3 py-2 rounded-lg flex items-center space-x-2">
+                  <div className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-3 py-2 rounded-lg flex items-center space-x-2">
                     <Timer className="w-4 h-4" />
                     <span className="font-mono text-sm">{formatTime(timerSeconds)}</span>
                   </div>
                 )}
               </div>
-              
+
               <div className="flex space-x-3">
                 {selectedTask.status !== 'completed' && (
                   <>
@@ -1192,8 +1192,8 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
                       onClick={() => handleStartTimer(selectedTask.id)}
                       className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
                         activeTimer === selectedTask.id
-                          ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                          : 'bg-green-100 text-green-700 hover:bg-green-200'
+                          ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 hover:bg-red-200 dark:hover:bg-red-800'
+                          : 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 hover:bg-green-200 dark:hover:bg-green-800'
                       }`}
                     >
                       {activeTimer === selectedTask.id ? (
@@ -1208,14 +1208,14 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
                         </>
                       )}
                     </button>
-                    
+
                     {selectedTask.status === 'in_progress' && (
                       <button
                         onClick={() => {
                           handleTaskStatusUpdate(selectedTask.id, 'completed');
                           setShowTaskModal(false);
                         }}
-                        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center transition-colors"
+                        className="bg-green-600 dark:bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-700 dark:hover:bg-green-600 flex items-center transition-colors"
                       >
                         <CheckSquare className="w-4 h-4 mr-2" />
                         Mark Complete
@@ -1223,10 +1223,10 @@ const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ activeSection, se
                     )}
                   </>
                 )}
-                
+
                 <button
                   onClick={() => setShowTaskModal(false)}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                 >
                   Close
                 </button>

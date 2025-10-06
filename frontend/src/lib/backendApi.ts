@@ -71,10 +71,14 @@ export class BackendApiClient {
           errorData = await response.json();
           console.log('Error response data:', errorData);
           
-          if (errorData.error) {
-            errorMessage = typeof errorData.error === 'string' ? errorData.error : JSON.stringify(errorData.error);
-          } else if (errorData.message) {
-            errorMessage = typeof errorData.message === 'string' ? errorData.message : JSON.stringify(errorData.message);
+          if (errorData && errorData.error) {
+            errorMessage = typeof errorData.error === 'string' && errorData.error ? 
+              errorData.error : 
+              (errorData.error ? JSON.stringify(errorData.error) : 'Unknown error');
+          } else if (errorData && errorData.message) {
+            errorMessage = typeof errorData.message === 'string' && errorData.message ? 
+              errorData.message : 
+              (errorData.message ? JSON.stringify(errorData.message) : 'Unknown error');
           }
         } catch {
           // Response is not JSON, keep the HTTP error message
@@ -101,7 +105,7 @@ export class BackendApiClient {
 
       // Network or other errors
       throw new BackendApiError(
-        error instanceof Error ? error.message : 'Network error occurred'
+        error instanceof Error && error.message ? error.message : 'Network error occurred'
       );
     }
   }
@@ -294,6 +298,51 @@ export class BackendApiClient {
    */
   async getAllBillingSnapshots(): Promise<any> {
     return this.get('/billing/snapshots');
+  }
+
+  // === PROJECT BILLING METHODS ===
+
+  /**
+   * Get project-based billing view
+   */
+  async getProjectBillingView(params: {
+    startDate: string;
+    endDate: string;
+    view?: 'weekly' | 'monthly';
+    projectIds?: string;
+  }): Promise<any> {
+    const queryParams = new URLSearchParams(params as any);
+    return this.get(`/project-billing/projects?${queryParams}`);
+  }
+
+  /**
+   * Get task-based billing view
+   */
+  async getTaskBillingView(params: {
+    startDate: string;
+    endDate: string;
+    projectIds?: string;
+    taskIds?: string;
+  }): Promise<any> {
+    const queryParams = new URLSearchParams(params as any);
+    return this.get(`/project-billing/tasks?${queryParams}`);
+  }
+
+  /**
+   * Update billable hours for a specific entry
+   */
+  async updateBillableHours(data: {
+    user_id: string;
+    project_id?: string;
+    task_id?: string;
+    date: string;
+    billable_hours: number;
+    reason?: string;
+  }): Promise<any> {
+    return this.request('/project-billing/billable-hours', {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    });
   }
 
   /**
@@ -513,13 +562,6 @@ export class BackendApiClient {
   }): Promise<any> {
     const searchParams = new URLSearchParams(params as any);
     return this.get(`/billing/summary?${searchParams}`);
-  }
-
-  /**
-   * Update billable hours
-   */
-  async updateBillableHours(entryId: string, hours: number): Promise<any> {
-    return this.patch(`/billing/hours/${entryId}`, { hours });
   }
 }
 

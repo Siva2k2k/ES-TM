@@ -30,6 +30,13 @@ export default defineConfig({
     headers: {
       'Cache-Control': 'no-cache',
     },
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
   // @ts-expect-error - Vitest config
   test: {

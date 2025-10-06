@@ -13,6 +13,13 @@ import { UserManagement } from './components/UserManagement';
 import { ProjectManagement } from './components/ProjectManagement';
 import { BillingManagement } from './components/BillingManagement';
 import { EnhancedBillingManagement } from './components/EnhancedBillingManagement';
+import { EnhancedBillingDashboard } from './components/billing/EnhancedBillingDashboard';
+import { BillingRateManagement } from './components/billing/BillingRateManagement';
+import { EnhancedInvoiceWorkflow } from './components/billing/EnhancedInvoiceWorkflow';
+import BillingManagementNew from './components/billing/BillingManagement';
+import ProjectBillingView from './components/billing/ProjectBillingView';
+import TaskBillingView from './components/billing/TaskBillingView';
+import BillingOthersView from './components/billing/BillingOthersView';
 import { AuditLogs } from './components/AuditLogs';
 import { Reports } from './components/Reports';
 import { EnhancedReports } from './components/EnhancedReports';
@@ -182,9 +189,9 @@ const App: React.FC = () => {
         },
         { id: 'reports', label: 'Reports & Analytics', icon: TrendingUp, subItems: [] },
         { id: 'billing', label: 'Billing Management', icon: FileText, subItems: [
-          { id: 'billing-dashboard', label: 'Dashboard' },
-          { id: 'billing-summaries', label: 'Summaries' },
-          { id: 'billing-reports', label: 'Reports' }
+          { id: 'billing-projects', label: '🎯 Project Billing' },
+          { id: 'billing-tasks', label: '🎯 Task Billing' },
+          { id: 'billing-others', label: 'Others' }
         ]},
         { id: 'audit', label: 'Audit Logs', icon: Activity, subItems: [
           { id: 'audit-logs', label: 'View Logs' },
@@ -202,9 +209,9 @@ const App: React.FC = () => {
         { id: 'timesheet-team', label: 'Team Review', icon: Users, subItems: [] },
         { id: 'reports', label: 'Reports & Analytics', icon: TrendingUp, subItems: [] },
         { id: 'billing', label: 'Billing Management', icon: FileText, subItems: [
-          { id: 'billing-dashboard', label: 'Dashboard' },
-          { id: 'billing-summaries', label: 'Summaries' },
-          { id: 'billing-reports', label: 'Reports' }
+          { id: 'billing-projects', label: '🎯 Project Billing' },
+          { id: 'billing-tasks', label: '🎯 Task Billing' },
+          { id: 'billing-others', label: 'Others' }
         ]}
       );
     }
@@ -359,7 +366,23 @@ const App: React.FC = () => {
         case 'timesheet-verification':
           return <TeamReview />;
         
-        // Billing Sub-sections
+        // Primary Billing Views
+        case 'billing-projects':
+          return <ProjectBillingView />;
+        case 'billing-tasks':
+          return <TaskBillingView />;
+        case 'billing-others':
+          return <BillingOthersView />;
+        
+        // Secondary Billing Sub-sections (keep for direct access)
+        case 'billing-enhanced-dashboard':
+          return <EnhancedBillingDashboard />;
+        case 'billing-invoice-workflow':
+          return <EnhancedInvoiceWorkflow />;
+        case 'billing-rate-management':
+          return <BillingRateManagement />;
+        
+        // Legacy Billing Sub-sections (fallback to enhanced billing management)
         case 'billing-view':
         case 'billing-reports':
         case 'billing-snapshots':
@@ -431,29 +454,29 @@ const App: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-gray-900 dark:to-gray-800">
       {/* Header */}
-      <header className="bg-white/95 backdrop-blur-sm shadow-lg border-b border-slate-200/50 fixed top-0 left-0 right-0 z-50">
+      <header className="bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm shadow-lg border-b border-slate-200/50 dark:border-gray-700/50 fixed top-0 left-0 right-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-18">
             <div className="flex items-center">
               <button
                 onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+                className="p-2 rounded-lg text-slate-600 dark:text-gray-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-gray-700 transition-colors"
               >
                 <Menu className="w-5 h-5" />
               </button>
               <div className="flex-shrink-0">
                 <div className="flex items-center">
                   <div className="relative">
-                    <Shield className="h-10 w-10 text-blue-600" />
+                    <Shield className="h-10 w-10 text-blue-600 dark:text-blue-400" />
                     <div className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full"></div>
                   </div>
                   <div className="ml-3">
-                    <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                    <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400 bg-clip-text text-transparent">
                       TimeTracker Pro
                     </span>
-                    <div className="text-xs text-slate-500 font-medium">Enterprise Edition</div>
+                    <div className="text-xs text-slate-500 dark:text-gray-400 font-medium">Enterprise Edition</div>
                   </div>
                 </div>
               </div>
@@ -462,11 +485,11 @@ const App: React.FC = () => {
             <div className="flex items-center space-x-3">
               {/* Search */}
               <div className="hidden md:block relative">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+                <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 dark:text-gray-500" />
                 <input
                   type="text"
                   placeholder="Search..."
-                  className="pl-9 pr-4 py-2 w-64 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  className="pl-9 pr-4 py-2 w-64 text-sm border border-slate-200 dark:border-gray-600 rounded-lg bg-slate-50 dark:bg-gray-700 dark:text-gray-100 focus:bg-white dark:focus:bg-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                 />
               </div>
 
@@ -474,29 +497,29 @@ const App: React.FC = () => {
               <div className="relative">
                 <button
                   onClick={() => setShowNotifications(!showNotifications)}
-                  className="relative p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="relative p-2 text-slate-600 dark:text-gray-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                 >
                   <Bell className="w-5 h-5" />
                   <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></span>
                 </button>
 
                 {showNotifications && (
-                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-slate-200 z-50">
-                    <div className="p-4 border-b border-slate-100">
-                      <h3 className="font-semibold text-slate-900">Notifications</h3>
+                  <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-slate-200 dark:border-gray-700 z-50">
+                    <div className="p-4 border-b border-slate-100 dark:border-gray-700">
+                      <h3 className="font-semibold text-slate-900 dark:text-gray-100">Notifications</h3>
                     </div>
                     <div className="max-h-96 overflow-y-auto">
                       {notifications.map((notification) => (
-                        <div key={notification.id} className="p-4 border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                        <div key={notification.id} className="p-4 border-b border-slate-50 dark:border-gray-700 hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors">
                           <div className="flex items-start space-x-3">
                             <div className={`w-2 h-2 rounded-full mt-2 ${
                               notification.type === 'success' ? 'bg-green-500' :
                               notification.type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'
                             }`}></div>
                             <div className="flex-1">
-                              <h4 className="font-medium text-slate-900 text-sm">{notification.title}</h4>
-                              <p className="text-slate-600 text-sm mt-1">{notification.message}</p>
-                              <p className="text-slate-400 text-xs mt-2">{notification.time}</p>
+                              <h4 className="font-medium text-slate-900 dark:text-gray-100 text-sm">{notification.title}</h4>
+                              <p className="text-slate-600 dark:text-gray-300 text-sm mt-1">{notification.message}</p>
+                              <p className="text-slate-400 dark:text-gray-500 text-xs mt-2">{notification.time}</p>
                             </div>
                           </div>
                         </div>
@@ -512,22 +535,22 @@ const App: React.FC = () => {
               </div>
 
               {/* User Info */}
-              <div className="flex items-center space-x-3 px-3 py-2 bg-slate-50 rounded-lg">
+              <div className="flex items-center space-x-3 px-3 py-2 bg-slate-50 dark:bg-gray-700 rounded-lg">
                 <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
                   <span className="text-white text-sm font-bold">
                     {currentUser?.full_name?.charAt(0) || 'U'}
                   </span>
                 </div>
                 <div className="hidden md:block">
-                  <p className="text-sm font-medium text-slate-900">{currentUser?.full_name}</p>
-                  <p className="text-xs text-slate-500 capitalize">{currentUserRole.replace('_', ' ')}</p>
+                  <p className="text-sm font-medium text-slate-900 dark:text-gray-100">{currentUser?.full_name}</p>
+                  <p className="text-xs text-slate-500 dark:text-gray-400 capitalize">{currentUserRole.replace('_', ' ')}</p>
                 </div>
               </div>
 
               {/* Sign Out Button */}
-              <button 
+              <button
                 onClick={handleSignOut}
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                className="p-2 text-slate-400 dark:text-gray-400 hover:text-slate-600 dark:hover:text-gray-200 hover:bg-slate-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                 title="Sign Out"
               >
                 <LogOut className="w-5 h-5" />
@@ -549,7 +572,7 @@ const App: React.FC = () => {
         {/* Sidebar */}
         <nav className={`
           ${sidebarCollapsed ? 'w-16 -translate-x-full lg:translate-x-0' : 'w-72 translate-x-0'}
-          bg-white/95 backdrop-blur-sm shadow-xl min-h-screen border-r border-slate-200/50
+          bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm shadow-xl min-h-screen border-r border-slate-200/50 dark:border-gray-700/50
           transition-all duration-300 fixed top-18 bottom-0 overflow-y-auto scrollbar-hide z-40
         `}>
           <div className="p-4">
@@ -582,7 +605,7 @@ const App: React.FC = () => {
                       className={`w-full flex items-center justify-center ${sidebarCollapsed ? 'px-2' : 'px-4'} py-3 text-sm font-medium rounded-xl transition-all group relative ${
                         isActive
                           ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
-                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                          : 'text-slate-600 dark:text-gray-300 hover:bg-slate-100 dark:hover:bg-gray-700 hover:text-slate-900 dark:hover:text-white'
                       }`}
                       title={sidebarCollapsed ? item.label : ''}
                     >
@@ -597,17 +620,17 @@ const App: React.FC = () => {
                       )}
                       {/* Tooltip for collapsed state */}
                       {sidebarCollapsed && (
-                        <span className="absolute left-full ml-2 px-2 py-1 bg-slate-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                        <span className="absolute left-full ml-2 px-2 py-1 bg-slate-900 dark:bg-gray-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
                           {item.label}
                         </span>
                       )}
                     </button>
-                    
+
                     {/* Popup menu for collapsed sidebar with sub-items */}
                     {sidebarCollapsed && hasSubItems && item.id === 'timesheet' && showTimesheetPopup && (
-                      <div 
+                      <div
                         data-timesheet-menu
-                        className="absolute left-full ml-2 top-0 bg-white rounded-xl shadow-2xl border border-slate-200 py-2 min-w-[200px] z-50 animate-in slide-in-from-left-2 duration-200">
+                        className="absolute left-full ml-2 top-0 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-slate-200 dark:border-gray-700 py-2 min-w-[200px] z-50 animate-in slide-in-from-left-2 duration-200">
                         {item.subItems.map((subItem) => (
                           <button
                             key={subItem.id}
@@ -617,8 +640,8 @@ const App: React.FC = () => {
                             }}
                             className={`w-full text-left px-4 py-2 text-sm transition-all duration-200 ${
                               activeSubSection === subItem.id
-                                ? 'bg-blue-50 text-blue-700 font-medium'
-                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                ? 'bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-medium'
+                                : 'text-slate-600 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-gray-700 hover:text-slate-900 dark:hover:text-white'
                             }`}
                           >
                             {subItem.label}
@@ -626,7 +649,7 @@ const App: React.FC = () => {
                         ))}
                       </div>
                     )}
-                    
+
                     {/* Sub Items */}
                     {!sidebarCollapsed && hasSubItems && isDropdownOpen && (
                       <div className="mt-2 ml-4 space-y-1 animate-in slide-in-from-top-2 duration-200">
@@ -636,8 +659,8 @@ const App: React.FC = () => {
                             onClick={() => handleNavigation(item.id, subItem.id)}
                             className={`w-full text-left px-4 py-2 text-sm rounded-lg transition-all duration-200 ${
                               activeSubSection === subItem.id
-                                ? 'bg-blue-50 text-blue-700 border-l-2 border-blue-500 font-medium'
-                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                ? 'bg-blue-50 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border-l-2 border-blue-500 font-medium'
+                                : 'text-slate-600 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-gray-700 hover:text-slate-900 dark:hover:text-white'
                             }`}
                           >
                             {subItem.label}

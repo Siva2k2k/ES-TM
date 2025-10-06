@@ -5,6 +5,7 @@ import authRoutes from './auth';
 import userRoutes from './user';
 import projectRoutes from './project';
 import billingRoutes from './billing';
+import projectBillingRoutes from './projectBilling';
 import auditRoutes from './audit';
 import clientRoutes from './client';
 import dashboardRoutes from './dashboard';
@@ -20,12 +21,13 @@ export const registerRoutes = (app: Express): void => {
   app.use('/api/v1/users', userRoutes);
   app.use('/api/v1/projects', projectRoutes);
   app.use('/api/v1/billing', billingRoutes);
+  app.use('/api/v1/project-billing', projectBillingRoutes);
   app.use('/api/v1/audit', auditRoutes);
   app.use('/api/v1/timesheets', timesheetRoutes);
   app.use('/api/v1/clients', clientRoutes);
   app.use('/api/v1/dashboard', dashboardRoutes);
   app.use('/api/v1/reports', reportRoutes);
-  app.use('/api/settings', settingsRoutes);
+  app.use('/api/v1/settings', settingsRoutes);
   
   // Health check at root
   app.get('/health', (req, res) => {

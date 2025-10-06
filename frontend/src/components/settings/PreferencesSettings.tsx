@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Palette, Monitor, Globe, Save } from 'lucide-react';
+import { Palette, Monitor, Globe, Save, Sun, Moon, Laptop } from 'lucide-react';
 import { SettingsService, UserSettings } from '../../services/SettingsService';
+import { useTheme } from '../../contexts/ThemeContext';
+import { useToast } from '../../hooks/useToast';
 
 interface PreferencesSettingsProps {
   onSettingsChange: () => void;
@@ -11,6 +13,7 @@ export const PreferencesSettings: React.FC<PreferencesSettingsProps> = ({
   onSettingsChange,
   onSettingsSaved
 }) => {
+  const { theme: currentTheme, setTheme } = useTheme();
   const [settings, setSettings] = useState<Partial<UserSettings>>({
     theme: 'system',
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -18,12 +21,16 @@ export const PreferencesSettings: React.FC<PreferencesSettingsProps> = ({
     time_format: '12h'
   });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const toast = useToast();
 
   useEffect(() => {
     loadSettings();
   }, []);
+
+  // Sync with theme context
+  useEffect(() => {
+    setSettings(prev => ({ ...prev, theme: currentTheme }));
+  }, [currentTheme]);
 
   const loadSettings = async () => {
     const result = await SettingsService.getUserSettings();
@@ -34,20 +41,31 @@ export const PreferencesSettings: React.FC<PreferencesSettingsProps> = ({
 
   const handleSave = async () => {
     setLoading(true);
-    setError(null);
-    setSuccess(null);
     onSettingsChange();
+
+    const loadingToast = toast.loading('Saving preferences...');
 
     try {
       const result = await SettingsService.updateUserSettings(settings);
       if (result.settings) {
-        setSuccess('Preferences saved successfully');
+        toast.update(loadingToast, {
+          render: 'Preferences saved successfully!',
+          type: 'success',
+          isLoading: false,
+          autoClose: 3000
+        });
         onSettingsSaved();
       } else {
-        setError(result.error || 'Failed to save preferences');
+        throw new Error(result.error || 'Failed to save preferences');
       }
-    } catch {
-      setError('Failed to save preferences');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save preferences';
+      toast.update(loadingToast, {
+        render: errorMessage,
+        type: 'error',
+        isLoading: false,
+        autoClose: 5000
+      });
     } finally {
       setLoading(false);
     }
@@ -56,6 +74,22 @@ export const PreferencesSettings: React.FC<PreferencesSettingsProps> = ({
   const handleChange = (key: keyof UserSettings, value: string) => {
     setSettings(prev => ({ ...prev, [key]: value }));
     onSettingsChange();
+  };
+
+  const handleThemeChange = (newTheme: 'light' | 'dark' | 'system') => {
+    setTheme(newTheme);
+    handleChange('theme', newTheme);
+  };
+
+  const getThemeIcon = (themeOption: 'light' | 'dark' | 'system') => {
+    switch (themeOption) {
+      case 'light':
+        return <Sun className="h-6 w-6 mx-auto mb-2" />;
+      case 'dark':
+        return <Moon className="h-6 w-6 mx-auto mb-2" />;
+      case 'system':
+        return <Laptop className="h-6 w-6 mx-auto mb-2" />;
+    }
   };
 
   return (
@@ -68,17 +102,6 @@ export const PreferencesSettings: React.FC<PreferencesSettingsProps> = ({
         <p className="text-sm text-gray-500">Customize your application appearance and behavior.</p>
       </div>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-md p-4">
-          <p className="text-red-700">{error}</p>
-        </div>
-      )}
-
-      {success && (
-        <div className="bg-green-50 border border-green-200 rounded-md p-4">
-          <p className="text-green-700">{success}</p>
-        </div>
-      )}
 
       <div className="space-y-6">
         {/* Theme Settings */}
@@ -88,24 +111,27 @@ export const PreferencesSettings: React.FC<PreferencesSettingsProps> = ({
             Theme
           </h4>
           <div className="grid grid-cols-3 gap-4">
-            {(['light', 'dark', 'system'] as const).map((theme) => (
-              <label key={theme} className="cursor-pointer">
+            {(['light', 'dark', 'system'] as const).map((themeOption) => (
+              <label key={themeOption} className="cursor-pointer">
                 <input
                   type="radio"
                   name="theme"
-                  value={theme}
-                  checked={settings.theme === theme}
-                  onChange={(e) => handleChange('theme', e.target.value)}
+                  value={themeOption}
+                  checked={settings.theme === themeOption}
+                  onChange={(e) => handleThemeChange(e.target.value as 'light' | 'dark' | 'system')}
                   className="sr-only"
                 />
-                <div className={`border-2 rounded-lg p-4 text-center transition-colors ${
-                  settings.theme === theme 
-                    ? 'border-blue-500 bg-blue-50' 
-                    : 'border-gray-300 hover:border-gray-400'
+                <div className={`border-2 rounded-lg p-4 text-center transition-all ${
+                  settings.theme === themeOption
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900 dark:border-blue-400'
+                    : 'border-gray-300 hover:border-gray-400 dark:border-gray-600 dark:hover:border-gray-500'
                 }`}>
-                  <div className="capitalize font-medium">{theme}</div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    {theme === 'system' && 'Follow system'}
+                  {getThemeIcon(themeOption)}
+                  <div className="capitalize font-medium dark:text-gray-100">{themeOption}</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {themeOption === 'light' && 'Always light'}
+                    {themeOption === 'dark' && 'Always dark'}
+                    {themeOption === 'system' && 'Follow system'}
                   </div>
                 </div>
               </label>

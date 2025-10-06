@@ -1,10 +1,22 @@
-import React, { useState } from 'react';
-import { Bell, Mail, Smartphone, Save } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Bell, Mail, Smartphone, Save, Loader2, RefreshCw } from 'lucide-react';
 import { usePermissions } from '../../hooks/usePermissions';
+import { SettingsService } from '../../services/SettingsService';
+import { useToast } from '../../hooks/useToast';
 
 interface NotificationSettingsProps {
   onSettingsChange: () => void;
   onSettingsSaved: () => void;
+}
+
+interface NotificationPreferences {
+  email_enabled: boolean;
+  push_enabled: boolean;
+  timesheet_reminders: boolean;
+  approval_notifications: boolean;
+  team_updates: boolean;
+  system_announcements: boolean;
+  frequency: 'immediate' | 'daily' | 'weekly';
 }
 
 export const NotificationSettings: React.FC<NotificationSettingsProps> = ({
@@ -12,39 +24,105 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({
   onSettingsSaved
 }) => {
   const permissions = usePermissions();
-  const [settings, setSettings] = useState({
+  const toast = useToast();
+  const [settings, setSettings] = useState<NotificationPreferences>({
     email_enabled: true,
+    push_enabled: false,
     timesheet_reminders: true,
     approval_notifications: false,
     team_updates: false,
     system_announcements: true,
-    frequency: 'daily' as 'immediate' | 'daily' | 'weekly'
+    frequency: 'daily'
   });
-  const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [initialSettings, setInitialSettings] = useState<NotificationPreferences | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
 
-  const handleSave = async () => {
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  const loadSettings = async () => {
     setLoading(true);
-    onSettingsChange();
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setSuccess('Notification settings saved successfully');
-      onSettingsSaved();
-    } catch {
-      // Error handled
+      const result = await SettingsService.getUserSettings();
+      if (result.settings?.notifications) {
+        const notifSettings = result.settings.notifications;
+        setSettings(notifSettings);
+        setInitialSettings(notifSettings);
+        setHasChanges(false);
+      } else if (result.error) {
+        toast.error(result.error);
+      }
+    } catch (err) {
+      toast.error('Failed to load notification settings');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleToggle = (key: keyof typeof settings, value: boolean | string) => {
-    setSettings(prev => ({ ...prev, [key]: value }));
-    onSettingsChange();
+  const handleSave = async () => {
+    setSaving(true);
+    const loadingToast = toast.loading('Saving notification settings...');
+
+    try {
+      const result = await SettingsService.updateUserSettings({
+        notifications: settings
+      });
+
+      if (result.settings) {
+        toast.update(loadingToast, {
+          render: 'Notification settings saved successfully!',
+          type: 'success',
+          isLoading: false,
+          autoClose: 3000
+        });
+        setInitialSettings(settings);
+        setHasChanges(false);
+        onSettingsSaved();
+      } else {
+        throw new Error(result.error || 'Failed to save settings');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save notification settings';
+      toast.update(loadingToast, {
+        render: errorMessage,
+        type: 'error',
+        isLoading: false,
+        autoClose: 5000
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToggle = (key: keyof NotificationPreferences, value: boolean | string) => {
+    const newSettings = { ...settings, [key]: value };
+    setSettings(newSettings);
+
+    // Check if there are changes
+    if (initialSettings) {
+      const changed = JSON.stringify(newSettings) !== JSON.stringify(initialSettings);
+      setHasChanges(changed);
+
+      if (changed) {
+        onSettingsChange();
+      }
+    }
   };
 
   const canManageTeam = permissions.hasAnyRole(['manager', 'management', 'super_admin']);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <span className="ml-3 text-gray-600">Loading notification settings...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -56,11 +134,6 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({
         <p className="text-sm text-gray-500">Manage how and when you receive notifications.</p>
       </div>
 
-      {success && (
-        <div className="bg-green-50 border border-green-200 rounded-md p-4">
-          <p className="text-green-700">{success}</p>
-        </div>
-      )}
 
       <div className="space-y-6">
         {/* Email Notifications */}
@@ -175,14 +248,38 @@ export const NotificationSettings: React.FC<NotificationSettingsProps> = ({
         </div>
       </div>
 
-      <div className="flex justify-end space-x-3">
+      <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+        <button
+          type="button"
+          onClick={() => {
+            if (initialSettings) {
+              setSettings(initialSettings);
+              setHasChanges(false);
+              setError(null);
+              setSuccess(null);
+            }
+          }}
+          disabled={saving || !hasChanges}
+          className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Reset
+        </button>
         <button
           onClick={handleSave}
-          disabled={loading}
+          disabled={saving || !hasChanges}
           className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Save className="h-4 w-4 mr-2" />
-          {loading ? 'Saving...' : 'Save Settings'}
+          {saving ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="h-4 w-4 mr-2" />
+              Save Settings
+            </>
+          )}
         </button>
       </div>
     </div>

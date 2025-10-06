@@ -246,7 +246,25 @@ export class BackendAuthService {
    */
   static isAuthenticated(): boolean {
     const token = localStorage.getItem('accessToken');
-    return !!token;
+    if (!token) return false;
+    
+    try {
+      // Simple JWT expiration check
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const currentTime = Math.floor(Date.now() / 1000);
+      
+      // If token is expired, clear it and return false
+      if (payload.exp && payload.exp < currentTime) {
+        this.clearTokens();
+        return false;
+      }
+      
+      return true;
+    } catch {
+      // If token is malformed, clear it
+      this.clearTokens();
+      return false;
+    }
   }
 
   /**
@@ -263,5 +281,13 @@ export class BackendAuthService {
     // In a real implementation, decode JWT and check exp claim
     // For now, always attempt refresh if we have a refresh token
     return !!localStorage.getItem('refreshToken');
+  }
+
+  /**
+   * Clear stored tokens
+   */
+  static clearTokens(): void {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
   }
 }
