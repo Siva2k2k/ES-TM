@@ -339,4 +339,148 @@ export class AdminService {
       return { error: 'Failed to fetch audit logs' };
     }
   }
+
+  // ============================================================================
+  // DELETED ITEMS MANAGEMENT
+  // ============================================================================
+
+  /**
+   * Get all soft-deleted timesheets
+   */
+  static async getDeletedTimesheets(): Promise<{ timesheets?: any[]; error?: string }> {
+    try {
+      const response = await fetch(`${this.baseURL}/timesheets/deleted`, {
+        headers: this.getAuthHeaders(),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        return { error: result.error || 'Failed to fetch deleted timesheets' };
+      }
+
+      return { timesheets: result.data || result.timesheets || [] };
+    } catch (error) {
+      console.error('[AdminService] Error fetching deleted timesheets:', error);
+      return { error: 'Failed to fetch deleted timesheets' };
+    }
+  }
+
+  /**
+   * Restore a soft-deleted timesheet
+   */
+  static async restoreTimesheet(timesheetId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(`${this.baseURL}/timesheets/${timesheetId}/restore`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        return { success: false, error: result.error || 'Failed to restore timesheet' };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('[AdminService] Error restoring timesheet:', error);
+      return { success: false, error: 'Failed to restore timesheet' };
+    }
+  }
+
+  /**
+   * Permanently delete a timesheet (hard delete - super admin only)
+   */
+  static async hardDeleteTimesheet(timesheetId: string, reason: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(`${this.baseURL}/timesheets/${timesheetId}/permanent`, {
+        method: 'DELETE',
+        headers: {
+          ...this.getAuthHeaders(),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ reason }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        return { success: false, error: result.error || 'Failed to permanently delete timesheet' };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('[AdminService] Error hard deleting timesheet:', error);
+      return { success: false, error: 'Failed to permanently delete timesheet' };
+    }
+  }
+
+  /**
+   * Get all soft-deleted users
+   */
+  static async getDeletedUsers(): Promise<{ users?: any[]; error?: string }> {
+    try {
+      const response = await fetch(`${this.baseURL}/users/deleted`, {
+        headers: this.getAuthHeaders(),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        return { error: result.error || 'Failed to fetch deleted users' };
+      }
+
+      return { users: result.data || result.users || [] };
+    } catch (error) {
+      console.error('[AdminService] Error fetching deleted users:', error);
+      return { error: 'Failed to fetch deleted users' };
+    }
+  }
+
+  /**
+   * Restore a soft-deleted user
+   */
+  static async restoreUser(userId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(`${this.baseURL}/users/${userId}/restore`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        return { success: false, error: result.error || 'Failed to restore user' };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('[AdminService] Error restoring user:', error);
+      return { success: false, error: 'Failed to restore user' };
+    }
+  }
+
+  /**
+   * Permanently delete a user (hard delete - super admin only)
+   */
+  static async hardDeleteUser(userId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(`${this.baseURL}/users/${userId}/permanent`, {
+        method: 'DELETE',
+        headers: this.getAuthHeaders(),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        return { success: false, error: result.error || 'Failed to permanently delete user' };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('[AdminService] Error hard deleting user:', error);
+      return { success: false, error: 'Failed to permanently delete user' };
+    }
+  }
 }
