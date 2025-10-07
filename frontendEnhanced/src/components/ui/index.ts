@@ -11,7 +11,8 @@ export { Textarea, type TextareaProps } from './Textarea';
 export { Select, type SelectProps, type SelectOption } from './Select';
 export { Checkbox, type CheckboxProps } from './Checkbox';
 export { RadioGroup, type RadioGroupProps, type RadioOption } from './Radio';
-export { Switch, type SwitchProps } from './Switch';
+// Switch removed - not used by features
+// export { Switch, type SwitchProps } from './Switch';
 
 // Layout Components
 export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './Card';
@@ -22,4 +23,5 @@ export { Tabs, TabsList, TabsTrigger, TabsContent, type TabsProps } from './Tabs
 export { Alert, AlertTitle, AlertDescription, alertVariants, type AlertProps } from './Alert';
 export { Badge, badgeVariants, type BadgeProps } from './Badge';
 export { Progress, type ProgressProps } from './Progress';
-export { Tooltip, type TooltipProps } from './Tooltip';
+// Tooltip removed - not used by features
+// export { Tooltip, type TooltipProps } from './Tooltip';

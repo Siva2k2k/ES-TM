@@ -50,7 +50,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
   }, [loadUsers]);
 
   // Permission check - only super_admin and admin can manage users
-  const canManageUsers = currentUser?.role === 'super_admin' || currentUser?.role === 'admin';
+  const canManageUsers = currentUser?.role === 'super_admin';
 
   if (!canManageUsers) {
     return (

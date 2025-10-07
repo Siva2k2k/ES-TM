@@ -24,7 +24,7 @@ export const searchService = {
     return response.results;
   },
 
-  async getQuickActions(): Promise<QuickAction[]> {
+  async getQuickActions(filters?: SearchFilters): Promise<QuickAction[]> {
     const response = await apiClient.get<{ quick_actions: QuickAction[] }>(
       '/search/quick-actions'
     );

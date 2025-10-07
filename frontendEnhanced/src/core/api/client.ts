@@ -40,9 +40,9 @@ class ApiClient {
     const { params, ...fetchOptions } = options;
     const url = this.buildURL(endpoint, params);
 
-    const headers: HeadersInit = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...fetchOptions.headers,
+      ...(fetchOptions.headers as Record<string, string>),
     };
 
     const token = this.getAuthToken();

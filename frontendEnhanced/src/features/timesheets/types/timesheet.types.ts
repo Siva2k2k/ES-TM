@@ -34,6 +34,8 @@ export interface Timesheet {
   submitted_at?: string;
   approved_at?: string;
   approved_by?: string;
+  reviewed_at?: string;
+  reviewed_by_name?: string;
   rejection_reason?: string;
   entries: TimeEntry[];
   created_at: string;

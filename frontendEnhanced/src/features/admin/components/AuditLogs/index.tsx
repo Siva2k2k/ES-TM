@@ -60,7 +60,7 @@ export const AuditLogs: React.FC<AuditLogsProps> = ({ className = '' }) => {
   }, [filters, currentUser]);
 
   // Permission check
-  const canViewAuditLogs = currentUser?.role === 'super_admin' || currentUser?.role === 'admin';
+  const canViewAuditLogs = currentUser?.role === 'super_admin';
 
   if (!canViewAuditLogs) {
     return (

@@ -15,7 +15,9 @@
       "Bash(npm install:*)",
       "Bash(tree:*)",
       "Bash(grep:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Read(//d/Web_dev/**)",
+      "Bash(awk:*)"
     ],
     "deny": [],
     "ask": []

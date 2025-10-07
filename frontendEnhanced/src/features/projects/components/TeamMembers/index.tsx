@@ -194,7 +194,7 @@ export const TeamMembers: React.FC<TeamMembersProps> = ({
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <Badge variant={config.variant} size="sm">
+                          <Badge variant={config.variant === 'secondary' ? 'info' : config.variant} size="sm">
                             <RoleIcon className="h-3 w-3 mr-1" />
                             {member.project_role}
                           </Badge>
