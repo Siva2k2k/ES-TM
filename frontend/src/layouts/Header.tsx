@@ -80,13 +80,13 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, className }) => {
         className
       )}
     >
-      <div className="flex items-center justify-between h-16 px-4 md:px-6">
+      <div className="flex items-center justify-between h-14 md:h-16 px-3 sm:px-4 md:px-6">
         {/* Left Section */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
           {/* Menu Toggle */}
           <button
             onClick={onMenuToggle}
-            className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+            className="p-1.5 md:p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors flex-shrink-0"
             aria-label="Toggle menu"
           >
             <Menu className="w-5 h-5" />
@@ -95,9 +95,19 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, className }) => {
           {/* Logo */}
           <Link to="/dashboard" className="flex items-center gap-2">
             <div className="relative">
-              <Shield className="h-8 w-8 text-blue-600" />
-              <div className="absolute -top-1 -right-1 w-3 h-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full" />
+              <Shield className="h-5 w-5 md:h-8 md:w-8 text-blue-600" />
+              <div className="absolute -top-1 -right-1 w-2.5 h-2.5 md:w-3 md:h-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full" />
             </div>
+            {/* Mobile: Show compact text */}
+            <div className="block md:hidden ">
+              <span className="text-lg font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                TimeTracker
+              </span>
+              <div className="text-xs text-slate-500 font-medium -mt-0.5">
+                Pro
+              </div>
+            </div>
+            {/* Desktop: Show full text */}
             <div className="hidden md:block">
               <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                 TimeTracker Pro
@@ -122,22 +132,22 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, className }) => {
         </div>
 
         {/* Right Section */}
-        <div className="flex items-center gap-1 sm:gap-2">
+        <div className="flex items-center gap-0.5 sm:gap-1 md:gap-2 flex-shrink-0">
           {/* Search for Mobile */}
-          <button className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors md:hidden">
+          <button className="p-1.5 md:p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors md:hidden">
             <Search className="w-5 h-5" />
           </button>
 
           {/* Theme Toggle - Hidden on small screens */}
           <button
             onClick={toggleTheme}
-            className="hidden sm:block p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+            className="hidden sm:flex p-1.5 md:p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
             aria-label="Toggle theme"
           >
             {theme === 'light' ? (
-              <Moon className="w-5 h-5" />
+              <Moon className="w-4 h-4 md:w-5 md:h-5" />
             ) : (
-              <Sun className="w-5 h-5" />
+              <Sun className="w-4 h-4 md:w-5 md:h-5" />
             )}
           </button>
 
@@ -145,12 +155,12 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, className }) => {
           <div className="relative">
             <button
               onClick={() => setShowNotifications(!showNotifications)}
-              className="relative p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+              className="relative p-1.5 md:p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
               aria-label="Notifications"
             >
-              <Bell className="w-5 h-5" />
+              <Bell className="w-4 h-4 md:w-5 md:h-5" />
               {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
+                <span className="absolute -top-0.5 -right-0.5 md:-top-1 md:-right-1 w-4 h-4 md:w-5 md:h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
                   {unreadCount}
                 </span>
               )}
@@ -221,15 +231,15 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, className }) => {
           <div className="relative">
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}
-              className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
+              className="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1.5 md:py-2 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
             >
-              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                <span className="text-white text-sm font-bold">
+              <div className="w-7 h-7 md:w-8 md:h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                <span className="text-white text-xs md:text-sm font-bold">
                   {currentUser?.full_name?.charAt(0) || 'U'}
                 </span>
               </div>
-              <div className="hidden md:block text-left">
-                <p className="text-sm font-medium text-slate-900">
+              <div className="hidden sm:block text-left">
+                <p className="text-sm font-medium text-slate-900 truncate max-w-20 md:max-w-none">
                   {currentUser?.full_name || 'User'}
                 </p>
                 <p className="text-xs text-slate-500 capitalize">

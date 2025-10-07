@@ -152,6 +152,16 @@ router.get('/:timesheetId/entries', [
 ], TimesheetController.getTimeEntries);
 
 /**
+ * @route DELETE /api/v1/timesheets/:timesheetId
+ * @desc Delete entire timesheet (draft only)
+ * @access Private
+ */
+router.delete('/:timesheetId', [
+  param('timesheetId').isMongoId().withMessage('Invalid timesheet ID'),
+  validate
+], TimesheetController.deleteTimesheet);
+
+/**
  * @route DELETE /api/v1/timesheets/:timesheetId/entries
  * @desc Delete timesheet entries
  * @access Private

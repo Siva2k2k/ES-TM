@@ -1550,6 +1550,85 @@ export class TimesheetService {
   }
 
   /**
+   * Delete timesheet - allows users to delete their own draft timesheets
+   */
+  static async deleteTimesheet(
+    timesheetId: string,
+    currentUser: AuthUser
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Get timesheet first to check ownership and status
+      const timesheet = await (Timesheet.findOne as any)({
+        _id: timesheetId,
+        deleted_at: null
+      }).lean().exec();
+
+      if (!timesheet) {
+        throw new NotFoundError('Timesheet not found');
+      }
+
+      // Check if user owns the timesheet or has admin privileges
+      if (timesheet.user_id.toString() !== currentUser.id && !['super_admin', 'management'].includes(currentUser.role)) {
+        throw new AuthorizationError('You can only delete your own timesheets');
+      }
+
+      // Only allow deletion of draft timesheets by regular users
+      if (timesheet.status !== 'draft' && !['super_admin', 'management'].includes(currentUser.role)) {
+        return {
+          success: false,
+          error: 'Only draft timesheets can be deleted. Submitted timesheets must be handled by management.'
+        };
+      }
+
+      // Check if timesheet can be deleted (has no dependencies)
+      const dependencies = await this.canDeleteTimesheet(timesheetId);
+      if (dependencies.length > 0) {
+        return {
+          success: false,
+          error: `Cannot delete timesheet. Has dependencies: ${dependencies.join(', ')}`
+        };
+      }
+
+      // Delete time entries first
+      await (TimeEntry.deleteMany as any)({
+        timesheet_id: timesheetId
+      }).exec();
+
+      // Delete the timesheet
+      await (Timesheet.deleteOne as any)({
+        _id: timesheetId
+      }).exec();
+
+      // Audit log
+      await AuditLogService.logEvent(
+        'timesheets',
+        timesheetId,
+        'TIMESHEET_DELETED',
+        currentUser.id,
+        currentUser.full_name,
+        {
+          user_id: timesheet.user_id,
+          week_start_date: timesheet.week_start_date,
+          status: timesheet.status,
+          total_hours: timesheet.total_hours
+        },
+        { deleted_by: currentUser.id },
+        { status: timesheet.status },
+        { deleted: true }
+      );
+
+      console.log(`Timesheet deleted: ${timesheetId} by ${currentUser.full_name}`);
+      return { success: true };
+    } catch (error) {
+      console.error('Error in deleteTimesheet:', error);
+      if (error instanceof AuthorizationError || error instanceof NotFoundError) {
+        return { success: false, error: error.message };
+      }
+      return { success: false, error: 'Failed to delete timesheet' };
+    }
+  }
+
+  /**
    * Hard delete timesheet - permanent deletion with audit archive
    */
   static async hardDeleteTimesheet(

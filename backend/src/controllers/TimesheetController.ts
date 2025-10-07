@@ -367,6 +367,32 @@ export class TimesheetController {
   });
 
   /**
+   * Delete entire timesheet (draft only)
+   */
+  static deleteTimesheet = handleAsyncError(async (req: AuthenticatedRequest, res: Response) => {
+    const { timesheetId } = req.params;
+    const currentUser = req.user!;
+
+    // Use TimesheetService for secure timesheet deletion
+    const result = await TimesheetService.deleteTimesheet(
+      timesheetId,
+      currentUser
+    );
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        error: result.error || 'Failed to delete timesheet'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Timesheet deleted successfully'
+    });
+  });
+
+  /**
    * Delete timesheet entries
    */
   static deleteTimesheetEntries = handleAsyncError(async (req: AuthenticatedRequest, res: Response) => {

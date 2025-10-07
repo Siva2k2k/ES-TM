@@ -517,20 +517,20 @@ const App: React.FC = () => {
               <div className="flex-shrink-0">
                 <div className="flex items-center">
                   <div className="relative">
-                    <Shield className="h-10 w-10 text-blue-600 dark:text-blue-400" />
-                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full"></div>
+                    <Shield className="h-6 w-6 md:h-8 md:w-8 text-blue-600 dark:text-blue-400" />
+                    <div className="absolute -top-1 -right-1 w-2 h-2 md:w-3 md:h-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full"></div>
                   </div>
                   <div className="ml-3">
-                    <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400 bg-clip-text text-transparent">
+                    <span className="text-l md:text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400 bg-clip-text text-transparent">
                       TimeTracker Pro
                     </span>
-                    <div className="text-xs text-slate-500 dark:text-gray-400 font-medium">Enterprise Edition</div>
+                    <div className="text-[10px] md:text-xs text-slate-500 dark:text-gray-400 font-medium">Enterprise Edition</div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-1">
               {/* Search */}
               <div className="hidden md:block">
                 <GlobalSearch className="w-64" />
