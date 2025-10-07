@@ -392,6 +392,28 @@ export class ProjectService {
   }
 
   /**
+   * Delete a task (soft delete)
+   */
+  static async deleteTask(taskId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await backendApi.delete<{ success: boolean; message?: string }>(
+        `/projects/tasks/${taskId}`
+      );
+
+      if (!response.success) {
+        return { success: false, error: response.message || 'Failed to delete task' };
+      }
+
+      console.log(`Soft deleted task: ${taskId}`);
+      return { success: true };
+    } catch (error) {
+      console.error('Error in deleteTask:', error);
+      const errorMessage = error instanceof BackendApiError ? error.message : 'Failed to delete task';
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  /**
    * Validate project data
    */
   static validateProjectData(projectData: Partial<Project>): { isValid: boolean; errors: string[] } {

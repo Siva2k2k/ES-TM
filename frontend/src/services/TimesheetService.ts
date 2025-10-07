@@ -398,6 +398,29 @@ export class TimesheetService {
   }
 
   /**
+   * Delete timesheet (only allowed for draft status)
+   */
+  static async deleteTimesheet(timesheetId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await backendApi.delete(`/timesheets/${timesheetId}`);
+      return {
+        success: response.success,
+        error: response.success ? undefined : (response.message || 'Failed to delete timesheet')
+      };
+    } catch (error: any) {
+      console.error('Error in deleteTimesheet:', error);
+      return { success: false, error: error.message || 'Failed to delete timesheet' };
+    }
+  }
+
+  /**
+   * Check if timesheet can be deleted (only draft versions)
+   */
+  static canDeleteTimesheet(timesheet: Timesheet): boolean {
+    return timesheet.status === 'draft' && !timesheet.is_frozen;
+  }
+
+  /**
    * Check if timesheet can be modified
    */
   static canModifyTimesheet(timesheet: Timesheet): boolean {

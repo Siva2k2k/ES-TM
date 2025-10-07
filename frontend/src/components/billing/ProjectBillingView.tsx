@@ -13,6 +13,7 @@ import {
   ChevronDown,
   ChevronRight
 } from 'lucide-react';
+import { showSuccess, showError } from '../../utils/toast';
 
 interface ProjectBillingData {
   project_id: string;
@@ -163,13 +164,13 @@ export const ProjectBillingView: React.FC = () => {
       if (result.success) {
         setEditingHours(null);
         await loadProjectBillingData(); // Reload data
-        alert(`Successfully updated ${result.data.entries_updated} time entries`);
+        showSuccess(`Successfully updated ${result.data.entries_updated} time entries`);
       } else {
-        alert(`Failed to update hours: ${result.error}`);
+        showError(`Failed to update hours: ${result.error}`);
       }
     } catch (error) {
       console.error('Error updating billable hours:', error);
-      alert('Failed to update billable hours');
+      showError('Failed to update billable hours');
     }
   };
 

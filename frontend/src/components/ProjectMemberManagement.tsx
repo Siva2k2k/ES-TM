@@ -3,6 +3,7 @@ import {
   Users, Plus, Trash2, AlertCircle, CheckCircle, User, Mail, Shield, X, Search,
   Crown, Star, Settings, Eye, UserPlus, Edit3, Badge, ChevronDown, ChevronUp
 } from 'lucide-react';
+import { DeleteButton } from './common/DeleteButton';
 
 interface EnhancedProjectMember {
   id: string;
@@ -189,16 +190,12 @@ export const ProjectMemberManagement: React.FC<ProjectMemberManagementProps> = (
     }
   };
 
-  const handleRemoveMember = async (userId: string, userName: string) => {
-    if (!confirm(`Are you sure you want to remove ${userName} from this project?`)) {
-      return;
-    }
-
+  const handleRemoveMember = async (entityType: string, entityId: string, deleteType: 'soft' | 'hard') => {
     setLoading(true);
     setError(null);
 
     try {
-      const response = await fetch(`/api/projects/${projectId}/members/${userId}`, {
+      const response = await fetch(`/api/projects/${projectId}/members/${entityId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
@@ -211,7 +208,7 @@ export const ProjectMemberManagement: React.FC<ProjectMemberManagementProps> = (
         throw new Error(data.message || 'Failed to remove project member');
       }
 
-      setSuccess(`${userName} removed from project successfully`);
+      setSuccess('Member removed from project successfully');
       await loadMembers();
       await loadAvailableUsers();
       onUpdate?.();
@@ -367,14 +364,14 @@ export const ProjectMemberManagement: React.FC<ProjectMemberManagementProps> = (
                   )}
 
                   {canManageMembers && !member.is_primary_manager && (
-                    <button
-                      onClick={() => handleRemoveMember(member.user_id, member.user_name)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Remove member"
+                    <DeleteButton
+                      onDelete={handleRemoveMember}
+                      entityId={member.user_id}
+                      entityName={member.user_name}
+                      entityType="member"
+                      variant="icon"
                       disabled={loading}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    />
                   )}
                 </div>
               </div>

@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ChevronRight
 } from 'lucide-react';
+import { showSuccess, showError } from '../../utils/toast';
 
 interface TaskBillingData {
   task_id: string;
@@ -100,12 +101,12 @@ export const TaskBillingView: React.FC = () => {
       } else {
         const errorMsg = result.error || 'Unknown error occurred';
         console.error('Failed to load task billing data:', errorMsg);
-        alert(`Failed to load task billing data: ${errorMsg}`);
+        showError(`Failed to load task billing data: ${errorMsg}`);
       }
     } catch (error: any) {
       const errorMsg = error?.message || 'Network error occurred';
       console.error('Error loading task billing data:', errorMsg);
-      alert(`Error loading task billing data: ${errorMsg}`);
+      showError(`Error loading task billing data: ${errorMsg}`);
     } finally {
       setLoading(false);
     }
@@ -154,11 +155,11 @@ export const TaskBillingView: React.FC = () => {
         setEditingHours(null);
         await loadTaskBillingData();
       } else {
-        alert(`Failed to update hours: ${result.error}`);
+        showError(`Failed to update hours: ${result.error}`);
       }
     } catch (error) {
       console.error('Error updating billable hours:', error);
-      alert('Failed to update billable hours');
+      showError('Failed to update billable hours');
     }
   };
 

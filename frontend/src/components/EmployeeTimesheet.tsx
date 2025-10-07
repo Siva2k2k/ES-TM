@@ -3,6 +3,7 @@ import { useAuth } from '../store/contexts/AuthContext';
 import { TimesheetApprovalService, TimeEntryInput } from '../services/TimesheetApprovalService';
 import ProjectService from '../services/ProjectService';
 import { showSuccess, showError, showWarning } from '../utils/toast';
+import { DeleteButton } from './common/DeleteButton';
 import type { TimesheetWithDetails, TimeEntry, CalendarData, Project, Task, UserRole } from '../types';
 import {
   Plus,
@@ -467,6 +468,12 @@ export const EmployeeTimesheet: React.FC<EmployeeTimesheetProps> = ({ viewMode: 
       ...prev,
       entries: prev.entries.filter((_, i) => i !== index)
     }));
+  };
+
+  // Delete handler for DeleteButton component
+  const handleDeleteTimeEntry = async (entityType: string, entityId: string, deleteType: 'soft' | 'hard') => {
+    const index = parseInt(entityId);
+    removeTimeEntry(index);
   };
 
   const copyEntryToWeek = (entry: TimeEntryInput) => {
@@ -2098,13 +2105,13 @@ export const EmployeeTimesheet: React.FC<EmployeeTimesheetProps> = ({ viewMode: 
                                 </div>
                               </div>
 
-                              <button
-                                onClick={() => removeTimeEntry(index)}
-                                className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
-                                title="Remove entry"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                              <DeleteButton
+                                onDelete={handleDeleteTimeEntry}
+                                entityId={index.toString()}
+                                entityName={`Time entry for ${projects.find(p => p.id === entry.project_id)?.name || 'Unknown Project'}`}
+                                entityType="time_entry"
+                                variant="icon"
+                              />
                             </div>
                           )}
                         </div>
@@ -2197,13 +2204,13 @@ export const EmployeeTimesheet: React.FC<EmployeeTimesheetProps> = ({ viewMode: 
                                 </div>
 
                                 {formMode !== 'view' && (
-                                  <button
-                                    onClick={() => removeTimeEntry(originalIndex)}
-                                    className="p-1 text-red-600 hover:text-red-800 hover:bg-red-100 rounded transition-colors"
-                                    title="Remove entry"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </button>
+                                  <DeleteButton
+                                    onDelete={handleDeleteTimeEntry}
+                                    entityId={originalIndex.toString()}
+                                    entityName={`Time entry for ${projects.find(p => p.id === entry.project_id)?.name || 'Unknown Project'}`}
+                                    entityType="time_entry"
+                                    variant="icon"
+                                  />
                                 )}
                               </div>
                             );

@@ -231,7 +231,29 @@ export class BackendAuthService {
       const result = await response.json();
 
       if (!response.ok) {
-        return { success: false, error: result.error?.message || 'Password change failed' };
+        console.error('Password change error details:', { status: response.status, result });
+        
+        // Enhanced error handling to extract the exact backend message
+        let errorMessage = 'Password change failed';
+        
+        // Handle different error response formats from backend
+        if (result.message) {
+          // Direct message from backend (most common case)
+          errorMessage = result.message;
+        } else if (result.error) {
+          if (typeof result.error === 'string') {
+            errorMessage = result.error;
+          } else if (result.error.message) {
+            errorMessage = result.error.message;
+          }
+        } else if (result.errors && Array.isArray(result.errors) && result.errors.length > 0) {
+          // Handle validation error arrays
+          errorMessage = result.errors.map((err: { message?: string } | string) => 
+            typeof err === 'string' ? err : (err.message || 'Validation error')
+          ).join(', ');
+        }
+        
+        return { success: false, error: errorMessage };
       }
 
       return { success: true };

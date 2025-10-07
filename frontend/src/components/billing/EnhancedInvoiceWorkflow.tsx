@@ -15,6 +15,7 @@ import {
   Plus,
   Eye
 } from 'lucide-react';
+import { showSuccess, showError } from '../../utils/toast';
 
 interface Invoice {
   id: string;
@@ -130,13 +131,13 @@ export const EnhancedInvoiceWorkflow: React.FC = () => {
       const data = await response.json();
       if (data.success) {
         await loadInvoices();
-        alert('Invoice approved successfully');
+        showSuccess('Invoice approved successfully');
       } else {
-        alert(data.error || 'Failed to approve invoice');
+        showError(data.error || 'Failed to approve invoice');
       }
     } catch (err) {
       console.error('Error approving invoice:', err);
-      alert('Failed to approve invoice');
+      showError('Failed to approve invoice');
     }
   };
 
@@ -157,13 +158,13 @@ export const EnhancedInvoiceWorkflow: React.FC = () => {
       const data = await response.json();
       if (data.success) {
         await loadInvoices();
-        alert('Invoice rejected successfully');
+        showSuccess('Invoice rejected successfully');
       } else {
-        alert(data.error || 'Failed to reject invoice');
+        showError(data.error || 'Failed to reject invoice');
       }
     } catch (err) {
       console.error('Error rejecting invoice:', err);
-      alert('Failed to reject invoice');
+      showError('Failed to reject invoice');
     }
   };
 
@@ -185,13 +186,13 @@ export const EnhancedInvoiceWorkflow: React.FC = () => {
       if (data.success) {
         await loadInvoices();
         setShowGenerateModal(false);
-        alert('Invoice generated successfully');
+        showSuccess('Invoice generated successfully');
       } else {
-        alert(data.error || 'Failed to generate invoice');
+        showError(data.error || 'Failed to generate invoice');
       }
     } catch (err) {
       console.error('Error generating invoice:', err);
-      alert('Failed to generate invoice');
+      showError('Failed to generate invoice');
     }
   };
 
@@ -386,7 +387,7 @@ export const EnhancedInvoiceWorkflow: React.FC = () => {
                         </button>
                         
                         <button
-                          onClick={() => alert('Download functionality will be implemented')}
+                          onClick={() => showError('Download functionality will be implemented')}
                           className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
                           title="Download Invoice"
                         >
@@ -396,14 +397,14 @@ export const EnhancedInvoiceWorkflow: React.FC = () => {
                         {invoice.status === 'draft' && (
                           <>
                             <button
-                              onClick={() => alert('Edit functionality will be implemented')}
+                              onClick={() => showError('Edit functionality will be implemented')}
                               className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
                               title="Edit Invoice"
                             >
                               <Edit className="h-4 w-4" />
                             </button>
                             <button
-                              onClick={() => alert('Delete functionality will be implemented')}
+                              onClick={() => showError('Delete functionality will be implemented')}
                               className="p-2 text-gray-400 hover:text-red-600 transition-colors"
                               title="Delete Invoice"
                             >

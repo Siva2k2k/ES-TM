@@ -1,4 +1,5 @@
 import { backendApi } from './BackendAPI';
+import { BackendAuthService } from './BackendAuthService';
 
 export interface UserSettings {
   theme: 'light' | 'dark' | 'system';
@@ -235,16 +236,15 @@ export class SettingsService {
    */
   static async changePassword(currentPassword: string, newPassword: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await backendApi.post<{ success: boolean; error?: string }>('/auth/change-password', {
+      const result = await BackendAuthService.changePassword({
         currentPassword,
-        newPassword,
-        confirmPassword: newPassword
+        newPassword
       });
       
-      return { success: response.success, error: response.error };
+      return result;
     } catch (error) {
       console.error('Error changing password:', error);
-      return { success: false, error: 'Failed to change password' };
+      return { success: false, error: error instanceof Error ? error.message : 'Failed to change password' };
     }
   }
 }

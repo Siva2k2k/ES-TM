@@ -326,36 +326,40 @@ const TimesheetListItem: React.FC<TimesheetListItemProps> = ({
 }) => {
   return (
     <div
-      className="border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
+      className="border rounded-lg p-3 sm:p-4 hover:shadow-md transition-shadow cursor-pointer"
       onClick={onClick}
     >
-      <div className="flex items-center justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-3 mb-2">
-            <h3 className="font-semibold">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2">
+            <h3 className="font-semibold text-sm sm:text-base truncate">
               Week of {formatDate(timesheet.week_start_date)}
             </h3>
             <StatusBadge status={timesheet.status} type="timesheet" />
           </div>
-          <div className="flex items-center gap-4 text-sm text-gray-600">
-            <span className="flex items-center gap-1">
-              <Clock className="h-4 w-4" />
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
+            <span className="flex items-center gap-1 flex-shrink-0">
+              <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
               {formatDuration(timesheet.total_hours)}
             </span>
             {timesheet.submitted_at && (
-              <span>Submitted {formatDate(timesheet.submitted_at, 'relative')}</span>
+              <span className="truncate">Submitted {formatDate(timesheet.submitted_at)}</span>
             )}
             {timesheet.approved_at && (
-              <span>Approved {formatDate(timesheet.approved_at, 'relative')}</span>
+              <span className="truncate">Approved {formatDate(timesheet.approved_at)}</span>
             )}
           </div>
         </div>
         {showActions && (
-          <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-            <Button variant="outline" size="sm" onClick={onEdit}>
+          <div className="flex gap-1 sm:gap-2 justify-end flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+            <Button variant="outline" size="sm" onClick={onEdit} className="text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2">
               Edit
             </Button>
-            <Button variant="ghost" size="sm" icon={MoreVertical} />
+            {timesheet.status === 'draft' && onDelete && (
+              <Button variant="ghost" size="sm" onClick={onDelete} className="p-1 sm:p-2 text-red-600 hover:text-red-800 hover:bg-red-50">
+                <MoreVertical className="h-3 w-3 sm:h-4 sm:w-4" />
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -397,7 +401,7 @@ const TimesheetTableRow: React.FC<TimesheetTableRowProps> = ({
       </td>
       <td className="px-4 py-3">
         {timesheet.submitted_at ? (
-          <span className="text-sm">{formatDate(timesheet.submitted_at, 'relative')}</span>
+          <span className="text-sm">{formatDate(timesheet.submitted_at)}</span>
         ) : (
           <span className="text-sm text-gray-400">Not submitted</span>
         )}
@@ -408,7 +412,11 @@ const TimesheetTableRow: React.FC<TimesheetTableRowProps> = ({
             <Button variant="outline" size="sm" onClick={onEdit}>
               Edit
             </Button>
-            <Button variant="ghost" size="sm" icon={MoreVertical} />
+            {timesheet.status === 'draft' && onDelete && (
+              <Button variant="ghost" size="sm" onClick={onDelete} className="text-red-600 hover:text-red-800 hover:bg-red-50">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </td>
       )}

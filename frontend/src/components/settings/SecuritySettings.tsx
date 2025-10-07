@@ -33,11 +33,11 @@ export const SecuritySettings: React.FC<SecuritySettingsProps> = ({
 
   const validatePassword = (password: string) => {
     const requirements = {
-      length: password.length >= 8,
+      length: password.length >= 12,
       uppercase: /[A-Z]/.test(password),
       lowercase: /[a-z]/.test(password),
       number: /\d/.test(password),
-      special: /[!@#$%^&*(),.?":{}|<>]/.test(password)
+      special: /[!@#$%^&*()_+=\-{}|;:,.<>?]/.test(password)
     };
 
     const score = Object.values(requirements).filter(Boolean).length;
@@ -54,20 +54,51 @@ export const SecuritySettings: React.FC<SecuritySettingsProps> = ({
     onSettingsChange();
 
     // Validation
+    if (!formData.currentPassword.trim()) {
+      setError('Current password is required');
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.newPassword.trim()) {
+      setError('New password is required');
+      setLoading(false);
+      return;
+    }
+
+    if (!formData.confirmPassword.trim()) {
+      setError('Password confirmation is required');
+      setLoading(false);
+      return;
+    }
+
     if (formData.newPassword !== formData.confirmPassword) {
       setError('New passwords do not match');
       setLoading(false);
       return;
     }
 
+    if (formData.currentPassword === formData.newPassword) {
+      setError('New password must be different from current password');
+      setLoading(false);
+      return;
+    }
+
     const passwordValidation = validatePassword(formData.newPassword);
-    if (passwordValidation.score < 3) {
-      setError('Password does not meet minimum requirements');
+    if (passwordValidation.score < 5) {
+      setError('Password must be at least 12 characters and contain uppercase, lowercase, number, and special character');
       setLoading(false);
       return;
     }
 
     try {
+      console.log('Attempting password change with validation:', {
+        currentPasswordLength: formData.currentPassword.length,
+        newPasswordLength: formData.newPassword.length,
+        passwordRequirements: passwordValidation,
+        score: passwordValidation.score
+      });
+      
       const result = await SettingsService.changePassword(
         formData.currentPassword,
         formData.newPassword
@@ -82,10 +113,13 @@ export const SecuritySettings: React.FC<SecuritySettingsProps> = ({
         });
         onSettingsSaved();
       } else {
-        setError(result.error || 'Failed to change password');
+        const errorMsg = result.error || 'Failed to change password';
+        console.log('Setting error message:', errorMsg);
+        setError(errorMsg);
       }
-    } catch {
-      setError('Failed to change password');
+    } catch (error) {
+      console.error('Password change error:', error);
+      setError('Failed to change password: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setLoading(false);
     }
@@ -93,8 +127,11 @@ export const SecuritySettings: React.FC<SecuritySettingsProps> = ({
 
   const handleInputChange = (field: keyof PasswordFormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    setError(null);
-    setSuccess(null);
+    // Only clear error/success when user starts typing, not immediately
+    if (error || success) {
+      setError(null);
+      setSuccess(null);
+    }
     onSettingsChange();
   };
 
@@ -108,7 +145,7 @@ export const SecuritySettings: React.FC<SecuritySettingsProps> = ({
     formData.newPassword.length > 0 &&
     formData.confirmPassword.length > 0 &&
     formData.newPassword === formData.confirmPassword &&
-    passwordValidation.score >= 3;
+    passwordValidation.score >= 5;
 
   return (
     <div className="space-y-6">
@@ -121,14 +158,28 @@ export const SecuritySettings: React.FC<SecuritySettingsProps> = ({
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-md p-4">
-          <p className="text-red-700">{error}</p>
+        <div className="bg-red-50 border-l-4 border-red-400 rounded-md p-4 mb-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <XCircle className="h-5 w-5 text-red-400" />
+            </div>
+            <div className="ml-3">
+              <p className="text-sm font-medium text-red-800">{error}</p>
+            </div>
+          </div>
         </div>
       )}
 
       {success && (
-        <div className="bg-green-50 border border-green-200 rounded-md p-4">
-          <p className="text-green-700">{success}</p>
+        <div className="bg-green-50 border-l-4 border-green-400 rounded-md p-4 mb-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <CheckCircle className="h-5 w-5 text-green-400" />
+            </div>
+            <div className="ml-3">
+              <p className="text-sm font-medium text-green-800">{success}</p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -196,7 +247,13 @@ export const SecuritySettings: React.FC<SecuritySettingsProps> = ({
                   type={showPasswords.confirm ? 'text' : 'password'}
                   value={formData.confirmPassword}
                   onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
-                  className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full px-3 py-2 pr-10 border rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 ${
+                    formData.confirmPassword && formData.newPassword !== formData.confirmPassword 
+                      ? 'border-red-300 bg-red-50' 
+                      : formData.confirmPassword && formData.newPassword === formData.confirmPassword && formData.newPassword
+                      ? 'border-green-300 bg-green-50'
+                      : 'border-gray-300'
+                  }`}
                   placeholder="Confirm your new password"
                 />
                 <button
@@ -207,6 +264,15 @@ export const SecuritySettings: React.FC<SecuritySettingsProps> = ({
                   {showPasswords.confirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+              {formData.confirmPassword && formData.newPassword !== formData.confirmPassword && (
+                <p className="text-sm text-red-600 mt-1">Passwords do not match</p>
+              )}
+              {formData.confirmPassword && formData.newPassword === formData.confirmPassword && formData.newPassword && (
+                <p className="text-sm text-green-600 mt-1 flex items-center">
+                  <CheckCircle className="h-4 w-4 mr-1" />
+                  Passwords match
+                </p>
+              )}
             </div>
 
             {/* Password Strength Indicator */}
@@ -241,7 +307,7 @@ export const SecuritySettings: React.FC<SecuritySettingsProps> = ({
                         <XCircle className="h-3 w-3 text-red-500 mr-2" />
                       )}
                       <span className={met ? 'text-gray-700' : 'text-gray-500'}>
-                        {key === 'length' && '8+ characters'}
+                        {key === 'length' && '12+ characters'}
                         {key === 'uppercase' && 'Uppercase letter'}
                         {key === 'lowercase' && 'Lowercase letter'}
                         {key === 'number' && 'Number'}

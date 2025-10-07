@@ -95,25 +95,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
         {/* Modal */}
         <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Settings</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100 truncate">Settings</h2>
+              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
                 Manage your account settings and preferences
               </p>
             </div>
             <button
               onClick={handleClose}
-              className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+              className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 ml-2 flex-shrink-0"
             >
-              <X className="h-5 w-5" />
+              <X className="h-4 w-4 sm:h-5 sm:w-5" />
             </button>
           </div>
 
-          <div className="flex h-[calc(90vh-120px)]">
+          <div className="flex flex-col sm:flex-row h-[calc(90vh-100px)] sm:h-[calc(90vh-120px)]">
             {/* Sidebar */}
-            <div className="w-64 border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-              <nav className="p-4 space-y-2">
+            <div className="w-full sm:w-64 border-b sm:border-b-0 sm:border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 overflow-x-auto sm:overflow-x-visible">
+              <nav className="p-2 sm:p-4 flex sm:flex-col overflow-x-auto sm:overflow-x-visible space-x-2 sm:space-x-0 sm:space-y-2">
                 {availableTabs.map((tab) => {
                   const Icon = tab.icon;
                   const isActive = activeTab === tab.id;
@@ -122,16 +122,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
                     <button
                       key={tab.id}
                       onClick={() => handleTabChange(tab.id as SettingsTab)}
-                      className={`w-full flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      className={`flex items-center px-3 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap sm:w-full ${
                         isActive
                           ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700'
                           : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                       }`}
                     >
-                      <Icon className="h-4 w-4 mr-3" />
-                      {tab.label}
+                      <Icon className="h-3 w-3 sm:h-4 sm:w-4 mr-2 sm:mr-3 flex-shrink-0" />
+                      <span className="hidden sm:inline">{tab.label}</span>
+                      <span className="sm:hidden">{tab.label.split(' ')[0]}</span>
                       {hasUnsavedChanges && isActive && (
-                        <div className="ml-auto w-2 h-2 bg-orange-400 rounded-full" />
+                        <div className="ml-auto w-1.5 h-1.5 sm:w-2 sm:h-2 bg-orange-400 rounded-full flex-shrink-0" />
                       )}
                     </button>
                   );
@@ -139,15 +140,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               </nav>
 
               {/* User Info */}
-              <div className="p-4 border-t border-gray-200 dark:border-gray-700 mt-auto">
+              <div className="hidden sm:block p-4 border-t border-gray-200 dark:border-gray-700 mt-auto">
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                    <span className="text-white font-medium">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                    <span className="text-white font-medium text-xs sm:text-sm">
                       {currentUser?.full_name?.charAt(0) || 'U'}
                     </span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                    <p className="text-xs sm:text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                       {currentUser?.full_name || 'User'}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-400 capitalize">
@@ -160,7 +161,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-800">
-              <div className="p-6">
+              <div className="p-4 sm:p-6">
                 {activeTab === 'profile' && (
                   <ProfileSettings
                     onSettingsChange={handleSettingsChange}

@@ -122,11 +122,16 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, className }) => {
         </div>
 
         {/* Right Section */}
-        <div className="flex items-center gap-2">
-          {/* Theme Toggle */}
+        <div className="flex items-center gap-1 sm:gap-2">
+          {/* Search for Mobile */}
+          <button className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors md:hidden">
+            <Search className="w-5 h-5" />
+          </button>
+
+          {/* Theme Toggle - Hidden on small screens */}
           <button
             onClick={toggleTheme}
-            className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+            className="hidden sm:block p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
             aria-label="Toggle theme"
           >
             {theme === 'light' ? (
@@ -158,7 +163,7 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, className }) => {
                   className="fixed inset-0 z-40"
                   onClick={() => setShowNotifications(false)}
                 />
-                <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-slate-200 z-50">
+                <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white rounded-xl shadow-xl border border-slate-200 z-50">
                   <div className="p-4 border-b border-slate-100">
                     <div className="flex items-center justify-between">
                       <h3 className="font-semibold text-slate-900">Notifications</h3>

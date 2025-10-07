@@ -13,6 +13,8 @@ import {
   Briefcase,
   Settings
 } from 'lucide-react';
+import { DeleteButton } from '../common/DeleteButton';
+import { showSuccess, showError } from '../../utils/toast';
 
 interface BillingRate {
   id: string;
@@ -173,19 +175,17 @@ export const BillingRateManagement: React.FC = () => {
         setShowCreateForm(false);
         resetNewRate();
       } else {
-        alert(data.error || 'Failed to create rate');
+        showError(data.error || 'Failed to create rate');
       }
     } catch (err) {
       console.error('Error creating rate:', err);
-      alert('Failed to create rate');
+      showError('Failed to create rate');
     }
   };
 
-  const handleDeleteRate = async (rateId: string) => {
-    if (!confirm('Are you sure you want to delete this rate?')) return;
-
+  const handleDeleteRate = async (entityType: string, entityId: string, deleteType: 'soft' | 'hard') => {
     try {
-      const response = await fetch(`/api/v1/billing/rates/${rateId}`, {
+      const response = await fetch(`/api/v1/billing/rates/${entityId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
@@ -195,13 +195,18 @@ export const BillingRateManagement: React.FC = () => {
 
       const data = await response.json();
       if (data.success) {
+        if (deleteType === 'soft') {
+          showSuccess('Billing rate moved to trash successfully');
+        } else {
+          showSuccess('Billing rate permanently deleted');
+        }
         await loadRates();
       } else {
-        alert(data.error || 'Failed to delete rate');
+        showError(data.error || 'Failed to delete rate');
       }
     } catch (err) {
       console.error('Error deleting rate:', err);
-      alert('Failed to delete rate');
+      showError('Failed to delete rate');
     }
   };
 
@@ -543,12 +548,13 @@ export const BillingRateManagement: React.FC = () => {
                           <Edit className="h-4 w-4" />
                         </button>
                         
-                        <button
-                          onClick={() => handleDeleteRate(rate.id)}
-                          className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        <DeleteButton
+                          onDelete={handleDeleteRate}
+                          entityId={rate.id}
+                          entityName={`${rate.entity_type} billing rate ($${rate.hourly_rate}/hr)`}
+                          entityType="billing_rate"
+                          variant="icon"
+                        />
                       </div>
                     </div>
                   </div>

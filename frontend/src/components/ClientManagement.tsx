@@ -3,6 +3,7 @@ import { useRoleManager } from '../hooks/useRoleManager';
 import { useAuth } from '../store/contexts/AuthContext';
 import { ClientService } from '../services/ClientService';
 import { showSuccess, showError, showWarning } from '../utils/toast';
+import { DeleteButton } from './common/DeleteButton';
 import {
   Building,
   Plus,
@@ -295,23 +296,26 @@ export const ClientManagement: React.FC = () => {
     }
   };
 
-  const handleDeleteClient = async (clientId: string) => {
+  const handleDeleteClient = async (entityType: string, entityId: string, deleteType: 'soft' | 'hard') => {
     if (!canDeleteClients) {
       showError('You do not have permission to delete clients');
       return;
     }
 
-    if (!confirm('Are you sure you want to permanently delete this client? This action cannot be undone.')) return;
-
     try {
-      const result = await ClientService.deleteClient(clientId);
+      const result = await ClientService.deleteClient(entityId);
 
       if (result.error) {
         showError(`Error deleting client: ${result.error}`);
         return;
       }
 
-      showSuccess('Client deleted successfully');
+      if (deleteType === 'soft') {
+        showSuccess('Client moved to trash successfully');
+      } else {
+        showSuccess('Client permanently deleted');
+      }
+      
       setRefreshTrigger(prev => prev + 1);
     } catch (err) {
       showError('Error deleting client');
@@ -471,19 +475,19 @@ export const ClientManagement: React.FC = () => {
             {filteredClients.length > 0 ? (
               <div className="divide-y divide-gray-200">
                 {filteredClients.map((client) => (
-                  <div key={client.id} className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4 flex-1">
-                        <div className="flex-shrink-0">
-                          <Building className="h-8 w-8 text-gray-400" />
+                  <div key={client.id} className="p-4 sm:p-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex items-start sm:items-center space-x-3 sm:space-x-4 flex-1 min-w-0">
+                        <div className="flex-shrink-0 mt-1 sm:mt-0">
+                          <Building className="h-6 w-6 sm:h-8 sm:w-8 text-gray-400" />
                         </div>
 
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center space-x-3 mb-2">
-                            <h4 className="text-lg font-semibold text-gray-900 truncate">
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-3 mb-2">
+                            <h4 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
                               {client.name}
                             </h4>
-                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full w-fit mt-1 sm:mt-0 ${
                               client.is_active
                                 ? 'bg-green-100 text-green-800'
                                 : 'bg-red-100 text-red-800'
@@ -492,73 +496,73 @@ export const ClientManagement: React.FC = () => {
                             </span>
                           </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4 text-sm text-gray-600">
                             {client.contact_person && (
-                              <div className="flex items-center">
-                                <Users className="h-4 w-4 mr-2" />
-                                <span>{client.contact_person}</span>
+                              <div className="flex items-center min-w-0">
+                                <Users className="h-4 w-4 mr-2 flex-shrink-0" />
+                                <span className="truncate sm:line-clamp-2">{client.contact_person}</span>
                               </div>
                             )}
                             {client.contact_email && (
-                              <div className="flex items-center">
-                                <Mail className="h-4 w-4 mr-2" />
-                                <span>{client.contact_email}</span>
+                              <div className="flex items-center min-w-0">
+                                <Mail className="h-4 w-4 mr-2 flex-shrink-0" />
+                                <span className="truncate sm:line-clamp-2">{client.contact_email}</span>
                               </div>
                             )}
-                            <div className="flex items-center">
-                              <Building className="h-4 w-4 mr-2" />
-                              <span>{client.total_projects || 0} projects ({client.active_projects || 0} active)</span>
+                            <div className="flex items-center min-w-0">
+                              <Building className="h-4 w-4 mr-2 flex-shrink-0" />
+                              <span className="truncate sm:line-clamp-2">{client.total_projects || 0} projects ({client.active_projects || 0} active)</span>
                             </div>
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center space-x-2 ml-4">
+                      <div className="flex items-center space-x-1 sm:space-x-2 ml-0 sm:ml-4 mt-2 sm:mt-0">
                         <button
                           onClick={() => handleViewDetails(client)}
-                          className="text-blue-600 hover:text-blue-900 p-2 hover:bg-blue-50 rounded-lg transition-colors"
+                          className="text-blue-600 hover:text-blue-900 p-1.5 sm:p-2 hover:bg-blue-50 rounded-lg transition-colors"
                           title="View details"
                         >
-                          <Eye className="w-4 h-4" />
+                          <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                         </button>
 
                         {canEditClients && (
                           <>
                             <button
                               onClick={() => openEditModal(client)}
-                              className="text-gray-600 hover:text-gray-900 p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                              className="text-gray-600 hover:text-gray-900 p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg transition-colors"
                               title="Edit client"
                             >
-                              <Edit className="w-4 h-4" />
+                              <Edit className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             </button>
 
                             {client.is_active ? (
                               <button
                                 onClick={() => handleDeactivateClient(client.id)}
-                                className="text-yellow-600 hover:text-yellow-900 p-2 hover:bg-yellow-50 rounded-lg transition-colors"
+                                className="text-yellow-600 hover:text-yellow-900 p-1.5 sm:p-2 hover:bg-yellow-50 rounded-lg transition-colors"
                                 title="Deactivate client"
                               >
-                                <XCircle className="w-4 h-4" />
+                                <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                               </button>
                             ) : (
                               <button
                                 onClick={() => handleReactivateClient(client.id)}
-                                className="text-green-600 hover:text-green-900 p-2 hover:bg-green-50 rounded-lg transition-colors"
+                                className="text-green-600 hover:text-green-900 p-1.5 sm:p-2 hover:bg-green-50 rounded-lg transition-colors"
                                 title="Reactivate client"
                               >
-                                <RotateCcw className="w-4 h-4" />
+                                <RotateCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                               </button>
                             )}
 
                             {canDeleteClients && (
-                              <button
-                                onClick={() => handleDeleteClient(client.id)}
-                                className="text-red-600 hover:text-red-900 p-2 hover:bg-red-50 rounded-lg transition-colors"
-                                title="Delete client"
+                              <DeleteButton
+                                onDelete={handleDeleteClient}
+                                entityName={client.name}
+                                entityType="client"
+                                variant="icon"
                                 disabled={client.total_projects! > 0}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                                disabledReason={client.total_projects! > 0 ? `Cannot delete client with ${client.total_projects} active projects` : undefined}
+                              />
                             )}
                           </>
                         )}

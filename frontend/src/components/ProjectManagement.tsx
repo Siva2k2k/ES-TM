@@ -4,6 +4,7 @@ import { useAuth } from '../store/contexts/AuthContext';
 import { showSuccess, showError, showWarning, showLoading, updateToast } from '../utils/toast';
 import { ProjectService } from '../services/ProjectService';
 import { UserService } from '../services/UserService';
+import { DeleteButton } from './common/DeleteButton';
 import { 
   Building2, 
   Plus, 
@@ -551,6 +552,57 @@ export const ProjectManagement: React.FC = () => {
         showError('Error removing employee');
         console.error('Error removing employee:', err);
       }
+    }
+  };
+
+  // Delete project handler
+  const handleDeleteProject = async (entityType: string, entityId: string, deleteType: 'soft' | 'hard') => {
+    try {
+      // For now, use the existing ProjectService delete method
+      // This will be enhanced when we implement the full DeleteService
+      await ProjectService.deleteProject(entityId);
+      
+      if (deleteType === 'soft') {
+        showSuccess('Project moved to trash successfully');
+      } else {
+        showSuccess('Project permanently deleted');
+      }
+      
+      // Refresh the projects list
+      await loadProjects();
+      
+      // Close expanded view if this project was expanded
+      setExpandedProjects(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(entityId);
+        return newSet;
+      });
+      
+    } catch (error) {
+      console.error('Delete project error:', error);
+      showError(`Failed to delete project: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  // Delete task handler
+  const handleDeleteTask = async (entityType: string, entityId: string, deleteType: 'soft' | 'hard') => {
+    try {
+      // Use the same API pattern as other project operations
+      const result = await ProjectService.deleteTask(entityId);
+
+      if (result.error) {
+        showError(`Failed to delete task: ${result.error}`);
+        return;
+      }
+
+      showSuccess('Task moved to trash successfully');
+      
+      // Refresh the projects list to update task counts and remove deleted task
+      await loadProjects();
+      
+    } catch (error) {
+      console.error('Delete task error:', error);
+      showError(`Failed to delete task: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -1548,11 +1600,11 @@ export const ProjectManagement: React.FC = () => {
                   <div className="divide-y divide-gray-200">
                     {filteredProjects.map((project) => (
                       <div key={project.id} className="p-6">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-4 flex-1">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="flex items-start sm:items-center space-x-2 sm:space-x-4 flex-1">
                             <button
                               onClick={() => handleProjectExpand(project)}
-                              className="text-gray-400 hover:text-gray-600 transition-colors"
+                              className="text-gray-400 hover:text-gray-600 transition-colors mt-1 sm:mt-0"
                             >
                               {expandedProjects.has(project.id) ? (
                                 <ChevronDown className="w-5 h-5" />
@@ -1561,54 +1613,56 @@ export const ProjectManagement: React.FC = () => {
                               )}
                             </button>
                             
-                            <div className="flex-1">
-                              <div className="flex items-center space-x-3 mb-2">
-                                <h4 className="text-lg font-semibold text-gray-900">{project.name}</h4>
-                                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                  project.status === 'active' 
-                                    ? 'bg-green-100 text-green-800'
-                                    : project.status === 'completed'
-                                    ? 'bg-blue-100 text-blue-800'
-                                    : 'bg-gray-100 text-gray-800'
-                                }`}>
-                                  {project.status}
-                                </span>
-                                {project.is_billable && (
-                                  <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                                    Billable
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-3 mb-2">
+                                <h4 className="text-lg font-semibold text-gray-900 truncate">{project.name}</h4>
+                                <div className="flex items-center space-x-2 mt-1 sm:mt-0">
+                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                    project.status === 'active' 
+                                      ? 'bg-green-100 text-green-800'
+                                      : project.status === 'completed'
+                                      ? 'bg-blue-100 text-blue-800'
+                                      : 'bg-gray-100 text-gray-800'
+                                  }`}>
+                                    {project.status}
                                   </span>
-                                )}
+                                  {project.is_billable && (
+                                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                      Billable
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                               
-                              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-gray-600">
-                                <div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 text-sm text-gray-600">
+                                <div className="truncate">
                                   <span className="font-medium">Start:</span> {new Date(project.start_date).toLocaleDateString()}
                                 </div>
                                 {project.end_date && (
-                                  <div>
+                                  <div className="truncate">
                                     <span className="font-medium">End:</span> {new Date(project.end_date).toLocaleDateString()}
                                   </div>
                                 )}
                                 {project.budget && (
-                                  <div>
+                                  <div className="truncate">
                                     <span className="font-medium">Budget:</span> ${project.budget.toLocaleString()}
                                   </div>
                                 )}
                               </div>
                               
                               {project.description && (
-                                <p className="text-gray-600 mt-2">{project.description}</p>
+                                <p className="text-gray-600 mt-2 text-sm line-clamp-2">{project.description}</p>
                               )}
                             </div>
                           </div>
 
-                          <div className="flex items-center space-x-2 ml-4">
+                          <div className="flex items-center justify-end space-x-1 sm:space-x-2 flex-shrink-0">
                             <button
                               onClick={() => handleProjectExpand(project)}
-                              className="text-blue-600 hover:text-blue-900 p-2 hover:bg-blue-50 rounded-lg transition-colors"
+                              className="text-blue-600 hover:text-blue-900 p-1.5 sm:p-2 hover:bg-blue-50 rounded-lg transition-colors"
                               title="View project details"
                             >
-                              <Eye className="w-4 h-4" />
+                              <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             </button>
                             
                             {currentRole === 'management' && (
@@ -1632,11 +1686,21 @@ export const ProjectManagement: React.FC = () => {
                                   });
                                   setShowEditProject(true);
                                 }}
-                                className="text-gray-600 hover:text-gray-900 p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                                className="text-gray-600 hover:text-gray-900 p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg transition-colors"
                                 title="Edit project"
                               >
-                                <Edit className="w-4 h-4" />
+                                <Edit className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                               </button>
+                            )}
+                            
+                            {(currentRole === 'management' || currentRole === 'super_admin') && (
+                              <DeleteButton
+                                entityType="project"
+                                entityId={project.id}
+                                entityName={project.name}
+                                onDelete={handleDeleteProject}
+                                variant="icon"
+                              />
                             )}
                           </div>
                         </div>
@@ -1697,11 +1761,11 @@ export const ProjectManagement: React.FC = () => {
                               {(projectTasks[project.id] || []).length > 0 ? (
                                 <div className="space-y-3">
                                   {(projectTasks[project.id] || []).map(task => (
-                                    <div key={task.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                                      <div className="flex-1">
-                                        <div className="flex items-center space-x-3 mb-1">
-                                          <h6 className="font-medium text-gray-900">{task.name}</h6>
-                                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                    <div key={task.id} className="flex flex-col sm:flex-row sm:items-start justify-between p-3 sm:p-4 bg-gray-50 rounded-lg gap-3">
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-3 mb-1">
+                                          <h6 className="font-medium text-gray-900 text-sm sm:text-base truncate pr-2">{task.name}</h6>
+                                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full w-fit mt-1 sm:mt-0 ${
                                             task.status === 'completed' 
                                               ? 'bg-green-100 text-green-800'
                                               : task.status === 'in_progress'
@@ -1712,7 +1776,7 @@ export const ProjectManagement: React.FC = () => {
                                           </span>
                                         </div>
                                         {task.description && (
-                                          <p className="text-sm text-gray-600">{task.description}</p>
+                                          <p className="text-sm text-gray-600 line-clamp-2">{task.description}</p>
                                         )}
                                         <div className="flex items-center space-x-4 text-xs text-gray-500 mt-2">
                                           {task.estimated_hours && (
@@ -1724,14 +1788,14 @@ export const ProjectManagement: React.FC = () => {
                                         </div>
                                       </div>
                                       
-                                      <div className="flex items-center space-x-2">
+                                      <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0">
                                         {task.status !== 'completed' && (
                                           <button
                                             onClick={() => handleUpdateTaskStatus(task.id, 'completed')}
-                                            className="text-green-600 hover:text-green-900 p-1"
+                                            className="text-green-600 hover:text-green-900 p-1 hover:bg-green-50 rounded transition-colors"
                                             title="Mark as completed"
                                           >
-                                            <CheckCircle className="h-4 w-4" />
+                                            <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                           </button>
                                         )}
                                         
@@ -1748,11 +1812,19 @@ export const ProjectManagement: React.FC = () => {
                                             });
                                             setShowEditTask(true);
                                           }}
-                                          className="text-blue-600 hover:text-blue-900 p-1"
+                                          className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded transition-colors"
                                           title="Edit task"
                                         >
-                                          <Edit className="h-4 w-4" />
+                                          <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                         </button>
+                                        
+                                        <DeleteButton
+                                          onDelete={handleDeleteTask}
+                                          entityId={task.id}
+                                          entityName={task.name}
+                                          entityType="task"
+                                          variant="icon"
+                                        />
                                       </div>
                                     </div>
                                   ))}
