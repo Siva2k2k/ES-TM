@@ -29,14 +29,21 @@ export class NotificationService {
    * Create a new notification
    */
   static async create(params: CreateNotificationParams): Promise<INotification> {
+    console.log('Creating notification for:', {
+      recipient_id: params.recipient_id,
+      sender_id: params.sender_id,
+    });
+
+    const validObjectId = (id: any) =>
+      mongoose.Types.ObjectId.isValid(id) && new mongoose.Types.ObjectId(id).toString() === id; 
+
+
     const notification = new (Notification as any)({
-      recipient_id: typeof params.recipient_id === 'string' 
-        ? mongoose.Types.ObjectId.createFromHexString(params.recipient_id)
-        : params.recipient_id,
-      sender_id: params.sender_id 
-        ? (typeof params.sender_id === 'string' 
-           ? mongoose.Types.ObjectId.createFromHexString(params.sender_id)
-           : params.sender_id)
+      recipient_id: validObjectId(params.recipient_id)
+        ? new mongoose.Types.ObjectId(params.recipient_id)
+        : undefined,
+      sender_id: params.sender_id && validObjectId(params.sender_id)
+        ? new mongoose.Types.ObjectId(params.sender_id)
         : undefined,
       type: params.type,
       title: params.title,
@@ -208,7 +215,7 @@ export class NotificationService {
   }
 
   // Timesheet notifications
-  static async notifyTimesheetApproval(userId: string, timesheetId: string, approvedBy: string): Promise<INotification> {
+  static async notifyTimesheetApproval(userId: string, timesheetId: string, approvedBy?: string): Promise<INotification> {
     return this.create({
       recipient_id: userId,
       sender_id: approvedBy,

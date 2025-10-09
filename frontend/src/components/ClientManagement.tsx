@@ -558,6 +558,7 @@ export const ClientManagement: React.FC = () => {
                               <DeleteButton
                                 onDelete={handleDeleteClient}
                                 entityName={client.name}
+                                entityId={client.id}
                                 entityType="client"
                                 variant="icon"
                                 disabled={client.total_projects! > 0}

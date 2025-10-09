@@ -1,4 +1,4 @@
-import mongoose, { Document, Schema } from 'mongoose';
+import mongoose, { Document, Model, Schema } from 'mongoose';
 
 export type TimesheetStatus =
   | 'draft'
@@ -225,7 +225,7 @@ TimesheetSchema.set('toJSON', {
   }
 });
 
-const Timesheet = mongoose.models.Timesheet || mongoose.model<ITimesheet>('Timesheet', TimesheetSchema);
+const Timesheet: Model<ITimesheet> = mongoose.models.Timesheet || mongoose.model<ITimesheet>('Timesheet', TimesheetSchema);
 
 export { Timesheet };
 export default Timesheet;

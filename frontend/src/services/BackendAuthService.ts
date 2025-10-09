@@ -42,7 +42,7 @@ export interface ChangePasswordRequest {
  * Backend authentication service - replaces Supabase auth
  */
 export class BackendAuthService {
-  private static readonly baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
+  private static readonly baseURL = '/api/v1'; // Always use proxy in development and production
   private static readonly API_PREFIX = '/auth';
 
   private static getAuthHeaders(): { [key: string]: string } {

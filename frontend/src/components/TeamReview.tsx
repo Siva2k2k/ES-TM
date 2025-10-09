@@ -24,6 +24,7 @@ import { TimesheetApprovalService } from '../services/TimesheetApprovalService';
 import { UserService } from '../services/UserService';
 import { showSuccess, showError, showWarning } from '../utils/toast';
 import type { TimesheetStatus, TimesheetWithDetails, User } from '../types';
+import { DeleteButton } from './common/DeleteButton';
 
 interface TeamReviewProps {
   defaultView?: 'list' | 'approval';
@@ -63,6 +64,31 @@ const TeamReview: React.FC<TeamReviewProps> = ({ defaultView = 'list' }) => {
   const isManagerRole = currentUserRole === 'manager';
   const isManagementRole = currentUserRole === 'management';
   const isSuperAdminRole = currentUserRole === 'super_admin';
+
+  //Status based on role
+  const statusOptionsByRole: Record<string, { label: string; value: TimesheetStatus | 'all' }[]> = {
+    employee: [
+      { label: 'All Status', value: 'all' },
+      { label: 'Draft', value: 'draft' },
+      { label: 'Submitted', value: 'submitted' },
+      { label: 'Manager Approved', value: 'manager_approved' },
+      { label: 'Management Pending', value: 'management_pending' },
+      { label: 'Manager Rejected', value: 'manager_rejected' },
+      { label: 'Management Rejected', value: 'management_rejected' },
+      { label: 'Frozen', value: 'frozen' },
+      { label: 'Billed', value: 'billed' },
+    ],
+    management: [
+      { label: 'All Status', value: 'all' },
+      { label: 'Manager Approved', value: 'manager_approved' },
+      { label: 'Management Pending', value: 'management_pending' },
+      { label: 'Manager Rejected', value: 'manager_rejected' },
+      { label: 'Management Rejected', value: 'management_rejected' },
+      { label: 'Frozen', value: 'frozen' },
+    ],
+  };
+
+  const statusOptions = statusOptionsByRole[currentUserRole] || statusOptionsByRole['employee'];
   
   // Enhanced permission checking for project-specific roles
   const canManageUser = useCallback((userId: string): boolean => {
@@ -282,7 +308,7 @@ const TeamReview: React.FC<TeamReviewProps> = ({ defaultView = 'list' }) => {
           const result = await TimesheetApprovalService.getUserTimesheets(member.id);
           console.log(`📤 Timesheets for ${member.full_name}:`, result);
           
-          const enhancedTimesheets = result.map(ts => ({
+          const enhancedTimesheets = result.filter(tss => (tss.status === 'frozen' )).map(ts => ({
             ...ts,
             user_name: member.full_name,
             user_email: member.email,
@@ -292,6 +318,7 @@ const TeamReview: React.FC<TeamReviewProps> = ({ defaultView = 'list' }) => {
             can_reject: ts.status === 'manager_approved' || ts.status === 'management_pending',
             can_edit: false
           }));
+          console.log(enhancedTimesheets.length, "Wohoooo")
           allTimesheets.push(...enhancedTimesheets);
         }
         
@@ -469,6 +496,7 @@ const TeamReview: React.FC<TeamReviewProps> = ({ defaultView = 'list' }) => {
         await loadTeamTimesheets();
         setSelectedTimesheet(null);
         showSuccess('Timesheet rejected successfully');
+        setShowRejectionModal(false);
       } else {
         showError('Error rejecting timesheet');
       }
@@ -530,6 +558,10 @@ const TeamReview: React.FC<TeamReviewProps> = ({ defaultView = 'list' }) => {
     
     if (timesheet.can_reject) {
       actions.push('reject');
+    }
+
+    if(!timesheet.is_frozen){
+      actions.push('delete')
     }
     
     console.log(`🔍 Actions for timesheet ${timesheet.id} (user: ${timesheet.user_name}):`, {
@@ -699,15 +731,11 @@ const TeamReview: React.FC<TeamReviewProps> = ({ defaultView = 'list' }) => {
               onChange={(e) => setStatusFilter(e.target.value as TimesheetStatus | 'all')}
               className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value="all">All Status</option>
-              <option value="draft">Draft</option>
-              <option value="submitted">Submitted</option>
-              <option value="manager_approved">Manager Approved</option>
-              <option value="management_pending">Management Pending</option>
-              <option value="manager_rejected">Manager Rejected</option>
-              <option value="management_rejected">Management Rejected</option>
-              <option value="frozen">Frozen</option>
-              <option value="billed">Billed</option>
+              {statusOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -742,10 +770,10 @@ const TeamReview: React.FC<TeamReviewProps> = ({ defaultView = 'list' }) => {
         <div className="bg-white p-4 rounded-lg border shadow-sm">
           <div className="flex items-center">
             <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
-            <span className="text-sm font-medium text-gray-600">Approved</span>
+            <span className="text-sm font-medium text-gray-600">Frozen</span>
           </div>
           <p className="text-2xl font-bold text-gray-900 mt-1">
-            {timesheets.filter(t => t.status === 'manager_approved' || t.status === 'frozen').length}
+            {timesheets.filter(t =>  t.status === 'frozen').length}
           </p>
           <p className="text-xs text-gray-500">This period</p>
         </div>
@@ -907,6 +935,18 @@ const TeamReview: React.FC<TeamReviewProps> = ({ defaultView = 'list' }) => {
                                 <X className="w-4 h-4" />
                               </button>
                             )}
+
+                            {/* Reject Button - Manager only */}
+                            {/* {actions.includes('delete') && (
+                              <button
+                                onClick={() => showRejectModal(timesheet.id)}
+                                className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50 transition-colors"
+                                disabled={loading}
+                                title="Reject timesheet"
+                              >
+                                <DeleteButton className="w-4 h-4" entityType={''} entityId={''} />
+                              </button>
+                            )} */}
 
                             {/* Role-specific indicators */}
                             {isLeadRole && (

@@ -118,6 +118,9 @@ export const UserManagement: React.FC<UserManagementProps> = ({ defaultTab = 'al
 
   const approvedUsers = users.filter(u => u.is_approved_by_super_admin);
 
+  //user list without super admin
+  const noSAuser = users.filter(u => u.role !== 'super_admin');
+
   const getFilteredUsers = () => {
     switch (activeTab) {
       case 'pending':
@@ -535,10 +538,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ defaultTab = 'al
                       <option value="lead">Lead</option>
                       <option value="manager">Manager</option>
                       {currentRole === 'super_admin' && (
-                        <>
                           <option value="management">Management</option>
-                          <option value="super_admin">Super Admin</option>
-                        </>
                       )}
                     </select>
                   </div>
@@ -633,9 +633,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ defaultTab = 'al
                     <option value="employee">Employee</option>
                     <option value="lead">Team Lead</option>
                     <option value="manager">Manager</option>
-                    <option value="management">Management</option>
                     {currentRole === 'super_admin' && (
-                      <option value="super_admin">Super Admin</option>
+                      <option value="management">Management</option>
                     )}
                   </select>
                 </div>

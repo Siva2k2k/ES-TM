@@ -9,6 +9,7 @@ export interface DeleteButtonProps {
   onDelete?: (entityType: string, entityId: string, deleteType: 'soft' | 'hard') => Promise<void>;
   onRestore?: (entityType: string, entityId: string) => Promise<void>;
   disabled?: boolean;
+  disabledReason?: string | undefined;
   variant?: 'icon' | 'button' | 'dropdown';
   showRestore?: boolean;
   isDeleted?: boolean;
@@ -116,7 +117,7 @@ export const DeleteButton: React.FC<DeleteButtonProps> = ({
       <button
         onClick={() => handleDelete('soft')}
         disabled={disabled || loading}
-        className={`text-gray-400 hover:text-red-500 transition-colors ${className}`}
+        className={`text-red-500 hover:text-gray-400 transition-colors ${className}`}
         title={`Delete ${entityName}`}
       >
         <Trash2 className="h-4 w-4" />

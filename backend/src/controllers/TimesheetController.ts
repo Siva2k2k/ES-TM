@@ -3,6 +3,8 @@ import { TimesheetService, NotificationService } from '@/services';
 import { handleAsyncError } from '@/utils/errors';
 import { AuthUser } from '@/utils/auth';
 
+import { Timesheet } from '@/models';
+
 // Extend Request type to include user
 interface AuthenticatedRequest extends Request {
   user?: AuthUser;
@@ -171,10 +173,16 @@ export class TimesheetController {
 
     // 🔔 Trigger automatic notification
     try {
-      if (action === 'approve') {
-        await NotificationService.notifyTimesheetApproval(timesheetId, currentUser.id, 'manager');
+      const ts = await Timesheet.findById(timesheetId).populate('user_id', '_id').lean();
+      const recipientId = ts?.user_id?._id?.toString() || ts?.user_id?.toString();
+      if (recipientId) {
+        if (action === 'approve') {
+          await NotificationService.notifyTimesheetApproval(recipientId, timesheetId, 'manager');
+        } else {
+          await NotificationService.notifyTimesheetRejection(recipientId, timesheetId, 'manager', reason || 'No reason provided');
+        }
       } else {
-        await NotificationService.notifyTimesheetRejection(timesheetId, currentUser.id, reason || 'No reason provided', 'manager');
+        console.warn('Timesheet owner not found, skipping notification for timesheet:', timesheetId);
       }
     } catch (notificationError) {
       console.error('Failed to send notification:', notificationError);
@@ -218,10 +226,16 @@ export class TimesheetController {
 
     // 🔔 Trigger automatic notification
     try {
-      if (action === 'approve') {
-        await NotificationService.notifyTimesheetApproval(timesheetId, currentUser.id, 'management');
+      const ts = await Timesheet.findById(timesheetId).populate('user_id', '_id').lean();
+      const recipientId = ts?.user_id?._id?.toString() || ts?.user_id?.toString();
+      if (recipientId) {
+        if (action === 'approve') {
+          await NotificationService.notifyTimesheetApproval(recipientId, timesheetId, 'Management');
+        } else {
+          await NotificationService.notifyTimesheetRejection(recipientId, timesheetId, 'Management', reason || 'No reason provided');
+        }
       } else {
-        await NotificationService.notifyTimesheetRejection(timesheetId, currentUser.id, reason || 'No reason provided', 'management');
+        console.warn('Timesheet owner not found, skipping notification for timesheet:', timesheetId);
       }
     } catch (notificationError) {
       console.error('Failed to send notification:', notificationError);

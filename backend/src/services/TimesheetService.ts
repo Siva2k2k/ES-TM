@@ -447,9 +447,15 @@ export class TimesheetService {
         throw new TimesheetError('Cannot submit timesheet with zero hours');
       }
 
+      let nextStatus: TimesheetStatus = 'submitted';
+      if (currentUser.role === 'manager') {
+        // Manager submitting own timesheet → goes to management approval directly
+        nextStatus = 'management_pending';
+      }
+
       // Update status
       await (Timesheet.findByIdAndUpdate as any)(timesheetId, {
-        status: 'submitted',
+        status: nextStatus,
         submitted_at: new Date(),
         updated_at: new Date()
       }).exec();
@@ -464,7 +470,7 @@ export class TimesheetService {
         { total_hours: timesheet.total_hours },
         { submitted_by: currentUser.id },
         { status: timesheet.status },
-        { status: 'submitted', submitted_at: new Date() }
+        { status: nextStatus, submitted_at: new Date() }
       );
 
       console.log('Timesheet submitted successfully:', timesheetId);
@@ -1513,6 +1519,12 @@ export class TimesheetService {
           deleted_reason: reason,
           updated_at: new Date()
         }
+      ).exec();
+
+      //Perform Soft delete on Time entries
+      await (TimeEntry.updateMany as any)(
+        { timesheet_id: timesheetId, deleted_at: null },
+        { deleted_at: new Date(), deleted_by: new mongoose.Types.ObjectId(currentUser.id), deleted_reason: reason }
       ).exec();
 
       if (result.matchedCount === 0) {

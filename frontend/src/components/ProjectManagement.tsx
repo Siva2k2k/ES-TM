@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRoleManager } from '../hooks/useRoleManager';
 import { useAuth } from '../store/contexts/AuthContext';
-import { showSuccess, showError, showWarning, showLoading, updateToast } from '../utils/toast';
+import { showSuccess, showError, showWarning } from '../utils/toast';
 import { ProjectService } from '../services/ProjectService';
 import { UserService } from '../services/UserService';
 import { DeleteButton } from './common/DeleteButton';
@@ -19,8 +19,6 @@ import {
   Save,
   Search,
   Filter,
-  ChevronDown,
-  ChevronRight,
   CheckSquare,
   Eye,
   UserPlus
@@ -324,6 +322,38 @@ export const ProjectManagement: React.FC = () => {
     }
   };
 
+  const loadAllProjects = async () => {
+    try{
+      setLoading(true);
+      setError(null);
+
+      const projectsResult = await ProjectService.getAllProjects();;
+
+      if (projectsResult.error) {
+        setError(projectsResult.error);
+        setProjects([]);
+      } else {
+        const raw = projectsResult.projects || [];
+        const seen = new Set<string>();
+        const deduped: typeof raw = [];
+        for (const p of raw) {
+          if (!p || !p.id) continue;
+          if (!seen.has(p.id)) {
+            seen.add(p.id);
+            deduped.push(p);
+          }
+        }
+        setProjects(deduped);
+      }
+    } catch (err) {
+      console.error('Error loading projects:', err);
+      setError('Failed to load project data');
+      setProjects([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleProjectExpand = async (project: Project) => {
     const isExpanded = expandedProjects.has(project.id);
     
@@ -569,7 +599,7 @@ export const ProjectManagement: React.FC = () => {
       }
       
       // Refresh the projects list
-      await loadProjects();
+      await loadAllProjects();
       
       // Close expanded view if this project was expanded
       setExpandedProjects(prev => {
@@ -598,7 +628,7 @@ export const ProjectManagement: React.FC = () => {
       showSuccess('Task moved to trash successfully');
       
       // Refresh the projects list to update task counts and remove deleted task
-      await loadProjects();
+      await loadAllProjects();
       
     } catch (error) {
       console.error('Delete task error:', error);
@@ -616,6 +646,8 @@ export const ProjectManagement: React.FC = () => {
     }
   };
 
+  
+
   // Filter projects based on search and status
   const filteredProjects = projects.filter(project => {
     const matchesSearch = project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -631,6 +663,29 @@ export const ProjectManagement: React.FC = () => {
   const projectMembers = users.filter(user => 
     ['manager', 'lead', 'employee'].includes(user.role) && user.is_active
   );
+
+  const getManagerDisplayName = (project: Project) => {
+    const pm = project.primary_manager_id;
+    if (!pm) return 'Unassigned';
+
+    // If backend returned a populated manager object
+    if (typeof pm === 'object' && pm !== null) {
+      // Define the expected structure of populated manager objects
+      const managerObj = pm as { full_name?: string; name?: string; _id?: string };
+      
+      if (managerObj.full_name) return managerObj.full_name;
+      if (managerObj._id && managerObj.name) return managerObj.name;
+      // fallback to string conversion
+      return String(pm);
+    }
+
+    // pm is a string id - try to find user in loaded users
+    const manager = users.find(u => {
+      const userObj = u as User & { _id?: string };
+      return u.id === pm || userObj._id === pm || String(u.id) === String(pm);
+    });
+    return manager ? manager.full_name : pm;
+  };
 
   // Access control
   if (!canManageProjects() && actualUserRole !== 'employee' && actualUserRole !== 'lead') {
@@ -725,7 +780,7 @@ export const ProjectManagement: React.FC = () => {
                   Project Overview ({filteredProjects.length})
                 </button>
                 
-                {currentRole === 'management' && (
+                {(currentRole === 'management'|| currentRole === 'super_admin') && (
                   <>
                     <button
                       onClick={() => setActiveTab('create')}
@@ -1602,17 +1657,7 @@ export const ProjectManagement: React.FC = () => {
                       <div key={project.id} className="p-6">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                           <div className="flex items-start sm:items-center space-x-2 sm:space-x-4 flex-1">
-                            <button
-                              onClick={() => handleProjectExpand(project)}
-                              className="text-gray-400 hover:text-gray-600 transition-colors mt-1 sm:mt-0"
-                            >
-                              {expandedProjects.has(project.id) ? (
-                                <ChevronDown className="w-5 h-5" />
-                              ) : (
-                                <ChevronRight className="w-5 h-5" />
-                              )}
-                            </button>
-                            
+                                            
                             <div className="flex-1 min-w-0">
                               <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-3 mb-2">
                                 <h4 className="text-lg font-semibold text-gray-900 truncate">{project.name}</h4>
@@ -1648,11 +1693,13 @@ export const ProjectManagement: React.FC = () => {
                                     <span className="font-medium">Budget:</span> ${project.budget.toLocaleString()}
                                   </div>
                                 )}
+                                {project.primary_manager_id && (
+                                  <div className="truncate">
+                                    <span className="font-medium">Manager:</span> {getManagerDisplayName(project)}
+                                  </div>
+                                )}
                               </div>
                               
-                              {project.description && (
-                                <p className="text-gray-600 mt-2 text-sm line-clamp-2">{project.description}</p>
-                              )}
                             </div>
                           </div>
 
@@ -1707,7 +1754,7 @@ export const ProjectManagement: React.FC = () => {
 
                         {/* Expanded Project Details */}
                         {expandedProjects.has(project.id) && (
-                          <div className="mt-6 ml-9 space-y-6">
+                          <div className="mt-10 space-y-6">
                             {/* Project Stats */}
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                               <div className="bg-blue-50 p-4 rounded-lg">
@@ -1925,9 +1972,9 @@ export const ProjectManagement: React.FC = () => {
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value="">Unassigned</option>
-                    {projectMembers.map(member => (
+                    {projectMembersList.map(member => (
                       <option key={member.id} value={member.id}>
-                        {member.full_name} ({member.role})
+                        {member.user_name} ({member.project_role})
                       </option>
                     ))}
                   </select>
