@@ -21,19 +21,22 @@ export function AppLayout() {
         sidebarCollapsed={sidebarCollapsed}
       />
 
-      {/* Sidebar */}
-      <Sidebar
-        isOpen={sidebarOpen}
-        isCollapsed={sidebarCollapsed}
-        onClose={() => setSidebarOpen(false)}
-      />
+      {/* Desktop Layout: Flex container for sidebar + content */}
+      <div className="flex">
+        {/* Sidebar */}
+        <Sidebar
+          isOpen={sidebarOpen}
+          isCollapsed={sidebarCollapsed}
+          onClose={() => setSidebarOpen(false)}
+        />
 
-      {/* Main content area */}
-      <main className="lg:pl-0 min-h-[calc(100vh-4rem)]">
-        <div className="p-4 lg:p-6 max-w-7xl mx-auto">
-          <Outlet />
-        </div>
-      </main>
+        {/* Main content area */}
+        <main className="flex-1 min-h-[calc(100vh-4rem)] w-0">
+          <div className="p-4 lg:p-6 max-w-7xl mx-auto">
+            <Outlet />
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

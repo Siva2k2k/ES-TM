@@ -20,7 +20,7 @@ import UnauthorizedPage from './pages/auth/UnauthorizedPage';
 import NotFoundPage from './pages/auth/NotFoundPage';
 
 // Dashboard Pages
-import { RoleSpecificDashboard } from './components/RoleSpecificDashboard';
+import { DashboardPage } from './pages/dashboard';
 import NotificationsPage from './pages/NotificationsPage';
 
 // User Management
@@ -88,7 +88,7 @@ const App: React.FC = () => {
           </ProtectedRoute>
         }>
           {/* Dashboard Home */}
-          <Route index element={<RoleSpecificDashboard />} />
+          <Route index element={<DashboardPage />} />
 
           {/* Notifications */}
           <Route path="notifications" element={<NotificationsPage />} />

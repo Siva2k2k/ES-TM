@@ -16,7 +16,9 @@ import { useAuth } from '../store/contexts/AuthContext';
 import { Badge } from '../components/ui/Badge';
 
 export interface HeaderProps {
-  onMenuToggle?: () => void;
+  onMenuClick?: () => void;
+  onSidebarToggle?: () => void;
+  sidebarCollapsed?: boolean;
   className?: string;
 }
 
@@ -24,7 +26,7 @@ export interface HeaderProps {
  * Header Component
  * Application header with search, notifications, and user menu
  */
-export const Header: React.FC<HeaderProps> = ({ onMenuToggle, className }) => {
+export const Header: React.FC<HeaderProps> = ({ onMenuClick, onSidebarToggle, sidebarCollapsed, className }) => {
   const { currentUser, currentUserRole, signOut } = useAuth();
   const [showNotifications, setShowNotifications] = React.useState(false);
   const [showUserMenu, setShowUserMenu] = React.useState(false);
@@ -83,11 +85,20 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, className }) => {
       <div className="flex items-center justify-between h-14 md:h-16 px-3 sm:px-4 md:px-6">
         {/* Left Section */}
         <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
-          {/* Menu Toggle */}
+          {/* Mobile Menu Toggle */}
           <button
-            onClick={onMenuToggle}
-            className="p-1.5 md:p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors flex-shrink-0"
-            aria-label="Toggle menu"
+            onClick={onMenuClick}
+            className="p-1.5 md:p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors flex-shrink-0 lg:hidden"
+            aria-label="Toggle mobile menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+
+          {/* Desktop Sidebar Toggle */}
+          <button
+            onClick={onSidebarToggle}
+            className="hidden lg:block p-1.5 md:p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors flex-shrink-0"
+            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             <Menu className="w-5 h-5" />
           </button>

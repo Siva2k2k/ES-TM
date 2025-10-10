@@ -1,4 +1,5 @@
-import { backendApi, BackendApiError } from '../lib/backendApi';
+import axiosInstance, { handleApiError } from '../config/axios.config';
+import type { AxiosResponse } from 'axios';
 
 interface SuperAdminDashboardData {
   system_overview: {
@@ -27,6 +28,10 @@ interface SuperAdminDashboardData {
     last_timesheet: string;
     status: string;
   }>;
+  // Charts data
+  user_growth?: Array<{ name: string; users: number }>;
+  revenue_trend?: Array<{ name: string; revenue: number; billable_hours: number }>;
+  project_status_distribution?: Array<{ name: string; value: number }>;
 }
 
 interface ManagementDashboardData {
@@ -57,6 +62,10 @@ interface ManagementDashboardData {
     active_timesheets: number;
     pending_approvals: number;
   }>;
+  // Charts data
+  monthly_revenue_trend?: Array<{ name: string; revenue: number; expenses: number }>;
+  project_completion_trend?: Array<{ name: string; completed: number; ongoing: number }>;
+  team_utilization?: Array<{ name: string; utilization: number }>;
 }
 
 interface ManagerDashboardData {
@@ -90,6 +99,10 @@ interface ManagerDashboardData {
     status: string;
     priority: 'high' | 'medium' | 'low';
   }>;
+  // Charts data
+  team_hours_trend?: Array<{ name: string; hours: number; billable: number }>;
+  project_progress?: Array<{ name: string; progress: number }>;
+  approval_status?: Array<{ name: string; value: number }>;
 }
 
 interface LeadDashboardData {
@@ -114,6 +127,9 @@ interface LeadDashboardData {
     pending_tasks: number;
     collaboration_score: number;
   }>;
+  // Charts data
+  task_completion_trend?: Array<{ name: string; completed: number; pending: number }>;
+  team_workload?: Array<{ name: string; tasks: number }>;
 }
 
 interface EmployeeDashboardData {
@@ -144,9 +160,19 @@ interface EmployeeDashboardData {
     description: string;
     project_name?: string;
   }>;
+  // Charts data
+  weekly_hours_trend?: Array<{ name: string; hours: number; billable: number }>;
+  project_time_distribution?: Array<{ name: string; value: number }>;
+  task_status?: Array<{ name: string; value: number }>;
 }
 
+/**
+ * Dashboard Service using Axios
+ * Provides role-specific dashboard data with charts
+ */
 export class DashboardService {
+  private static readonly API_PREFIX = '/dashboard';
+
   /**
    * Get role-specific dashboard data
    */
@@ -156,21 +182,21 @@ export class DashboardService {
     error?: string;
   }> {
     try {
-      const response = await backendApi.get<{
+      const response: AxiosResponse<{
         success: boolean;
         data: any;
         role: string;
         message?: string;
-      }>('/dashboard');
+      }> = await axiosInstance.get(this.API_PREFIX);
 
-      if (!response.success) {
-        return { error: response.message || 'Failed to fetch dashboard data' };
+      if (!response.data.success) {
+        return { error: response.data.message || 'Failed to fetch dashboard data' };
       }
 
-      return { dashboard: response.data, role: response.role };
+      return { dashboard: response.data.data, role: response.data.role };
     } catch (error) {
       console.error('Error in getRoleSpecificDashboard:', error);
-      const errorMessage = error instanceof BackendApiError ? error.message : 'Failed to fetch dashboard data';
+      const { error: errorMessage } = handleApiError(error);
       return { error: errorMessage };
     }
   }
@@ -180,20 +206,20 @@ export class DashboardService {
    */
   static async getSuperAdminDashboard(): Promise<{ dashboard?: SuperAdminDashboardData; error?: string }> {
     try {
-      const response = await backendApi.get<{
+      const response: AxiosResponse<{
         success: boolean;
         data: SuperAdminDashboardData;
         message?: string;
-      }>('/dashboard/super-admin');
+      }> = await axiosInstance.get(`${this.API_PREFIX}/super-admin`);
 
-      if (!response.success) {
-        return { error: response.message || 'Failed to fetch super admin dashboard' };
+      if (!response.data.success) {
+        return { error: response.data.message || 'Failed to fetch super admin dashboard' };
       }
 
-      return { dashboard: response.data };
+      return { dashboard: response.data.data };
     } catch (error) {
       console.error('Error in getSuperAdminDashboard:', error);
-      const errorMessage = error instanceof BackendApiError ? error.message : 'Failed to fetch super admin dashboard';
+      const { error: errorMessage } = handleApiError(error);
       return { error: errorMessage };
     }
   }
@@ -203,20 +229,20 @@ export class DashboardService {
    */
   static async getManagementDashboard(): Promise<{ dashboard?: ManagementDashboardData; error?: string }> {
     try {
-      const response = await backendApi.get<{
+      const response: AxiosResponse<{
         success: boolean;
         data: ManagementDashboardData;
         message?: string;
-      }>('/dashboard/management');
+      }> = await axiosInstance.get(`${this.API_PREFIX}/management`);
 
-      if (!response.success) {
-        return { error: response.message || 'Failed to fetch management dashboard' };
+      if (!response.data.success) {
+        return { error: response.data.message || 'Failed to fetch management dashboard' };
       }
 
-      return { dashboard: response.data };
+      return { dashboard: response.data.data };
     } catch (error) {
       console.error('Error in getManagementDashboard:', error);
-      const errorMessage = error instanceof BackendApiError ? error.message : 'Failed to fetch management dashboard';
+      const { error: errorMessage } = handleApiError(error);
       return { error: errorMessage };
     }
   }
@@ -226,20 +252,20 @@ export class DashboardService {
    */
   static async getManagerDashboard(): Promise<{ dashboard?: ManagerDashboardData; error?: string }> {
     try {
-      const response = await backendApi.get<{
+      const response: AxiosResponse<{
         success: boolean;
         data: ManagerDashboardData;
         message?: string;
-      }>('/dashboard/manager');
+      }> = await axiosInstance.get(`${this.API_PREFIX}/manager`);
 
-      if (!response.success) {
-        return { error: response.message || 'Failed to fetch manager dashboard' };
+      if (!response.data.success) {
+        return { error: response.data.message || 'Failed to fetch manager dashboard' };
       }
 
-      return { dashboard: response.data };
+      return { dashboard: response.data.data };
     } catch (error) {
       console.error('Error in getManagerDashboard:', error);
-      const errorMessage = error instanceof BackendApiError ? error.message : 'Failed to fetch manager dashboard';
+      const { error: errorMessage } = handleApiError(error);
       return { error: errorMessage };
     }
   }
@@ -249,20 +275,20 @@ export class DashboardService {
    */
   static async getLeadDashboard(): Promise<{ dashboard?: LeadDashboardData; error?: string }> {
     try {
-      const response = await backendApi.get<{
+      const response: AxiosResponse<{
         success: boolean;
         data: LeadDashboardData;
         message?: string;
-      }>('/dashboard/lead');
+      }> = await axiosInstance.get(`${this.API_PREFIX}/lead`);
 
-      if (!response.success) {
-        return { error: response.message || 'Failed to fetch lead dashboard' };
+      if (!response.data.success) {
+        return { error: response.data.message || 'Failed to fetch lead dashboard' };
       }
 
-      return { dashboard: response.data };
+      return { dashboard: response.data.data };
     } catch (error) {
       console.error('Error in getLeadDashboard:', error);
-      const errorMessage = error instanceof BackendApiError ? error.message : 'Failed to fetch lead dashboard';
+      const { error: errorMessage } = handleApiError(error);
       return { error: errorMessage };
     }
   }
@@ -272,20 +298,20 @@ export class DashboardService {
    */
   static async getEmployeeDashboard(): Promise<{ dashboard?: EmployeeDashboardData; error?: string }> {
     try {
-      const response = await backendApi.get<{
+      const response: AxiosResponse<{
         success: boolean;
         data: EmployeeDashboardData;
         message?: string;
-      }>('/dashboard/employee');
+      }> = await axiosInstance.get(`${this.API_PREFIX}/employee`);
 
-      if (!response.success) {
-        return { error: response.message || 'Failed to fetch employee dashboard' };
+      if (!response.data.success) {
+        return { error: response.data.message || 'Failed to fetch employee dashboard' };
       }
 
-      return { dashboard: response.data };
+      return { dashboard: response.data.data };
     } catch (error) {
       console.error('Error in getEmployeeDashboard:', error);
-      const errorMessage = error instanceof BackendApiError ? error.message : 'Failed to fetch employee dashboard';
+      const { error: errorMessage } = handleApiError(error);
       return { error: errorMessage };
     }
   }
