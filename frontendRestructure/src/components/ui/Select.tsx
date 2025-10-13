@@ -4,6 +4,8 @@ import { cn } from '../../utils/cn';
 export interface SelectProps
   extends React.SelectHTMLAttributes<HTMLSelectElement> {
   error?: string;
+  // optional structured options for convenience
+  options?: { label: string; value: string | number; disabled?: boolean }[];
 }
 
 const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
@@ -19,7 +21,15 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
           ref={ref}
           {...props}
         >
-          {children}
+          {props.options && props.options.length > 0 ? (
+            props.options.map((opt) => (
+              <option key={String(opt.value)} value={opt.value} disabled={opt.disabled}>
+                {opt.label}
+              </option>
+            ))
+          ) : (
+            children
+          )}
         </select>
         {error && (
           <p className="text-sm text-destructive">{error}</p>

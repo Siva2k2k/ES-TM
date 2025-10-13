@@ -12,7 +12,7 @@ export interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectE
   error?: string;
   label?: string;
   helperText?: string;
-  options: SelectOption[];
+  options?: SelectOption[];
   placeholder?: string;
   onChange?: (value: string) => void;
 }
@@ -59,20 +59,27 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
             onChange={handleChange}
             {...props}
           >
-            {placeholder && (
-              <option value="" disabled>
-                {placeholder}
-              </option>
-            )}
-            {options.map((option) => (
-              <option
-                key={option.value}
-                value={option.value}
-                disabled={option.disabled}
-              >
-                {option.label}
-              </option>
-            ))}
+              {options && options.length > 0 ? (
+                <> 
+                  {placeholder && (
+                    <option value="" disabled>
+                      {placeholder}
+                    </option>
+                  )}
+                  {options.map((option) => (
+                    <option
+                      key={option.value}
+                      value={option.value}
+                      disabled={option.disabled}
+                    >
+                      {option.label}
+                    </option>
+                  ))}
+                </>
+              ) : (
+                // Allow consumers (like FormField) to pass custom children <option /> elements
+                props.children
+              )}
           </select>
           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
         </div>

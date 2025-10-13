@@ -4,4 +4,5 @@
 
 export { ProjectListPage } from './ProjectListPage';
 export { ProjectMembersPage } from './ProjectMembersPage';
+export { ProjectDetailPage } from './ProjectDetailPage';
 export * from './components';

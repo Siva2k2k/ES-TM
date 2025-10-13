@@ -134,6 +134,7 @@ export function FormField<TFieldValues extends FieldValues>({
           {...field}
           type={type}
           value={
+            // Keep date values as ISO date strings (YYYY-MM-DD or YYYY-MM-DDTHH:MM)
             field.value instanceof Date
               ? type === 'date'
                 ? field.value.toISOString().split('T')[0]
@@ -142,7 +143,8 @@ export function FormField<TFieldValues extends FieldValues>({
           }
           onChange={(e) => {
             const value = e.target.value;
-            field.onChange(value ? new Date(value) : null);
+            // Do not convert to Date object here. Keep the raw string so validators expecting strings work.
+            field.onChange(value === '' ? '' : value);
           }}
         />
       );

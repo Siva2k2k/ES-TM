@@ -27,7 +27,7 @@ import NotificationsPage from './pages/NotificationsPage';
 import { UserManagementPage } from './pages/users';
 
 // Project Management
-import { ProjectListPage, ProjectMembersPage } from './pages/projects';
+import { ProjectListPage, ProjectMembersPage, ProjectDetailPage } from './pages/projects';
 
 // Timesheet Management
 import { EmployeeTimesheet } from './components/EmployeeTimesheet';
@@ -104,6 +104,11 @@ const App: React.FC = () => {
           <Route path="projects" element={
             <ProtectedRoute>
               <ProjectListPage />
+            </ProtectedRoute>
+          } />
+          <Route path="projects/:projectId" element={
+            <ProtectedRoute>
+              <ProjectDetailPage />
             </ProtectedRoute>
           } />
           <Route path="projects/:projectId/members" element={

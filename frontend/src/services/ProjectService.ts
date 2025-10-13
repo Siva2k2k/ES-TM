@@ -309,8 +309,9 @@ export class ProjectService {
         return { clients: [], error: response.message || 'Failed to fetch clients' };
       }
 
-      console.log('Clients fetched:', response.data);
-      return { clients: response.data };
+  // Log raw client payload to help debug id vs _id differences
+  console.debug('ProjectService.getAllClients: raw clients payload:', response.data);
+  return { clients: response.data };
     } catch (error) {
       console.error('Error in getAllClients:', error);
       const errorMessage = error instanceof BackendApiError ? error.message : 'Failed to fetch clients';

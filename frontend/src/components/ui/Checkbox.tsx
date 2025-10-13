@@ -2,11 +2,16 @@ import * as React from 'react';
 import { Check } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
-export interface CheckboxProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type'> {
+export interface CheckboxProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type' | 'onChange'> {
   label?: string;
   error?: string;
   helperText?: string;
   indeterminate?: boolean;
+  /**
+   * Convenience callback used by some form libraries (e.g. react-hook-form wrappers)
+   * Not part of native input props. If provided, it's called with the new checked state.
+   */
+  onCheckedChange?: (checked: boolean) => void;
 }
 
 /**
@@ -14,7 +19,7 @@ export interface CheckboxProps extends Omit<React.InputHTMLAttributes<HTMLInputE
  * Accessible checkbox with label and error states
  */
 const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
-  ({ className, label, error, helperText, id, indeterminate, ...props }, ref) => {
+  ({ className, label, error, helperText, id, indeterminate, onCheckedChange, ...props }, ref) => {
     const checkboxId = id || label?.toLowerCase().replace(/\s+/g, '-');
     const inputRef = React.useRef<HTMLInputElement>(null);
 
@@ -51,6 +56,14 @@ const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
                     ? `${checkboxId}-helper`
                     : undefined
                 }
+                // Ensure react gets an onChange when checked is provided by consumers
+                onChange={(e) => {
+                  // call native onChange if present
+                  // (props may include an onChange from other callers)
+                  // @ts-ignore allow calling possibly-undefined prop
+                  props.onChange?.(e as unknown as React.ChangeEvent<HTMLInputElement>);
+                  onCheckedChange?.(e.currentTarget.checked);
+                }}
                 {...props}
               />
               <div

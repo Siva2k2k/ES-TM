@@ -190,7 +190,11 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
               label="Client"
               type="select"
               required
-              options={clients.map((c) => ({ value: c.id, label: c.name }))}
+              options={
+                  clients && clients.length > 0
+                    ? clients.map((c) => ({ value: (c as any).id || (c as any)._id || '', label: c.name }))
+                    : [{ value: '', label: 'No clients available' }]
+                }
             />
 
             <FormField
