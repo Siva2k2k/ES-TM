@@ -262,7 +262,8 @@ InvoiceSchema.set('toJSON', {
 
 // Pre-save middleware to calculate balance_due
 InvoiceSchema.pre('save', function(next) {
-  const invoice = this as IInvoice;
+  // Use unknown cast to satisfy TypeScript when converting from Mongoose Document
+  const invoice = this as unknown as IInvoice;
   invoice.balance_due = invoice.total_amount - invoice.payments_received;
   next();
 });

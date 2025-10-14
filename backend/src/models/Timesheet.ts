@@ -212,8 +212,8 @@ TimesheetSchema.index({
 
 // Virtual for ID as string
 TimesheetSchema.virtual('id').get(function() {
-  // @ts-ignore
-  return this._id.toHexString();
+  // Cast to ObjectId for TypeScript safety
+  return (this._id as mongoose.Types.ObjectId).toHexString();
 });
 
 TimesheetSchema.set('toJSON', {

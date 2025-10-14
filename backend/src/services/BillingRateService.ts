@@ -331,7 +331,7 @@ export class BillingRateService {
         break;
       }
       case 'client': {
-        const client = await Client.findById(entityId);
+  const client = await (Client as any).findById(entityId);
         if (!client || client.deleted_at) {
           throw new ValidationError('Referenced client not found or inactive');
         }

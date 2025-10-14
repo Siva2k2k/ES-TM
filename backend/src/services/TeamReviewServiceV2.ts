@@ -10,7 +10,7 @@ import { TimesheetProjectApproval } from '../models/TimesheetProjectApproval';
 import { TimeEntry } from '../models/TimeEntry';
 import { Project, ProjectMember } from '../models/Project';
 import { User } from '../models/User';
-import { Task } from '../models/Task';
+import Task from '../models/Task';
 import { logger } from '../config/logger';
 import type {
   ProjectWeekGroup,
@@ -56,7 +56,7 @@ export class TeamReviewServiceV2 {
 
       // Get projects based on role
       const projectQuery = await this.buildProjectQuery(approverId, approverRole, project_id, search);
-      const projects = await Project.find(projectQuery)
+      const projects = await (Project as any).find(projectQuery)
         .populate('primary_manager_id', 'name email')
         .lean() as any[];
 
@@ -71,7 +71,7 @@ export class TeamReviewServiceV2 {
       const projectIds = projects.map(p => p._id);
 
       // Get all timesheets in date range for these projects
-      const timesheets = await Timesheet.find({
+      const timesheets = await (Timesheet as any).find({
         week_start_date: { $gte: dateStart, $lte: dateEnd },
         deleted_at: null
       })
@@ -89,13 +89,13 @@ export class TeamReviewServiceV2 {
       const timesheetIds = timesheets.map(t => t._id);
 
       // Get all project approvals for these timesheets and projects
-      const approvals = await TimesheetProjectApproval.find({
+      const approvals = await (TimesheetProjectApproval as any).find({
         timesheet_id: { $in: timesheetIds },
         project_id: { $in: projectIds }
       }).lean() as any[];
 
       // Get all time entries for these timesheets and projects
-      const entries = await TimeEntry.find({
+      const entries = await (TimeEntry as any).find({
         timesheet_id: { $in: timesheetIds },
         project_id: { $in: projectIds },
         deleted_at: null
@@ -104,7 +104,7 @@ export class TeamReviewServiceV2 {
         .lean() as any[];
 
       // Get project members
-      const projectMembers = await ProjectMember.find({
+      const projectMembers = await (ProjectMember as any).find({
         project_id: { $in: projectIds },
         deleted_at: null,
         removed_at: null
@@ -122,7 +122,7 @@ export class TeamReviewServiceV2 {
         const leadMember = projectMembersForProject.find(pm => pm.project_role === 'lead');
         let leadInfo = null;
         if (leadMember) {
-          const leadUser = await User.findById(leadMember.user_id).select('name').lean();
+          const leadUser = await (User as any).findById(leadMember.user_id).select('name').lean() as any;
           leadInfo = { id: leadMember.user_id.toString(), name: leadUser?.name || 'Unknown' };
         }
 
@@ -288,7 +288,7 @@ export class TeamReviewServiceV2 {
       query.primary_manager_id = new mongoose.Types.ObjectId(approverId);
     } else if (approverRole === 'lead') {
       // Leads see projects where they are assigned as lead
-      const leadProjects = await ProjectMember.find({
+      const leadProjects = await (ProjectMember as any).find({
         user_id: new mongoose.Types.ObjectId(approverId),
         project_role: 'lead',
         deleted_at: null,

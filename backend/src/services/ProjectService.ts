@@ -308,6 +308,8 @@ export class ProjectService {
         .populate('created_by_user_id', 'full_name')
         .sort({ created_at: -1 });
 
+      console.log(tasks, "......................");
+
       return { tasks };
     } catch (error) {
       console.error('Error in getProjectTasks:', error);

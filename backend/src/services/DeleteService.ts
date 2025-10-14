@@ -209,7 +209,13 @@ export class DeleteService {
 
     switch (entityType) {
       case 'user':
-        return await UserService.getDeletedUsers(currentUser);
+        {
+          const result = await UserService.getDeletedUsers(currentUser);
+          if (result.error) {
+            return { success: false, error: result.error };
+          }
+          return { success: true, data: result.users };
+        }
 
       default:
         return { success: false, error: `Get deleted not implemented for ${entityType}` };

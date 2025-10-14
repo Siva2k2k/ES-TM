@@ -1,25 +1,40 @@
 import { backendApi } from '../lib/backendApi';
 import type { BillingSnapshot } from '../types';
+import type {
+  BillingDashboardMetrics,
+  BillingInvoice,
+  BillingPeriodView,
+  BillingRate,
+  BillingSummary,
+  CreateRateData,
+  ProjectBillingResponse,
+  RevenueByProject,
+  TaskBillingResponse
+} from '../types/billing';
 
-/**
- * Billing Management Service - Backend API Integration
- * Handles all billing-related operations with MongoDB backend
- */
-interface BillingSummary {
-  total_revenue: number;
-  total_hours: number;
-  billable_hours: number;
-  non_billable_hours: number;
-  average_rate: number;
-  entries: Array<{
-    id: string;
-    name: string;
-    hours: number;
-    billable_hours: number;
-    revenue: number;
-    week_start: string;
-    is_editable: boolean;
-  }>;
+interface ProjectBillingParams {
+  startDate: string;
+  endDate: string;
+  view: BillingPeriodView;
+  projectIds?: string[];
+}
+
+interface TaskBillingParams {
+  startDate: string;
+  endDate: string;
+  projectIds?: string[];
+  taskIds?: string[];
+}
+
+interface UpdateBillingHoursPayload {
+  userId: string;
+  projectId?: string;
+  taskId?: string;
+  startDate: string;
+  endDate: string;
+  billableHours: number;
+  totalHours?: number;
+  reason?: string;
 }
 
 export class BillingService {
@@ -28,24 +43,27 @@ export class BillingService {
    */
   static async generateWeeklySnapshot(weekStartDate: string): Promise<{
     snapshots: BillingSnapshot[];
-    error?: string
+    error?: string;
   }> {
     try {
-      console.log(`Management generating weekly billing snapshot for week of ${weekStartDate}`);
-
       const response = await backendApi.post('/billing/snapshots/generate', {
         weekStartDate
       });
 
-      if (response.success && response.data) {
-        console.log(`Generated ${response.data.length} billing snapshots`);
+      if (response.success && Array.isArray(response.data)) {
         return { snapshots: response.data as BillingSnapshot[] };
-      } else {
-        return { snapshots: [], error: response.message || 'Failed to generate weekly snapshot' };
       }
-    } catch (error: any) {
+
+      return {
+        snapshots: [],
+        error: response.message || 'Failed to generate weekly snapshot'
+      };
+    } catch (error: unknown) {
       console.error('Error in generateWeeklySnapshot:', error);
-      return { snapshots: [], error: error.message || 'Failed to generate weekly snapshot' };
+      return {
+        snapshots: [],
+        error: error instanceof Error ? error.message : 'Failed to generate weekly snapshot'
+      };
     }
   }
 
@@ -55,57 +73,54 @@ export class BillingService {
   static async getAllBillingSnapshots(): Promise<{ snapshots: BillingSnapshot[]; error?: string }> {
     try {
       const response = await backendApi.get('/billing/snapshots');
-
-      if (response.success && response.data) {
+      if (response.success && Array.isArray(response.data)) {
         return { snapshots: response.data as BillingSnapshot[] };
-      } else {
-        return { snapshots: [], error: response.message || 'Failed to fetch billing snapshots' };
       }
-    } catch (error: any) {
+
+      return {
+        snapshots: [],
+        error: response.message || 'Failed to fetch billing snapshots'
+      };
+    } catch (error: unknown) {
       console.error('Error in getAllBillingSnapshots:', error);
-      return { snapshots: [], error: error.message || 'Failed to fetch billing snapshots' };
+      return {
+        snapshots: [],
+        error: error instanceof Error ? error.message : 'Failed to fetch billing snapshots'
+      };
     }
   }
 
   /**
-   * Get billing dashboard data
+   * Get billing dashboard metrics
    */
-  static async getBillingDashboard(): Promise<{
-    totalRevenue: number;
-    weeklyRevenue: number;
-    monthlyRevenue: number;
-    pendingApprovals: number;
-    totalBillableHours: number;
-    averageHourlyRate: number;
-    revenueGrowth: number;
-    error?: string;
-  }> {
+  static async getBillingDashboard(): Promise<BillingDashboardMetrics & { error?: string }> {
     try {
       const response = await backendApi.get('/billing/dashboard');
 
       if (response.success && response.dashboard) {
+        const metrics = response.dashboard as Partial<BillingDashboardMetrics>;
         return {
-          totalRevenue: response.dashboard.totalRevenue || 0,
-          weeklyRevenue: response.dashboard.weeklyRevenue || 0,
-          monthlyRevenue: response.dashboard.monthlyRevenue || 0,
-          pendingApprovals: response.dashboard.pendingApprovals || 0,
-          totalBillableHours: response.dashboard.totalBillableHours || 0,
-          averageHourlyRate: response.dashboard.averageHourlyRate || 0,
-          revenueGrowth: response.dashboard.revenueGrowth || 0
-        };
-      } else {
-        return {
-          totalRevenue: 0,
-          weeklyRevenue: 0,
-          monthlyRevenue: 0,
-          pendingApprovals: 0,
-          totalBillableHours: 0,
-          averageHourlyRate: 0,
-          revenueGrowth: 0,
-          error: response.message || 'Failed to fetch billing dashboard data'
+          totalRevenue: metrics.totalRevenue ?? 0,
+          weeklyRevenue: metrics.weeklyRevenue ?? 0,
+          monthlyRevenue: metrics.monthlyRevenue ?? 0,
+          pendingApprovals: metrics.pendingApprovals ?? 0,
+          totalBillableHours: metrics.totalBillableHours ?? 0,
+          averageHourlyRate: metrics.averageHourlyRate ?? 0,
+          revenueGrowth: metrics.revenueGrowth ?? 0
         };
       }
-    } catch (error: any) {
+
+      return {
+        totalRevenue: 0,
+        weeklyRevenue: 0,
+        monthlyRevenue: 0,
+        pendingApprovals: 0,
+        totalBillableHours: 0,
+        averageHourlyRate: 0,
+        revenueGrowth: 0,
+        error: response.message || 'Failed to fetch billing dashboard data'
+      };
+    } catch (error: unknown) {
       console.error('Error in getBillingDashboard:', error);
       return {
         totalRevenue: 0,
@@ -115,7 +130,7 @@ export class BillingService {
         totalBillableHours: 0,
         averageHourlyRate: 0,
         revenueGrowth: 0,
-        error: error.message || 'Failed to fetch billing dashboard data'
+        error: error instanceof Error ? error.message : 'Failed to fetch billing dashboard data'
       };
     }
   }
@@ -125,121 +140,60 @@ export class BillingService {
    */
   static async approveMonthlyBilling(year: number, month: number): Promise<{ success: boolean; error?: string }> {
     try {
-      console.log(`Management approving monthly billing for ${year}-${month}`);
-
       const response = await backendApi.post('/billing/approve-monthly', {
         year,
         month
       });
 
       return {
-        success: response.success || false,
+        success: Boolean(response.success),
         error: response.success ? undefined : (response.message || 'Failed to approve monthly billing')
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error in approveMonthlyBilling:', error);
-      return { success: false, error: error.message || 'Failed to approve monthly billing' };
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to approve monthly billing'
+      };
     }
   }
 
   /**
    * Get revenue by project
    */
-  static async getRevenueByProject(): Promise<{
-    projects: Array<{
-      projectId: string;
-      projectName: string;
-      revenue: number;
-      hours: number;
-      rate: number;
-    }>;
-    error?: string;
-  }> {
+  static async getRevenueByProject(): Promise<{ projects: RevenueByProject[]; error?: string }> {
     try {
       const response = await backendApi.get('/billing/revenue-by-project');
-
-      if (response.success && response.data) {
-        return { projects: response.data };
-      } else {
-        return { projects: [], error: response.message || 'Failed to fetch revenue by project' };
-      }
-    } catch (error: any) {
-      console.error('Error in getRevenueByProject:', error);
-      return { projects: [], error: error.message || 'Failed to fetch revenue by project' };
-    }
-  }
-
-  /**
-   * Export billing report
-   */
-  static async exportBillingReport(
-    startDate: string,
-    endDate: string,
-    format: 'csv' | 'pdf' | 'excel'
-  ): Promise<{ success: boolean; downloadUrl?: string; error?: string }> {
-    try {
-      console.log(`Exporting billing report from ${startDate} to ${endDate} in ${format} format`);
-
-      const response = await backendApi.post('/billing/export', {
-        startDate,
-        endDate,
-        format
-      });
-
-      if (response.success) {
+      if (response.success && Array.isArray(response.data)) {
         return {
-          success: true,
-          downloadUrl: response.downloadUrl
+          projects: (response.data as any[]).map((project) => ({
+            projectId: project.projectId ?? project.project_id ?? '',
+            projectName: project.projectName ?? project.project_name ?? 'Unknown project',
+            revenue: Number(project.revenue ?? 0),
+            hours: Number(project.hours ?? 0),
+            rate: Number(project.rate ?? 0)
+          }))
         };
-      } else {
-        return { success: false, error: response.message || 'Failed to export billing report' };
       }
-    } catch (error: any) {
-      console.error('Error in exportBillingReport:', error);
-      return { success: false, error: error.message || 'Failed to export billing report' };
+
+      return {
+        projects: [],
+        error: response.message || 'Failed to fetch revenue by project'
+      };
+    } catch (error: unknown) {
+      console.error('Error in getRevenueByProject:', error);
+      return {
+        projects: [],
+        error: error instanceof Error ? error.message : 'Failed to fetch revenue by project'
+      };
     }
-  }
-
-  /**
-   * Validate billing snapshot
-   */
-  static validateBillingSnapshot(snapshot: Partial<BillingSnapshot>): { 
-    isValid: boolean; 
-    errors: string[] 
-  } {
-    const errors: string[] = [];
-
-    if (!snapshot.timesheet_id) {
-      errors.push('Timesheet ID is required');
-    }
-
-    if (!snapshot.user_id) {
-      errors.push('User ID is required');
-    }
-
-    if (snapshot.total_hours !== undefined && snapshot.total_hours < 0) {
-      errors.push('Total hours cannot be negative');
-    }
-
-    if (snapshot.billable_hours !== undefined && snapshot.billable_hours < 0) {
-      errors.push('Billable hours cannot be negative');
-    }
-
-    if (snapshot.hourly_rate !== undefined && snapshot.hourly_rate <= 0) {
-      errors.push('Hourly rate must be greater than 0');
-    }
-
-    return {
-      isValid: errors.length === 0,
-      errors
-    };
   }
 
   /**
    * Get billing summary with filters
    */
   static async getBillingSummary(
-    period: 'weekly' | 'monthly',
+    period: BillingPeriodView,
     filterType: 'project' | 'employee',
     filterId?: string,
     startDate?: string,
@@ -255,20 +209,19 @@ export class BillingService {
       });
 
       const response = await backendApi.get(`/billing/summary?${params}`);
-
       if (response.success && response.data) {
         return { summary: response.data as BillingSummary };
-      } else {
-        return { error: response.message || 'Failed to fetch billing summary' };
       }
-    } catch (error: any) {
+
+      return { error: response.message || 'Failed to fetch billing summary' };
+    } catch (error: unknown) {
       console.error('Error in getBillingSummary:', error);
-      return { error: error.message || 'Failed to fetch billing summary' };
+      return { error: error instanceof Error ? error.message : 'Failed to fetch billing summary' };
     }
   }
 
   /**
-   * Update billable hours
+   * Update billable hours by entry identifier
    */
   static async updateBillableHours(
     entryId: string,
@@ -279,35 +232,32 @@ export class BillingService {
         hours: newHours
       });
 
-      if (response.success) {
-        return { success: true };
-      } else {
-        return { success: false, error: response.message || 'Failed to update billable hours' };
-      }
-    } catch (error: any) {
+      return {
+        success: Boolean(response.success),
+        error: response.success ? undefined : (response.message || 'Failed to update billable hours')
+      };
+    } catch (error: unknown) {
       console.error('Error in updateBillableHours:', error);
-      return { success: false, error: error.message || 'Failed to update billable hours' };
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to update billable hours'
+      };
     }
   }
 
   /**
-   * Export report for Enhanced Reports component
+   * Export billing report
    */
-  static async exportReport(options: {
-    startDate: string;
-    endDate: string;
-    format: 'csv' | 'pdf' | 'excel';
-    reportType: string;
-  }): Promise<{ success: boolean; downloadUrl?: string; error?: string }> {
+  static async exportBillingReport(
+    startDate: string,
+    endDate: string,
+    format: 'csv' | 'pdf' | 'excel'
+  ): Promise<{ success: boolean; downloadUrl?: string; error?: string }> {
     try {
-      console.log(`Generating ${options.reportType} report from ${options.startDate} to ${options.endDate} in ${options.format} format`);
-
-      // For now, use the billing export endpoint with additional metadata
       const response = await backendApi.post('/billing/export', {
-        startDate: options.startDate,
-        endDate: options.endDate,
-        format: options.format,
-        reportType: options.reportType
+        startDate,
+        endDate,
+        format
       });
 
       if (response.success) {
@@ -315,15 +265,267 @@ export class BillingService {
           success: true,
           downloadUrl: response.downloadUrl
         };
-      } else {
-        return { success: false, error: response.message || 'Failed to generate report' };
       }
-    } catch (error: any) {
-      console.error('Error in exportReport:', error);
-      return { success: false, error: error.message || 'Failed to generate report' };
+
+      return {
+        success: false,
+        error: response.message || 'Failed to export billing report'
+      };
+    } catch (error: unknown) {
+      console.error('Error in exportBillingReport:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to export billing report'
+      };
     }
   }
 
+  /**
+   * Get project billing data
+   */
+  static async getProjectBilling(params: ProjectBillingParams): Promise<{ data?: ProjectBillingResponse; error?: string }> {
+    try {
+      const query = new URLSearchParams({
+        startDate: params.startDate,
+        endDate: params.endDate,
+        view: params.view,
+        ...(params.projectIds && params.projectIds.length > 0
+          ? { projectIds: params.projectIds.join(',') }
+          : {})
+      });
+
+      const response = await backendApi.get(`/project-billing/projects?${query}`);
+      if (response.success && response.data) {
+        return { data: response.data as ProjectBillingResponse };
+      }
+
+      return {
+        error: response.message || 'Failed to fetch project billing data'
+      };
+    } catch (error: unknown) {
+      console.error('Error in getProjectBilling:', error);
+      return {
+        error: error instanceof Error ? error.message : 'Failed to fetch project billing data'
+      };
+    }
+  }
+
+  /**
+   * Update project/task billable hours with additional context
+   */
+  static async updateProjectBillingHours(payload: UpdateBillingHoursPayload): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await backendApi.updateBillableHours({
+        user_id: payload.userId,
+        project_id: payload.projectId,
+        task_id: payload.taskId,
+        date: payload.startDate,
+        start_date: payload.startDate,
+        end_date: payload.endDate,
+        billable_hours: payload.billableHours,
+        total_hours: payload.totalHours,
+        reason: payload.reason
+      } as any);
+
+      return {
+        success: Boolean(response.success),
+        error: response.success ? undefined : (response.message || 'Failed to update billable hours')
+      };
+    } catch (error: unknown) {
+      console.error('Error in updateProjectBillingHours:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to update billable hours'
+      };
+    }
+  }
+
+  /**
+   * Get task-level billing data
+   */
+  static async getTaskBilling(params: TaskBillingParams): Promise<{ data?: TaskBillingResponse; error?: string }> {
+    try {
+      const query = new URLSearchParams({
+        startDate: params.startDate,
+        endDate: params.endDate,
+        ...(params.projectIds && params.projectIds.length > 0
+          ? { projectIds: params.projectIds.join(',') }
+          : {}),
+        ...(params.taskIds && params.taskIds.length > 0
+          ? { taskIds: params.taskIds.join(',') }
+          : {})
+      });
+
+      const response = await backendApi.get(`/project-billing/tasks?${query}`);
+      if (response.success && response.data) {
+        return { data: response.data as TaskBillingResponse };
+      }
+
+      return {
+        error: response.message || 'Failed to fetch task billing data'
+      };
+    } catch (error: unknown) {
+      console.error('Error in getTaskBilling:', error);
+      return {
+        error: error instanceof Error ? error.message : 'Failed to fetch task billing data'
+      };
+    }
+  }
+
+  /**
+   * Get invoice list
+   */
+  static async getInvoices(): Promise<{ invoices: BillingInvoice[]; error?: string }> {
+    try {
+      const response = await backendApi.get('/billing/invoices');
+      if (response.success) {
+        const invoices: BillingInvoice[] = Array.isArray(response.invoices)
+          ? response.invoices
+          : (response.data as BillingInvoice[]) ?? [];
+        return { invoices };
+      }
+
+      return {
+        invoices: [],
+        error: response.message || 'Failed to fetch invoices'
+      };
+    } catch (error: unknown) {
+      console.error('Error in getInvoices:', error);
+      return {
+        invoices: [],
+        error: error instanceof Error ? error.message : 'Failed to fetch invoices'
+      };
+    }
+  }
+
+  /**
+   * Approve invoice
+   */
+  static async approveInvoice(invoiceId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await backendApi.post(`/billing/invoices/${invoiceId}/approve`, {});
+      return {
+        success: Boolean(response.success),
+        error: response.success ? undefined : (response.message || 'Failed to approve invoice')
+      };
+    } catch (error: unknown) {
+      console.error('Error in approveInvoice:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to approve invoice'
+      };
+    }
+  }
+
+  /**
+   * Reject invoice with reason
+   */
+  static async rejectInvoice(invoiceId: string, reason: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await backendApi.post(`/billing/invoices/${invoiceId}/reject`, { reason });
+      return {
+        success: Boolean(response.success),
+        error: response.success ? undefined : (response.message || 'Failed to reject invoice')
+      };
+    } catch (error: unknown) {
+      console.error('Error in rejectInvoice:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to reject invoice'
+      };
+    }
+  }
+
+  /**
+   * Generate invoice for client and period
+   */
+  static async generateInvoice(clientId: string, weekStartDate: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await backendApi.post('/billing/invoices/generate', {
+        client_id: clientId,
+        week_start_date: weekStartDate
+      });
+
+      return {
+        success: Boolean(response.success),
+        error: response.success ? undefined : (response.message || 'Failed to generate invoice')
+      };
+    } catch (error: unknown) {
+      console.error('Error in generateInvoice:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to generate invoice'
+      };
+    }
+  }
+
+  /**
+   * Get billing rates
+   */
+  static async getBillingRates(): Promise<{ rates: BillingRate[]; error?: string }> {
+    try {
+      const response = await backendApi.get('/billing/rates');
+
+      if (response.success && Array.isArray(response.rates)) {
+        return { rates: response.rates as BillingRate[] };
+      }
+
+      if (response.success && Array.isArray(response.data)) {
+        return { rates: response.data as BillingRate[] };
+      }
+
+      return {
+        rates: [],
+        error: response.message || 'Failed to fetch billing rates'
+      };
+    } catch (error: unknown) {
+      console.error('Error in getBillingRates:', error);
+      return {
+        rates: [],
+        error: error instanceof Error ? error.message : 'Failed to fetch billing rates'
+      };
+    }
+  }
+
+  /**
+   * Create or update billing rate
+   */
+  static async createBillingRate(payload: CreateRateData): Promise<{ rate?: BillingRate; error?: string }> {
+    try {
+      const response = await backendApi.post('/billing/rates', payload);
+      if (response.success && response.rate) {
+        return { rate: response.rate as BillingRate };
+      }
+
+      return {
+        error: response.message || 'Failed to save billing rate'
+      };
+    } catch (error: unknown) {
+      console.error('Error in createBillingRate:', error);
+      return {
+        error: error instanceof Error ? error.message : 'Failed to save billing rate'
+      };
+    }
+  }
+
+  /**
+   * Delete billing rate
+   */
+  static async deleteBillingRate(rateId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await backendApi.delete(`/billing/rates/${rateId}`);
+      return {
+        success: Boolean(response.success),
+        error: response.success ? undefined : (response.message || 'Failed to delete billing rate')
+      };
+    } catch (error: unknown) {
+      console.error('Error in deleteBillingRate:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to delete billing rate'
+      };
+    }
+  }
 }
 
 export default BillingService;

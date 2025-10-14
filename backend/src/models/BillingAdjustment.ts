@@ -193,6 +193,9 @@ BillingAdjustmentSchema.pre(/^find/, function(this: any) {
   this.where({ deleted_at: null });
 });
 
-export const BillingAdjustment = mongoose.model<IBillingAdjustment>('BillingAdjustment', BillingAdjustmentSchema);
+// Use existing compiled model if available to avoid OverwriteModelError in dev/hot-reload
+export const BillingAdjustment =
+  (mongoose.models.BillingAdjustment as mongoose.Model<IBillingAdjustment>) ||
+  mongoose.model<IBillingAdjustment>('BillingAdjustment', BillingAdjustmentSchema);
 
 export default BillingAdjustment;

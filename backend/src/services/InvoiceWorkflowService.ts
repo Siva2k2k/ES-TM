@@ -48,7 +48,7 @@ export class InvoiceWorkflowService {
   ): Promise<InvoiceDraft> {
     
     // 1. Validate client exists and is active
-    const client = await Client.findById(clientId);
+  const client = await (Client as any).findById(clientId);
     if (!client || client.deleted_at) {
       throw new ValidationError('Client not found or inactive');
     }

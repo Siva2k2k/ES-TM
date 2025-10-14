@@ -2782,3 +2782,22 @@ function canLeadApproveTimesheet(lead: User, timesheet: Timesheet): boolean {
 **Ready for:** Phase 7 Part 2 - Timesheet UI Implementation
 
 ---
+## Phase 8 Billing Management (Restructure in Progress)
+
+**Scope Completed:**
+- Added billing workspace under `frontend/src/pages/billing/` with dashboard, project, task, invoice, and rate views.
+- Introduced `BillingProvider` plus hooks (`useBillingData`, `useProjectBilling`, `useBillingRates`, `useInvoiceManagement`, `useBillingContext`) to centralize Sonar-compliant data, forms, and validation.
+- Restricted `/dashboard/billing` routes to Super Admin and Management roles and removed billing links for other roles in `Sidebar.tsx`.
+- Delivered the project billing page with project-level totals (worked hours, billable hours, cost) and expandable user rows supporting inline billable-hour edits.
+
+**Key Outcomes:**
+- Billable hours default to worked hours and persist manual overrides through `BillingService.updateProjectBillingHours`.
+- Project cost now equals the sum of member costs (hourly rate × worked hours), aligning with audit expectations.
+- Filters for period, project/employee, and date range reuse shared context + Zod schemas for consistency with Phase 1 foundations.
+
+**Next Steps (Phase 8 TODO alignment):**
+- Finalize Task Billing, Invoice Management, and Rate Management flows with react-hook-form + Zod integration.
+- Add Vitest/Playwright coverage for billing CRUD paths and RBAC enforcement.
+- Retire legacy `components/billing/*` monoliths once migration smoke tests pass.
+
+---

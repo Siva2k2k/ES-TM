@@ -65,6 +65,24 @@ export function Sidebar({ isOpen, isCollapsed, onClose }: SidebarProps) {
       },
     ];
 
+    const role = currentUserRole ?? '';
+    const billingSubItems =
+      (() => {
+        if (!['super_admin', 'management'].includes(role)) {
+          return [];
+        }
+
+        const items: NavItem['subItems'] = [
+          { id: 'billing-projects', label: 'Project Billing', path: '/dashboard/billing' },
+          { id: 'billing-dashboard', label: 'Billing Dashboard', path: '/dashboard/billing/dashboard' },
+          { id: 'billing-tasks', label: 'Task Billing', path: '/dashboard/billing/tasks' },
+          { id: 'billing-invoices', label: 'Invoices', path: '/dashboard/billing/invoices' },
+          { id: 'billing-rates', label: 'Rates', path: '/dashboard/billing/rates' }
+        ];
+
+        return items;
+      })();
+
     // Super Admin - Full system access
     if (currentUserRole === 'super_admin') {
       baseItems.push(
@@ -82,17 +100,7 @@ export function Sidebar({ isOpen, isCollapsed, onClose }: SidebarProps) {
           ]
         },
         { id: 'reports', label: 'Reports & Analytics', icon: TrendingUp, path: '/dashboard/reports' },
-        {
-          id: 'billing',
-          label: 'Billing Management',
-          icon: FileText,
-          path: '/dashboard/billing',
-          subItems: [
-            { id: 'billing-projects', label: '🎯 Project Billing', path: '/dashboard/billing/projects' },
-            { id: 'billing-tasks', label: '🎯 Task Billing', path: '/dashboard/billing/tasks' },
-            { id: 'billing-others', label: 'Others', path: '/dashboard/billing/others' }
-          ]
-        },
+        { id: 'billing', label: 'Billing Management', icon: FileText, path: '/dashboard/billing', subItems: billingSubItems },
         {
           id: 'audit',
           label: 'Audit Logs',
@@ -105,27 +113,14 @@ export function Sidebar({ isOpen, isCollapsed, onClose }: SidebarProps) {
         },
         { id: 'deleted-items', label: 'Deleted Items', icon: Trash2, path: '/dashboard/admin/deleted-items' }
       );
-    }
-
-    // Management - Mid-level privileges
-    else if (currentUserRole === 'management') {
+    } else if (currentUserRole === 'management') {
       baseItems.push(
         { id: 'users', label: 'User Management', icon: Users, path: '/dashboard/users' },
         { id: 'projects', label: 'Project Management', icon: Building2, path: '/dashboard/projects' },
         { id: 'clients', label: 'Client Management', icon: UserCheck, path: '/dashboard/clients' },
         { id: 'team', label: 'Team Review', icon: Users, path: '/dashboard/team-review' },
         { id: 'reports', label: 'Reports & Analytics', icon: TrendingUp, path: '/dashboard/reports' },
-        {
-          id: 'billing',
-          label: 'Billing Management',
-          icon: FileText,
-          path: '/dashboard/billing',
-          subItems: [
-            { id: 'billing-projects', label: '🎯 Project Billing', path: '/dashboard/billing/projects' },
-            { id: 'billing-tasks', label: '🎯 Task Billing', path: '/dashboard/billing/tasks' },
-            { id: 'billing-others', label: 'Others', path: '/dashboard/billing/others' }
-          ]
-        },
+        { id: 'billing', label: 'Billing Management', icon: FileText, path: '/dashboard/billing', subItems: billingSubItems },
         { id: 'deleted-items', label: 'Deleted Items', icon: Trash2, path: '/dashboard/admin/deleted-items' }
       );
     }
@@ -136,11 +131,7 @@ export function Sidebar({ isOpen, isCollapsed, onClose }: SidebarProps) {
         { id: 'users', label: 'Team Management', icon: Users, path: '/dashboard/users' },
         { id: 'projects', label: 'Project Management', icon: Building2, path: '/dashboard/projects' },
         { id: 'clients', label: 'Client Management', icon: UserCheck, path: '/dashboard/clients' },
-        {
-          id: 'timesheet',
-          label: 'My Timesheet',
-          icon: Clock,
-          path: '/dashboard/timesheets',
+        { id: 'timesheet', label: 'My Timesheet', icon: Clock, path: '/dashboard/timesheets',
           subItems: [
             { id: 'timesheet-list', label: 'List View', path: '/dashboard/timesheets/list' },
             { id: 'timesheet-calendar', label: 'Calendar View', path: '/dashboard/timesheets/calendar' }
@@ -155,11 +146,7 @@ export function Sidebar({ isOpen, isCollapsed, onClose }: SidebarProps) {
     else if (currentUserRole === 'lead') {
       baseItems.push(
         { id: 'projects', label: 'My Projects', icon: Building2, path: '/dashboard/projects' },
-        {
-          id: 'timesheet',
-          label: 'My Timesheet',
-          icon: Clock,
-          path: '/dashboard/timesheets',
+        { id: 'timesheet', label: 'My Timesheet', icon: Clock, path: '/dashboard/timesheets',
           subItems: [
             { id: 'timesheet-list', label: 'List View', path: '/dashboard/timesheets/list' },
             { id: 'timesheet-calendar', label: 'Calendar View', path: '/dashboard/timesheets/calendar' }
@@ -175,11 +162,7 @@ export function Sidebar({ isOpen, isCollapsed, onClose }: SidebarProps) {
     else if (currentUserRole === 'employee') {
       baseItems.push(
         { id: 'projects', label: 'My Projects', icon: Building2, path: '/dashboard/projects' },
-        {
-          id: 'timesheet',
-          label: 'My Timesheet',
-          icon: Clock,
-          path: '/dashboard/timesheets',
+        { id: 'timesheet', label: 'My Timesheet', icon: Clock, path: '/dashboard/timesheets',
           subItems: [
             { id: 'timesheet-list', label: 'List View', path: '/dashboard/timesheets/list' },
             { id: 'timesheet-calendar', label: 'Calendar View', path: '/dashboard/timesheets/calendar' }

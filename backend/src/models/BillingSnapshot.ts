@@ -131,4 +131,7 @@ BillingSnapshotSchema.pre(/^find/, function(this: any) {
   this.where({ deleted_at: null });
 });
 
-export const BillingSnapshot = mongoose.model<IBillingSnapshot>('BillingSnapshot', BillingSnapshotSchema);
+// Use existing compiled model if available to avoid OverwriteModelError in dev/hot-reload
+export const BillingSnapshot =
+  (mongoose.models.BillingSnapshot as mongoose.Model<IBillingSnapshot>) ||
+  mongoose.model<IBillingSnapshot>('BillingSnapshot', BillingSnapshotSchema);

@@ -306,7 +306,7 @@ export class TeamReviewApprovalService {
 
     try {
       // Get project details
-      const project = await Project.findById(projectId).session(session);
+  const project = await (Project as any).findById(projectId).session(session);
       if (!project) {
         throw new Error('Project not found');
       }
@@ -429,7 +429,7 @@ export class TeamReviewApprovalService {
 
     try {
       // Get project details
-      const project = await Project.findById(projectId).session(session);
+  const project = await (Project as any).findById(projectId).session(session);
       if (!project) {
         throw new Error('Project not found');
       }

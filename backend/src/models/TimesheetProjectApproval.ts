@@ -127,7 +127,7 @@ TimesheetProjectApprovalSchema.index({
 
 // Virtual for ID as string
 TimesheetProjectApprovalSchema.virtual('id').get(function() {
-  return this._id.toHexString();
+  return (this._id as mongoose.Types.ObjectId).toHexString();
 });
 
 TimesheetProjectApprovalSchema.set('toJSON', {

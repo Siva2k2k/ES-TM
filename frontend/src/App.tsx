@@ -28,6 +28,13 @@ import { UserManagementPage } from './pages/users';
 
 // Project Management
 import { ProjectListPage, ProjectMembersPage, ProjectDetailPage } from './pages/projects';
+import MyProjectsPage from './pages/projects/MyProjectsPage';
+import { useRoleManager } from './hooks/useRoleManager';
+
+const ProjectSelector: React.FC = () => {
+  const { canManageProjects } = useRoleManager();
+  return canManageProjects() ? <ProjectListPage /> : <MyProjectsPage />;
+};
 
 // Timesheet Management
 import { EmployeeTimesheet } from './components/EmployeeTimesheet';
@@ -37,14 +44,13 @@ import TimesheetStatusView from './components/TimesheetStatusView';
 // Phase 7: Team Review (Project-wise approval)
 import { TeamReviewPageV2 as TeamReviewPage } from './pages/team-review/TeamReviewPageV2';
 
-// Billing Management
-import { EnhancedBillingManagement } from './components/EnhancedBillingManagement';
-import { EnhancedBillingDashboard } from './components/billing/EnhancedBillingDashboard';
-import { BillingRateManagement } from './components/billing/BillingRateManagement';
-import { EnhancedInvoiceWorkflow } from './components/billing/EnhancedInvoiceWorkflow';
-import ProjectBillingView from './components/billing/ProjectBillingView';
-import TaskBillingView from './components/billing/TaskBillingView';
-import BillingOthersView from './components/billing/BillingOthersView';
+// Billing Management (Phase 8)
+import BillingLayout from './pages/billing/BillingLayout';
+import BillingDashboardPage from './pages/billing/BillingDashboardPage';
+import ProjectBillingPage from './pages/billing/ProjectBillingPage';
+import TaskBillingPage from './pages/billing/TaskBillingPage';
+import InvoiceManagementPage from './pages/billing/InvoiceManagementPage';
+import RateManagementPage from './pages/billing/RateManagementPage';
 
 // Reports & Admin
 import ReportsHub from './components/ReportsHub';
@@ -103,10 +109,11 @@ const App: React.FC = () => {
             </ProtectedRoute>
           } />
 
-          {/* Project Management */}
+          {/* Project Management / My Projects selector */}
           <Route path="projects" element={
             <ProtectedRoute>
-              <ProjectListPage />
+              {/* Inline selector: if user can manage projects show full management view, otherwise show My Projects */}
+              <ProjectSelector />
             </ProtectedRoute>
           } />
           <Route path="projects/:projectId" element={
@@ -207,89 +214,49 @@ const App: React.FC = () => {
             </ProtectedRoute>
           } />
 
-          {/* Billing Management - Admin/Management/Manager Only */}
-          <Route path="billing">
-            <Route index element={
-              <ProtectedRoute requiredRoles={['super_admin', 'management', 'manager']}>
-                <EnhancedBillingManagement />
+          {/* Billing Management - Phase 8 */}
+          <Route
+            path="billing"
+            element={
+              <ProtectedRoute requiredRoles={['super_admin', 'management']}>
+                <BillingLayout />
               </ProtectedRoute>
-            } />
-            <Route path="dashboard" element={
-              <ProtectedRoute requiredRoles={['super_admin', 'management', 'manager']}>
-                <EnhancedBillingDashboard />
-              </ProtectedRoute>
-            } />
-            <Route path="enhanced-dashboard" element={
-              <ProtectedRoute requiredRoles={['super_admin', 'management', 'manager']}>
-                <EnhancedBillingDashboard />
-              </ProtectedRoute>
-            } />
-            <Route path="projects" element={
-              <ProtectedRoute requiredRoles={['super_admin', 'management', 'manager']}>
-                <ProjectBillingView />
-              </ProtectedRoute>
-            } />
-            <Route path="tasks" element={
-              <ProtectedRoute requiredRoles={['super_admin', 'management', 'manager']}>
-                <TaskBillingView />
-              </ProtectedRoute>
-            } />
-            <Route path="others" element={
-              <ProtectedRoute requiredRoles={['super_admin', 'management', 'manager']}>
-                <BillingOthersView />
-              </ProtectedRoute>
-            } />
-            <Route path="invoices" element={
-              <ProtectedRoute requiredRoles={['super_admin', 'management', 'manager']}>
-                <EnhancedInvoiceWorkflow />
-              </ProtectedRoute>
-            } />
-            <Route path="invoice-workflow" element={
-              <ProtectedRoute requiredRoles={['super_admin', 'management', 'manager']}>
-                <EnhancedInvoiceWorkflow />
-              </ProtectedRoute>
-            } />
-            <Route path="rates" element={
-              <ProtectedRoute requiredRoles={['super_admin', 'management', 'manager']}>
-                <BillingRateManagement />
-              </ProtectedRoute>
-            } />
-            <Route path="rate-management" element={
-              <ProtectedRoute requiredRoles={['super_admin', 'management', 'manager']}>
-                <BillingRateManagement />
-              </ProtectedRoute>
-            } />
-            {/* Legacy billing routes */}
-            <Route path="view" element={
-              <ProtectedRoute requiredRoles={['super_admin', 'management', 'manager']}>
-                <EnhancedBillingManagement />
-              </ProtectedRoute>
-            } />
-            <Route path="reports" element={
-              <ProtectedRoute requiredRoles={['super_admin', 'management', 'manager']}>
-                <EnhancedBillingManagement />
-              </ProtectedRoute>
-            } />
-            <Route path="snapshots" element={
-              <ProtectedRoute requiredRoles={['super_admin', 'management', 'manager']}>
-                <EnhancedBillingManagement />
-              </ProtectedRoute>
-            } />
-            <Route path="approval" element={
-              <ProtectedRoute requiredRoles={['super_admin', 'management', 'manager']}>
-                <EnhancedBillingManagement />
-              </ProtectedRoute>
-            } />
-            <Route path="provisions" element={
-              <ProtectedRoute requiredRoles={['super_admin', 'management', 'manager']}>
-                <EnhancedBillingManagement />
-              </ProtectedRoute>
-            } />
-            <Route path="summaries" element={
-              <ProtectedRoute requiredRoles={['super_admin', 'management', 'manager']}>
-                <EnhancedBillingManagement />
-              </ProtectedRoute>
-            } />
+            }
+          >
+            <Route index element={<ProjectBillingPage />} />
+            <Route path="dashboard" element={<BillingDashboardPage />} />
+            <Route
+              path="projects"
+              element={
+                <ProtectedRoute requiredRoles={['super_admin', 'management']}>
+                  <ProjectBillingPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="tasks"
+              element={
+                <ProtectedRoute requiredRoles={['super_admin', 'management']}>
+                  <TaskBillingPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="invoices"
+              element={
+                <ProtectedRoute requiredRoles={['super_admin', 'management']}>
+                  <InvoiceManagementPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="rates"
+              element={
+                <ProtectedRoute requiredRoles={['super_admin', 'management']}>
+                  <RateManagementPage />
+                </ProtectedRoute>
+              }
+            />
           </Route>
 
           {/* Reports - All Authenticated Users */}

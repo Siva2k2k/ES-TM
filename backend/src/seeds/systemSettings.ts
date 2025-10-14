@@ -10,7 +10,7 @@ export async function seedSystemSettings() {
 
   try {
     // Find a super admin to set as the creator
-    const superAdmin = await User.findOne({ role: 'super_admin' });
+  const superAdmin = await (User as any).findOne({ role: 'super_admin' });
     if (!superAdmin) {
       console.log('❌ No super admin found. Create a super admin user first.');
       return;

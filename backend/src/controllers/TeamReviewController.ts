@@ -227,7 +227,7 @@ export class TeamReviewController {
         return;
       }
 
-      const entries = await TimeEntry.find({
+      const entries = await (TimeEntry as any).find({
         timesheet_id: new mongoose.Types.ObjectId(timesheetId),
         deleted_at: null
       })
@@ -235,7 +235,7 @@ export class TeamReviewController {
         .populate('task_id', 'name')
         .lean() as any[];
 
-      const history = await ApprovalHistory.find({
+      const history = await (ApprovalHistory as any).find({
         timesheet_id: new mongoose.Types.ObjectId(timesheetId)
       })
         .populate('project_id', 'name')

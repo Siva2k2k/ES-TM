@@ -591,20 +591,81 @@ export class ProjectBillingController {
       }, 0);
 
       // Create or update billing adjustment using the new method
-      const adjustmentReq = {
-        ...req,
-        body: {
-          user_id,
-          project_id,
-          start_date,
-          end_date,
-          adjusted_billable_hours: billable_hours,
-          original_billable_hours: originalBillableHours,
-          reason: reason || 'Manual adjustment from billing management'
-        }
+      // Use first matching timesheet for the adjustment scope (backend expects timesheet_id)
+      const timesheetIdToUse = timesheetIds.length > 0 ? timesheetIds[0] : undefined;
+
+      // Determine adjusted_by user (use authenticated user if available)
+      let adjustedBy: mongoose.Types.ObjectId;
+      try {
+        const userId = (req.user as any)?._id;
+        adjustedBy = typeof userId === 'string' ? mongoose.Types.ObjectId.createFromHexString(userId) : (userId || new mongoose.Types.ObjectId());
+      } catch (userErr) {
+        adjustedBy = new mongoose.Types.ObjectId();
+      }
+
+      // Build adjustment data
+      const adjustmentQuery = {
+        user_id: mongoose.Types.ObjectId.createFromHexString(user_id),
+        project_id: mongoose.Types.ObjectId.createFromHexString(project_id),
+        billing_period_start: new Date(start_date),
+        billing_period_end: new Date(end_date)
       };
 
-      await ProjectBillingController.createBillingAdjustment(adjustmentReq, res);
+      const existingAdjustment = await (BillingAdjustment as any).findOne(adjustmentQuery);
+
+      if (existingAdjustment) {
+        existingAdjustment.original_billable_hours = originalBillableHours;
+        existingAdjustment.adjusted_billable_hours = billable_hours;
+        existingAdjustment.reason = reason || 'Manual adjustment from billing management';
+        if (timesheetIdToUse) {
+          existingAdjustment.timesheet_id = timesheetIdToUse;
+        }
+        existingAdjustment.adjusted_by = adjustedBy;
+        existingAdjustment.updated_at = new Date();
+
+        await existingAdjustment.save();
+
+        res.json({
+          success: true,
+          message: 'Billing adjustment updated successfully',
+          data: {
+            adjustment_id: existingAdjustment._id,
+            original_billable_hours: originalBillableHours,
+            adjusted_billable_hours: billable_hours,
+            difference: billable_hours - originalBillableHours
+          }
+        });
+        return;
+      }
+
+      const newAdjustmentData: any = {
+        user_id: mongoose.Types.ObjectId.createFromHexString(user_id),
+        project_id: mongoose.Types.ObjectId.createFromHexString(project_id),
+        billing_period_start: new Date(start_date),
+        billing_period_end: new Date(end_date),
+        original_billable_hours: originalBillableHours,
+        adjusted_billable_hours: billable_hours,
+        reason: reason || 'Manual adjustment from billing management',
+        adjusted_by: adjustedBy
+      };
+
+      if (timesheetIdToUse) {
+        newAdjustmentData.timesheet_id = timesheetIdToUse;
+      }
+
+      const newAdjustment = new (BillingAdjustment as any)(newAdjustmentData);
+      await newAdjustment.save();
+
+      res.json({
+        success: true,
+        message: 'Billing adjustment created successfully',
+        data: {
+          adjustment_id: newAdjustment._id,
+          original_billable_hours: originalBillableHours,
+          adjusted_billable_hours: billable_hours,
+          difference: billable_hours - originalBillableHours
+        }
+      });
 
     } catch (error: any) {
       console.error('Error in updateBillableHours:', error);
@@ -765,6 +826,9 @@ export class ProjectBillingController {
         existingAdjustment.original_billable_hours = original_billable_hours;
         existingAdjustment.adjusted_billable_hours = adjusted_billable_hours;
         existingAdjustment.reason = reason;
+        if (req.body.timesheet_id) {
+          existingAdjustment.timesheet_id = mongoose.Types.ObjectId.createFromHexString(req.body.timesheet_id);
+        }
         existingAdjustment.adjusted_by = adjustedBy;
         existingAdjustment.updated_at = new Date();
 
@@ -782,7 +846,7 @@ export class ProjectBillingController {
         });
       } else {
         // Create new adjustment
-        const newAdjustment = new (BillingAdjustment as any)({
+        const newAdjustmentData: any = {
           user_id: mongoose.Types.ObjectId.createFromHexString(user_id),
           project_id: mongoose.Types.ObjectId.createFromHexString(project_id),
           billing_period_start: new Date(start_date),
@@ -791,7 +855,13 @@ export class ProjectBillingController {
           adjusted_billable_hours,
           reason,
           adjusted_by: adjustedBy
-        });
+        };
+
+        if (req.body.timesheet_id) {
+          newAdjustmentData.timesheet_id = mongoose.Types.ObjectId.createFromHexString(req.body.timesheet_id);
+        }
+
+        const newAdjustment = new (BillingAdjustment as any)(newAdjustmentData);
 
         await newAdjustment.save();
 

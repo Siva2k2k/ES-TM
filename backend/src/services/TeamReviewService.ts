@@ -66,7 +66,7 @@ export class TeamReviewService {
         ? { deleted_at: null }
         : { primary_manager_id: new mongoose.Types.ObjectId(approverId), deleted_at: null };
 
-      const projects = await Project.find(projectQuery)
+      const projects = await (Project as any).find(projectQuery)
         .populate('primary_manager_id', 'name email')
         .lean() as any[];
 
@@ -186,7 +186,7 @@ export class TeamReviewService {
     weekEnd.setHours(23, 59, 59, 999);
 
     // Find timesheet for current week
-    const timesheet = await Timesheet.findOne({
+      const timesheet = await (Timesheet as any).findOne({
       user_id: new mongoose.Types.ObjectId(userId),
       week_start_date: { $gte: weekStart, $lte: weekEnd },
       deleted_at: null
@@ -195,14 +195,14 @@ export class TeamReviewService {
     let currentWeekData;
     if (timesheet) {
       // Get project approval status
-      const projectApproval = await TimesheetProjectApproval.findOne({
+      const projectApproval = await (TimesheetProjectApproval as any).findOne({
         timesheet_id: timesheet._id,
         project_id: new mongoose.Types.ObjectId(projectId)
       }).lean();
 
       if (projectApproval) {
         // Count entries for this project
-        const entries = await TimeEntry.find({
+        const entries = await (TimeEntry as any).find({
           timesheet_id: timesheet._id,
           project_id: new mongoose.Types.ObjectId(projectId),
           deleted_at: null
