@@ -729,16 +729,31 @@ export class ProjectService {
         is_billable: taskData.is_billable ?? true
       };
 
-      const response = await backendApi.post<{ success: boolean; data: Task; message?: string }>(
-        `/projects/${taskData.project_id}/tasks`,
-        payload
-      );
+      const response: any = await backendApi.post(`/projects/${taskData.project_id}/tasks`, payload);
 
-      if (!response.success) {
-        return { error: response.message || 'Failed to create task' };
+      // Backend historically returned different shapes. Accept several patterns:
+      // 1) { success: true, data: Task }
+      // 2) { task: Task }
+      // 3) direct Task object
+      console.debug('ProjectService.createTask: raw response:', response);
+
+      if (response && typeof response === 'object') {
+        if (response.success && response.data) {
+          return { task: response.data };
+        }
+
+        if (response.task) {
+          return { task: response.task };
+        }
+
+        // If the response looks like a Task (has _id or id and project_id), return it
+        if (response._id || response.id) {
+          return { task: response as Task };
+        }
       }
 
-      return { task: response.data };
+      // If we reach here, treat as failure with best-effort message
+      return { error: (response && response.message) || 'Failed to create task' };
     } catch (error) {
       console.error('Error in createTask:', error);
       const errorMessage = error instanceof BackendApiError ? error.message : 'Failed to create task';
@@ -751,9 +766,39 @@ export class ProjectService {
    */
   static async updateTask(taskId: string, updates: Partial<Task>): Promise<{ success: boolean; error?: string }> {
     try {
+      // Sanitize updates to ensure backend receives valid ID formats
+      const payload: any = { ...updates } as any;
+      if ('assigned_to_user_id' in payload) {
+        const at = payload.assigned_to_user_id;
+        if (!at) {
+          payload.assigned_to_user_id = null;
+        } else if (typeof at === 'string') {
+          payload.assigned_to_user_id = at.trim() || null;
+        } else if (typeof at === 'object') {
+          // try to extract id fields
+          const candidate = (at as any)._id || (at as any).id || (at as any).user_id || null;
+          payload.assigned_to_user_id = candidate ? String(candidate) : null;
+        } else {
+          payload.assigned_to_user_id = String(at);
+        }
+      }
+
+      // Ensure estimated_hours is a number or null
+      if ('estimated_hours' in payload) {
+        const eh = payload.estimated_hours;
+        payload.estimated_hours = eh === undefined || eh === null || eh === '' ? null : Number(eh);
+      }
+
+      // Ensure is_billable is a boolean if present
+      if ('is_billable' in payload) {
+        payload.is_billable = !!payload.is_billable;
+      }
+
+      console.debug(`ProjectService.updateTask payload for ${taskId}:`, payload);
+
       const response = await backendApi.put<{ success: boolean; message?: string }>(
         `/projects/tasks/${taskId}`,
-        updates
+        payload
       );
 
       if (!response.success) {

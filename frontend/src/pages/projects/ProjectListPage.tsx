@@ -14,7 +14,10 @@ import {
   List,
   ChevronDown,
   ChevronUp
-  , X, Target, CheckSquare
+  , X, Target, CheckSquare,
+  Plus,
+  BarChart3,
+  Eye
 } from 'lucide-react';
 import { useRoleManager } from '../../hooks/useRoleManager';
 import { useAuth } from '../../store/contexts/AuthContext';
@@ -25,6 +28,8 @@ import { LoadingSpinner } from '../../components/ui/LoadingSpinner';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { DeleteActionModal } from '../../components/DeleteActionModal';
 import type { Project, Client, User, Task, ProjectWithClients } from '../../types';
+import { DeleteButton } from '@/components/common/DeleteButton';
+import TaskSlideOver from './components/TaskSlideOver';
 
 interface ProjectFormData {
   name: string;
@@ -91,6 +96,11 @@ export const ProjectListPage: React.FC = () => {
     user_name: string;
     user_email: string;
   }[]>([]);
+  // Task SlideOver state
+  const [showTaskSlide, setShowTaskSlide] = useState(false);
+  const [taskSlideProjectId, setTaskSlideProjectId] = useState<string | null>(null);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [taskSlideMembers, setTaskSlideMembers] = useState<any[]>([]);
   const [selectedMemberProject, setSelectedMemberProject] = useState<Project | null>(null);
   const [showAddMember, setShowAddMember] = useState(false);
   const [availableUsers, setAvailableUsers] = useState<User[]>([]);
@@ -136,7 +146,7 @@ export const ProjectListPage: React.FC = () => {
           const seen = new Set<string>();
           const deduped: typeof raw = [];
           for (const p of raw) {
-            if (!p || !p.id) continue;
+            if (!p?.id) continue;
             if (!seen.has(p.id)) {
               seen.add(p.id);
               deduped.push(p);
@@ -167,6 +177,38 @@ export const ProjectListPage: React.FC = () => {
     loadData();
   }, [refreshTrigger, canManageProjects, currentRole, currentUser]);
 
+  const loadAllProjects = async () => {
+    try{
+      setLoading(true);
+      setError(null);
+
+      const projectsResult = await ProjectService.getAllProjects();;
+
+      if (projectsResult.error) {
+        setError(projectsResult.error);
+        setProjects([]);
+      } else {
+        const raw = projectsResult.projects || [];
+        const seen = new Set<string>();
+        const deduped: typeof raw = [];
+        for (const p of raw) {
+          if (!p || !p.id) continue;
+          if (!seen.has(p.id)) {
+            seen.add(p.id);
+            deduped.push(p);
+          }
+        }
+        setProjects(deduped);
+      }
+    } catch (err) {
+      console.error('Error loading projects:', err);
+      setError('Failed to load project data');
+      setProjects([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -194,6 +236,34 @@ export const ProjectListPage: React.FC = () => {
     } catch (err) {
       showError('Error creating project');
       console.error('Error creating project:', err);
+    }
+  };
+
+  const handleDeleteProject = async (entityType: string, entityId: string, deleteType: 'soft' | 'hard') => {
+    try {
+      // For now, use the existing ProjectService delete method
+      // This will be enhanced when we implement the full DeleteService
+      await ProjectService.deleteProject(entityId);
+      
+      if (deleteType === 'soft') {
+        showSuccess('Project moved to trash successfully');
+      } else {
+        showSuccess('Project permanently deleted');
+      }
+      
+      // Refresh the projects list
+      await loadAllProjects();
+      
+      // Close expanded view if this project was expanded
+      setExpandedProjects(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(entityId);
+        return newSet;
+      });
+      
+    } catch (error) {
+      console.error('Delete project error:', error);
+      showError(`Failed to delete project: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -317,6 +387,25 @@ export const ProjectListPage: React.FC = () => {
     } catch (err) {
       console.error('Error loading users:', err);
     }
+  };
+
+  const openTaskSlideForProject = async (projectId: string, task?: Task | null) => {
+    setTaskSlideProjectId(projectId);
+    setEditingTask(task || null);
+    // load users and project members so Assigned To shows project members first
+    await loadAvailableUsers();
+    try {
+      const membersRes = await ProjectService.getProjectMembers(projectId);
+      if (!membersRes.error) {
+        setTaskSlideMembers(membersRes.members || []);
+      } else {
+        setTaskSlideMembers([]);
+      }
+    } catch (err) {
+      console.error('Error loading project members for task slide:', err);
+      setTaskSlideMembers([]);
+    }
+    setShowTaskSlide(true);
   };
 
   const resetProjectForm = () => {
@@ -471,6 +560,42 @@ export const ProjectListPage: React.FC = () => {
           {/* Overview Tab */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
+
+              {/* Quick Actions */}
+                <div className="bg-white rounded-lg shadow p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+                  <div className="flex flex-wrap gap-4">
+                    {currentRole === 'management' && (
+                      <button 
+                        onClick={() => setActiveTab('create')}
+                        className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create New Project
+                      </button>
+                    )}
+                    
+                    <button 
+                      onClick={() => setActiveTab('analytics')}
+                      className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                    >
+                      <BarChart3 className="h-4 w-4 mr-2" />
+                      View Analytics
+                    </button>
+
+                    {selectedProject && (
+                      <button 
+                        onClick={() => openTaskSlideForProject(selectedProject.id, null)}
+                        className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                      >
+                        <CheckSquare className="h-4 w-4 mr-2" />
+                        Add Task to {selectedProject.name}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+              
               {/* Search and Filters */}
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <div className="flex flex-col md:flex-row gap-4">
@@ -516,8 +641,8 @@ export const ProjectListPage: React.FC = () => {
                   </div>
                 </div>
               </div>
-
-              {/* Projects Grid */}
+            
+            {/* Projects Grid */}
               {filteredProjects.length === 0 ? (
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
                   <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -705,6 +830,9 @@ export const ProjectListPage: React.FC = () => {
                                       <div key={task.id} className="p-2 bg-gray-50 rounded">
                                         <p className="text-sm font-medium text-gray-900">{task.name}</p>
                                         <p className="text-xs text-gray-500">{task.status} • {task.estimated_hours || 0}h</p>
+                                        <div className="mt-2 flex gap-2">
+                                          <button onClick={() => openTaskSlideForProject(project.id, task)} className="text-indigo-600 text-sm">Edit</button>
+                                        </div>
                                       </div>
                                     ))}
                                     {(projectTasks[project.id] || []).length === 0 && (
@@ -786,9 +914,29 @@ export const ProjectListPage: React.FC = () => {
                     ))}
                   </div>
                 )
-              )}
+              )} 
+
+              
             </div>
           )}
+
+          {/* Task SlideOver for Add/Edit */}
+          <TaskSlideOver
+            open={showTaskSlide}
+            onClose={() => { setShowTaskSlide(false); setTaskSlideProjectId(null); setEditingTask(null); }}
+            projectId={taskSlideProjectId || ''}
+            task={editingTask}
+            members={taskSlideMembers}
+            onSaved={async () => {
+              // refresh tasks for the active project
+              if (taskSlideProjectId) {
+                await loadProjectTasks(taskSlideProjectId);
+              }
+            }}
+            onDeleted={async (taskId) => {
+              if (taskSlideProjectId) await loadProjectTasks(taskSlideProjectId);
+            }}
+          />
 
           {/* Create Project Tab */}
           {activeTab === 'create' && (
