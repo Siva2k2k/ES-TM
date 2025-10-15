@@ -19,6 +19,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../store/contexts/AuthContext';
 import { TimesheetApprovalService } from '../../services/TimesheetApprovalService';
 import ProjectService from '../../services/ProjectService';
+import { TeamReviewService } from '../../services/TeamReviewService';
 import { showSuccess, showError } from '../../utils/toast';
 import { useModal } from '../../hooks/useModal';
 import { Button } from '../../components/ui/Button';
@@ -46,6 +47,8 @@ export const EmployeeTimesheetPage: React.FC = () => {
   const [weekStartDate, setWeekStartDate] = useState(getCurrentWeekMonday());
   const [timesheets, setTimesheets] = useState<Timesheet[]>([]);
   const [selectedTimesheet, setSelectedTimesheet] = useState<Timesheet | null>(null);
+  const [editingProjectApprovals, setEditingProjectApprovals] = useState<any[] | null>(null);
+  const [editingEntries, setEditingEntries] = useState<any[] | null>(null);
   const [projects, setProjects] = useState<Array<{ id: string; name: string; is_active: boolean; color?: string }>>([]);
   const [tasks, setTasks] = useState<Array<{ id: string; name: string; project_id: string }>>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -123,6 +126,19 @@ export const EmployeeTimesheetPage: React.FC = () => {
   const handleEdit = (timesheet: Timesheet) => {
     setSelectedTimesheet(timesheet);
     editModal.open();
+
+    // fetch full timesheet with approval history to determine per-project locks
+    (async () => {
+      try {
+        const detail = await TeamReviewService.getTimesheetWithHistory(timesheet.id);
+        setEditingProjectApprovals(detail.timesheet?.project_approvals || []);
+        setEditingEntries(detail.entries || timesheet.entries || []);
+      } catch (err) {
+        console.error('Failed to load timesheet history for edit', err);
+        setEditingProjectApprovals([]);
+        setEditingEntries(timesheet.entries || []);
+      }
+    })();
   };
 
   const handleDelete = async (timesheet: Timesheet) => {

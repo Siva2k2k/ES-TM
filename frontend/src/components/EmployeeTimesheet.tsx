@@ -1633,14 +1633,25 @@ export const EmployeeTimesheet: React.FC<EmployeeTimesheetProps> = ({ viewMode: 
   const renderTimesheetForm = () => {
     const availableProjects = projects.filter(p => p.status === 'active');
     const availableTasks = newEntry.project_id
-      ? tasks.filter(t => t.project_id === newEntry.project_id)
+      ? tasks
+          .filter(t => t.project_id === newEntry.project_id)
+          .filter(t => {
+            // If current user is an employee, only show tasks assigned to them
+            if (currentUser && currentUserRole === 'employee') {
+              const assigned = (t as any).assigned_to_user_id;
+              // normalize assigned id which might be an object
+              const assignedId = typeof assigned === 'string' ? assigned : (assigned && (assigned.id || assigned._id)) || null;
+              return assignedId === currentUser.id;
+            }
+            return true;
+          })
       : [];
 
     console.log(`🎯 Task dropdown debug:`);
     console.log(`   Selected project ID: ${newEntry.project_id}`);
     console.log(`   Total tasks in state: ${tasks.length}`);
-    console.log(`   Available tasks for this project: ${availableTasks.length}`);
-    console.log(`   Available tasks:`, availableTasks.map(t => ({ id: t.id, name: t.name })));
+  console.log(`   Available tasks for this project: ${availableTasks.length}`);
+  console.log(`   Available tasks:`, availableTasks.map(t => ({ id: t.id, name: t.name, assigned_to: (t as any).assigned_to_user_id })));
 
     const selectedProject = projects.find(p => p.id === newEntry.project_id);
     const currentWeekMonday = getMonday(new Date());

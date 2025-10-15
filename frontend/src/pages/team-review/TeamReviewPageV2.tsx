@@ -4,7 +4,7 @@
  * Supports Management, Manager, and Lead roles
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileCheck, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../store/contexts/AuthContext';
@@ -16,6 +16,7 @@ import {
   ProjectWeekCard,
   ProjectWeekApprovalModal
 } from './components';
+import UserRejectModal from './components/UserRejectModal';
 import type {
   ProjectWeekFilters,
   ProjectWeekGroup,
@@ -26,7 +27,7 @@ type TabStatus = 'pending' | 'approved' | 'rejected';
 
 export const TeamReviewPageV2: React.FC = () => {
   const navigate = useNavigate();
-  const { currentUser, currentUserRole } = useAuth();
+  const { currentUserRole } = useAuth();
   const roleManager = useRoleManager();
 
   // State
@@ -59,16 +60,8 @@ export const TeamReviewPageV2: React.FC = () => {
   // Check permissions
   const canApprove = roleManager.canApproveTimesheets();
 
-  useEffect(() => {
-    if (!canApprove) {
-      navigate('/dashboard');
-      return;
-    }
-    loadProjectWeeks();
-  }, [canApprove, navigate, filters]);
-
-  // Load project weeks
-  const loadProjectWeeks = async () => {
+  // Load project weeks (memoized)
+  const loadProjectWeeks = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -80,7 +73,15 @@ export const TeamReviewPageV2: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters]);
+
+  useEffect(() => {
+    if (!canApprove) {
+      navigate('/dashboard');
+      return;
+    }
+    loadProjectWeeks();
+  }, [canApprove, navigate, filters, loadProjectWeeks]);
 
   // Handle tab change
   const handleTabChange = (tab: TabStatus) => {
@@ -124,6 +125,88 @@ export const TeamReviewPageV2: React.FC = () => {
       projectWeek,
       action: 'reject'
     });
+  };
+
+  // Per-user approve/reject handlers (called from ProjectWeekCard -> UserTimesheetDetails)
+  const handleApproveUser = async (userId: string, projectId: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      // userId corresponds to the member's user id; need to find their timesheet id from current data
+      const projectWeek = data?.project_weeks.find(pw => pw.project_id === projectId && pw.users.some(u => u.user_id === userId));
+      const user = projectWeek?.users.find(u => u.user_id === userId);
+      if (!user) throw new Error('Timesheet not found for the user');
+
+      await TeamReviewService.approveTimesheetForProject({
+        timesheet_id: user.timesheet_id,
+        project_id: projectId,
+        action: 'approve'
+      });
+
+      setSuccess(`Approved ${user.user_name}'s timesheet for ${projectWeek?.project_name}`);
+      setTimeout(() => setSuccess(null), 4000);
+
+      // Refresh the project weeks to reflect updated approval state
+      await loadProjectWeeks();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to approve user timesheet');
+      setTimeout(() => setError(null), 5000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRejectUser = async (userId: string, projectId: string) => {
+    // Open a modal to collect rejection reason. We'll set modal state below.
+    const projectWeek = data?.project_weeks.find(pw => pw.project_id === projectId && pw.users.some(u => u.user_id === userId));
+    const user = projectWeek?.users.find(u => u.user_id === userId);
+    if (!user) {
+      setError('Timesheet not found for the user');
+      setTimeout(() => setError(null), 5000);
+      return;
+    }
+
+    setUserRejectState({ isOpen: true, userId: user.user_id, userName: user.user_name, projectId, projectName: projectWeek?.project_name || '' });
+  };
+
+  // State for per-user reject modal
+  const [userRejectState, setUserRejectState] = useState<{
+    isOpen: boolean;
+    userId?: string;
+    userName?: string;
+    projectId?: string;
+    projectName?: string;
+  }>({ isOpen: false });
+
+  const handleUserRejectConfirm = async (reason: string) => {
+    if (!userRejectState.userId || !userRejectState.projectId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      // find timesheet id
+      const projectWeek = data?.project_weeks.find(pw => pw.project_id === userRejectState.projectId && pw.users.some(u => u.user_id === userRejectState.userId));
+      const user = projectWeek?.users.find(u => u.user_id === userRejectState.userId);
+      if (!user) throw new Error('Timesheet not found for the user');
+
+      await TeamReviewService.rejectTimesheetForProject({
+        timesheet_id: user.timesheet_id,
+        project_id: userRejectState.projectId,
+        reason,
+        action: 'reject'
+      });
+
+      setSuccess(`Rejected ${user.user_name}'s timesheet for ${projectWeek?.project_name}`);
+      setTimeout(() => setSuccess(null), 4000);
+
+      // Close modal and refresh
+      setUserRejectState({ isOpen: false });
+      await loadProjectWeeks();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reject user timesheet');
+      setTimeout(() => setError(null), 5000);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleModalConfirm = async (reason?: string) => {
@@ -175,12 +258,7 @@ export const TeamReviewPageV2: React.FC = () => {
     return Array.from(projectMap.values());
   }, [data]);
 
-  // Tab counts
-  const tabCounts = {
-    pending: data?.pagination.total || 0,
-    approved: 0,
-    rejected: 0
-  };
+  // (tabCounts not used) - remove to satisfy linter
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
@@ -287,6 +365,9 @@ export const TeamReviewPageV2: React.FC = () => {
                 projectWeek={projectWeek}
                 onApprove={handleApproveClick}
                 onReject={handleRejectClick}
+                onApproveUser={handleApproveUser}
+                onRejectUser={handleRejectUser}
+                canApprove={canApprove}
                 isLoading={loading}
               />
             ))}
@@ -311,6 +392,14 @@ export const TeamReviewPageV2: React.FC = () => {
         projectWeek={modalState.projectWeek}
         action={modalState.action}
         onConfirm={handleModalConfirm}
+        isLoading={loading}
+      />
+      <UserRejectModal
+        isOpen={userRejectState.isOpen}
+        onClose={() => setUserRejectState({ isOpen: false })}
+        userName={userRejectState.userName || null}
+        projectName={userRejectState.projectName || null}
+        onConfirm={handleUserRejectConfirm}
         isLoading={loading}
       />
     </div>

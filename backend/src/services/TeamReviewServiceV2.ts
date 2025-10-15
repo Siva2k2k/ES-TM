@@ -57,7 +57,7 @@ export class TeamReviewServiceV2 {
       // Get projects based on role
       const projectQuery = await this.buildProjectQuery(approverId, approverRole, project_id, search);
       const projects = await (Project as any).find(projectQuery)
-        .populate('primary_manager_id', 'name email')
+        .populate('primary_manager_id', 'full_name email')
         .lean() as any[];
 
       if (projects.length === 0) {
@@ -75,7 +75,7 @@ export class TeamReviewServiceV2 {
         week_start_date: { $gte: dateStart, $lte: dateEnd },
         deleted_at: null
       })
-        .populate('user_id', 'name email role')
+        .populate('user_id', 'full_name email role')
         .lean() as any[];
 
       if (timesheets.length === 0) {
@@ -122,8 +122,8 @@ export class TeamReviewServiceV2 {
         const leadMember = projectMembersForProject.find(pm => pm.project_role === 'lead');
         let leadInfo = null;
         if (leadMember) {
-          const leadUser = await (User as any).findById(leadMember.user_id).select('name').lean() as any;
-          leadInfo = { id: leadMember.user_id.toString(), name: leadUser?.name || 'Unknown' };
+          const leadUser = await (User as any).findById(leadMember.user_id).select('full_name').lean() as any;
+          leadInfo = { id: leadMember.user_id.toString(), name: leadUser?.full_name || 'Unknown' };
         }
 
         // Group timesheets by week for this project
@@ -148,8 +148,9 @@ export class TeamReviewServiceV2 {
         // Build project-week group for each week
         for (const [weekKey, weekTimesheets] of weekGroups.entries()) {
           const firstTimesheet = weekTimesheets[0];
-          const weekStart = firstTimesheet.week_start_date;
-          const weekEnd = firstTimesheet.week_end_date;
+          // Ensure week dates exist
+          const weekStart = firstTimesheet.week_start_date ? new Date(firstTimesheet.week_start_date) : new Date();
+          const weekEnd = firstTimesheet.week_end_date ? new Date(firstTimesheet.week_end_date) : new Date();
 
           const projectWeekKey = `${project._id}_${weekKey}`;
 
@@ -173,6 +174,12 @@ export class TeamReviewServiceV2 {
             );
             if (!approval) continue;
 
+            // Skip if user_id is null or not populated
+            if (!ts.user_id || !ts.user_id._id) {
+              console.warn(`Skipping timesheet ${ts._id} - user_id is null or not populated`);
+              continue;
+            }
+
             // Check if user is a member of this project
             const memberInfo = projectMembersForProject.find(
               pm => pm.user_id.toString() === ts.user_id._id.toString()
@@ -185,23 +192,23 @@ export class TeamReviewServiceV2 {
                    e.project_id.toString() === project._id.toString()
             );
 
-            const userHours = userEntries.reduce((sum, e) => sum + (e.hours_worked || 0), 0);
+            const userHours = userEntries.reduce((sum, e) => sum + (e.hours || 0), 0);
 
             const entryDetails: TimeEntryDetail[] = userEntries.map(e => ({
               entry_id: e._id.toString(),
               date: e.date.toISOString(),
               task_id: e.task_id?._id?.toString(),
               task_name: e.task_id?.name || e.custom_task_description || 'Unnamed Task',
-              hours: e.hours_worked || 0,
+              hours: e.hours || 0,
               description: e.description,
               is_billable: e.is_billable
             }));
 
             users.push({
               user_id: ts.user_id._id.toString(),
-              user_name: ts.user_id.name,
-              user_email: ts.user_id.email,
-              user_role: ts.user_id.role,
+              user_name: ts.user_id.full_name || 'Unknown',
+              user_email: ts.user_id.email || undefined,
+              user_role: ts.user_id.role || undefined,
               project_role: memberInfo.project_role,
               timesheet_id: ts._id.toString(),
               timesheet_status: ts.status,
@@ -227,8 +234,8 @@ export class TeamReviewServiceV2 {
             week_start: weekStart.toISOString(),
             week_end: weekEnd.toISOString(),
             week_label: this.formatWeekLabel(weekStart, weekEnd),
-            manager_id: project.primary_manager_id._id.toString(),
-            manager_name: project.primary_manager_id.name,
+            manager_id: project.primary_manager_id?._id ? project.primary_manager_id._id.toString() : undefined,
+            manager_name: project.primary_manager_id?.full_name || 'Unknown',
             lead_id: leadInfo?.id,
             lead_name: leadInfo?.name,
             approval_status: approvalStatus,
@@ -238,9 +245,9 @@ export class TeamReviewServiceV2 {
             total_entries: totalEntries,
             rejected_reason: rejectedApproval?.manager_rejection_reason,
             rejected_by: rejectedApproval?.rejected_by?.toString(),
-            rejected_at: rejectedApproval?.updated_at?.toISOString(),
+            rejected_at: rejectedApproval && rejectedApproval.updated_at ? new Date(rejectedApproval.updated_at).toISOString() : undefined,
             approved_by: approvedApproval?.approved_by?.toString(),
-            approved_at: approvedApproval?.updated_at?.toISOString()
+            approved_at: approvedApproval && approvedApproval.updated_at ? new Date(approvedApproval.updated_at).toISOString() : undefined
           });
         }
       }
@@ -264,8 +271,18 @@ export class TeamReviewServiceV2 {
       };
 
     } catch (error) {
-      logger.error('Error fetching project-week groups:', error);
-      throw new Error('Failed to fetch project-week groups');
+      logger.error('Error fetching project-week groups:', {
+        message: error.message,
+        stack: error.stack,
+        data: {
+          filters,
+          approverId,
+          approverRole
+        }
+      });
+
+      // Re-throw original error so controller sees the real reason
+      throw error;
     }
   }
 

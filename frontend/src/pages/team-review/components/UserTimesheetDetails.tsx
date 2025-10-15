@@ -11,12 +11,18 @@ interface UserTimesheetDetailsProps {
   user: ProjectWeekUser;
   isExpanded: boolean;
   onToggle: () => void;
+  onApproveUser?: () => void;
+  onRejectUser?: () => void;
+  canApprove?: boolean;
 }
 
 export const UserTimesheetDetails: React.FC<UserTimesheetDetailsProps> = ({
   user,
   isExpanded,
-  onToggle
+  onToggle,
+  onApproveUser,
+  onRejectUser,
+  canApprove = false
 }) => {
   const getStatusIcon = () => {
     switch (user.approval_status) {
@@ -75,6 +81,25 @@ export const UserTimesheetDetails: React.FC<UserTimesheetDetailsProps> = ({
             <div className="flex items-center gap-2">
               <span className="font-medium text-gray-900">{user.user_name}</span>
               {getStatusBadge()}
+              {/* Per-user Approve/Reject buttons */}
+              {user.approval_status === 'pending' && canApprove && (
+                <div className="ml-3 flex items-center gap-2">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onApproveUser && onApproveUser(); }}
+                    className="inline-flex items-center gap-2 px-3 py-1 bg-green-600 text-white rounded-md text-sm hover:bg-green-700"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    Approve
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onRejectUser && onRejectUser(); }}
+                    className="inline-flex items-center gap-2 px-3 py-1 bg-red-600 text-white rounded-md text-sm hover:bg-red-700"
+                  >
+                    <XCircle className="w-4 h-4" />
+                    Reject
+                  </button>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
               <span>{user.user_email}</span>

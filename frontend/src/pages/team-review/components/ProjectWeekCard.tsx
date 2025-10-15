@@ -12,6 +12,9 @@ interface ProjectWeekCardProps {
   projectWeek: ProjectWeekGroup;
   onApprove: (projectWeek: ProjectWeekGroup) => void;
   onReject: (projectWeek: ProjectWeekGroup) => void;
+  onApproveUser?: (userId: string, projectWeekId: string) => void;
+  onRejectUser?: (userId: string, projectWeekId: string) => void;
+  canApprove?: boolean;
   isLoading?: boolean;
 }
 
@@ -19,6 +22,9 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
   projectWeek,
   onApprove,
   onReject,
+  onApproveUser,
+  onRejectUser,
+  canApprove = false,
   isLoading = false
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -61,6 +67,10 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
 
   const pendingUsers = projectWeek.users.filter(u => u.approval_status === 'pending');
   const hasPendingApprovals = pendingUsers.length > 0;
+  // Show total_hours if provided, otherwise sum per-user totals as a fallback
+  const displayHours = (typeof projectWeek.total_hours === 'number' && projectWeek.total_hours > 0)
+    ? projectWeek.total_hours
+    : projectWeek.users.reduce((sum, u) => sum + (u.total_hours_for_project || 0), 0);
 
   return (
     <div className={`rounded-lg border-2 overflow-hidden transition-all ${getStatusColor()}`}>
@@ -132,7 +142,7 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
               <span className="text-sm text-gray-600">Hours</span>
             </div>
             <div className="text-2xl font-bold text-gray-900">
-              {projectWeek.total_hours.toFixed(1)}
+              {displayHours.toFixed(1)}
             </div>
           </div>
 
@@ -201,6 +211,9 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
                   user={user}
                   isExpanded={expandedUsers.has(user.user_id)}
                   onToggle={() => toggleUserExpansion(user.user_id)}
+                  onApproveUser={() => onApproveUser && onApproveUser(user.user_id, projectWeek.project_id)}
+                  onRejectUser={() => onRejectUser && onRejectUser(user.user_id, projectWeek.project_id)}
+                  canApprove={!!canApprove}
                 />
               ))}
             </div>

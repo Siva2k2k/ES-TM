@@ -15,8 +15,8 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { Controller } from 'react-hook-form';
-import { Calendar, Plus, AlertTriangle, CheckCircle, Save, Send } from 'lucide-react';
+import { Controller, type Control } from 'react-hook-form';
+import { Calendar, Plus, AlertTriangle, Save, Send, Lock } from 'lucide-react';
 import { useTimesheetForm } from '../../hooks/useTimesheetForm';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -27,7 +27,16 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '../ui/Card
 import { Alert, AlertTitle, AlertDescription } from '../ui/Alert';
 import { Badge } from '../ui/Badge';
 import { formatDate, formatDuration } from '../../utils/formatting';
+import { cn } from '../../utils/cn';
 import type { TimeEntry } from '../../types/timesheet.schemas';
+
+// Project approval type used to determine per-project locking
+export type ProjectApproval = {
+  project_id: string;
+  manager_status: 'approved' | 'rejected' | 'pending' | 'not_required';
+  manager_approved_at?: string | Date;
+  manager_name?: string;
+};
 
 export interface TimesheetFormProps {
   /** Initial week start date (defaults to current week Monday) */
@@ -41,6 +50,13 @@ export interface TimesheetFormProps {
   projects?: Array<{ id: string; name: string; is_active: boolean }>;
   /** Available tasks for selection */
   tasks?: Array<{ id: string; name: string; project_id: string }>;
+  /** Optional project approvals (used to lock entries per-project) */
+  projectApprovals?: Array<{
+    project_id: string;
+    manager_status: 'approved' | 'rejected' | 'pending' | 'not_required';
+    manager_approved_at?: string | Date;
+    manager_name?: string;
+  }>;
   /** Callback when form is successfully submitted */
   onSuccess?: (timesheetId: string) => void;
   /** Callback when form is cancelled */
@@ -54,6 +70,7 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
   initialData,
   projects = [],
   tasks = [],
+  projectApprovals = [],
   onSuccess,
   onCancel
 }) => {
@@ -65,11 +82,10 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
     submitTimesheet,
     addEntry,
     removeEntry,
-    updateEntry,
     dailyTotals,
     weeklyTotal,
     isSubmitting,
-    error
+    validationWarnings
   } = useTimesheetForm({
     defaultValues: initialData || {
       week_start_date: initialWeekStartDate || getCurrentWeekMonday(),
@@ -77,6 +93,14 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
     },
     onSuccess
   });
+  // Build quick lookup map for project approvals
+  const projectApprovalMap = useMemo<Record<string, ProjectApproval>>(() => {
+    const map: Record<string, ProjectApproval> = {};
+    (projectApprovals || []).forEach((p) => {
+      map[p.project_id] = p as ProjectApproval;
+    });
+    return map;
+  }, [projectApprovals]);
 
   const { control, watch, formState: { errors } } = form;
   const entries = watch('entries') || [];
@@ -189,11 +213,15 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
 
       <CardContent className="space-y-6">
         {/* Error Display */}
-        {error && (
-          <Alert variant="destructive">
+        {validationWarnings && validationWarnings.length > 0 && (
+          <Alert variant="warning">
             <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
+            <AlertTitle>Validation</AlertTitle>
+            <AlertDescription>
+              <ul className="list-disc list-inside space-y-1">
+                {validationWarnings.map((w, i) => <li key={i}>{w}</li>)}
+              </ul>
+            </AlertDescription>
           </Alert>
         )}
 
@@ -284,12 +312,12 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
                 index={index}
                 isExpanded={expandedEntry === index}
                 onToggle={() => setExpandedEntry(expandedEntry === index ? null : index)}
-                onUpdate={(updated) => updateEntry(index, updated)}
                 onRemove={() => removeEntry(index)}
                 tasks={availableTasks}
                 projects={activeProjects}
                 control={control}
                 errors={errors.entries?.[index]}
+                projectApprovalsMap={projectApprovalMap}
               />
             ))}
           </div>
@@ -337,12 +365,12 @@ interface TimesheetEntryRowProps {
   index: number;
   isExpanded: boolean;
   onToggle: () => void;
-  onUpdate: (entry: TimeEntry) => void;
   onRemove: () => void;
   tasks: SelectOption[];
   projects: SelectOption[];
-  control: any;
-  errors?: any;
+  control: unknown;
+  errors?: unknown;
+  projectApprovalsMap?: Record<string, ProjectApproval>;
 }
 
 const TimesheetEntryRow: React.FC<TimesheetEntryRowProps> = ({
@@ -350,7 +378,6 @@ const TimesheetEntryRow: React.FC<TimesheetEntryRowProps> = ({
   index,
   isExpanded,
   onToggle,
-  onUpdate,
   onRemove,
   tasks,
   projects,
@@ -359,8 +386,11 @@ const TimesheetEntryRow: React.FC<TimesheetEntryRowProps> = ({
 }) => {
   const projectName = projects.find(p => p.value === entry.project_id)?.label || 'Unknown';
 
+  const projectApproval = (projectApprovalsMap || {})[entry.project_id];
+  const isProjectApproved = projectApproval && projectApproval.manager_status === 'approved';
+
   return (
-    <div className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+    <div className={cn('border rounded-lg p-4 hover:shadow-md transition-shadow', isProjectApproved && 'opacity-80')}>
       <div className="flex items-center justify-between cursor-pointer" onClick={onToggle}>
         <div className="flex-1">
           <div className="flex items-center gap-3">
@@ -373,75 +403,106 @@ const TimesheetEntryRow: React.FC<TimesheetEntryRowProps> = ({
             <p className="text-sm text-gray-600 mt-1 truncate">{entry.description}</p>
           )}
         </div>
-        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onRemove(); }}>
-          Remove
-        </Button>
+        {!isProjectApproved ? (
+          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onRemove(); }}>
+            Remove
+          </Button>
+        ) : (
+          <div className="flex items-center text-sm text-gray-500">
+            <Lock className="w-4 h-4 mr-1" />
+            <span>Locked</span>
+          </div>
+        )}
       </div>
 
       {isExpanded && (
         <div className="mt-4 pt-4 border-t space-y-4">
-          <Controller
-            name={`entries.${index}.task_id`}
-            control={control}
-            render={({ field }) => (
-              <Select
-                {...field}
-                label="Task"
-                options={tasks}
-                error={errors?.task_id?.message}
+          {/* If project is approved, show read-only values */}
+          {isProjectApproved ? (
+            <div className="space-y-2">
+              <div>
+                <p className="text-xs text-gray-500 uppercase font-medium mb-1">Task</p>
+                <p className="text-sm text-gray-900">{tasks.find(t => t.value === entry.task_id)?.label || '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase font-medium mb-1">Date</p>
+                <p className="text-sm font-medium">{entry.date}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase font-medium mb-1">Hours</p>
+                <p className="text-sm font-medium">{entry.hours}h</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase font-medium mb-1">Description</p>
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">{entry.description}</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <Controller
+                name={`entries.${index}.task_id`}
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    {...field}
+                    label="Task"
+                    options={tasks}
+                    error={errors?.task_id?.message}
+                  />
+                )}
               />
-            )}
-          />
-          <Controller
-            name={`entries.${index}.date`}
-            control={control}
-            render={({ field }) => (
-              <Input
-                {...field}
-                type="date"
-                label="Date"
-                error={errors?.date?.message}
+              <Controller
+                name={`entries.${index}.date`}
+                control={control}
+                render={({ field }) => (
+                  <Input
+                    {...field}
+                    type="date"
+                    label="Date"
+                    error={errors?.date?.message}
+                  />
+                )}
               />
-            )}
-          />
-          <Controller
-            name={`entries.${index}.hours`}
-            control={control}
-            render={({ field }) => (
-              <Input
-                {...field}
-                type="number"
-                step="0.5"
-                min="0.5"
-                max="24"
-                label="Hours"
-                error={errors?.hours?.message}
+              <Controller
+                name={`entries.${index}.hours`}
+                control={control}
+                render={({ field }) => (
+                  <Input
+                    {...field}
+                    type="number"
+                    step="0.5"
+                    min="0.5"
+                    max="24"
+                    label="Hours"
+                    error={errors?.hours?.message}
+                  />
+                )}
               />
-            )}
-          />
-          <Controller
-            name={`entries.${index}.description`}
-            control={control}
-            render={({ field }) => (
-              <Textarea
-                {...field}
-                label="Description"
-                placeholder="What did you work on?"
-                error={errors?.description?.message}
+              <Controller
+                name={`entries.${index}.description`}
+                control={control}
+                render={({ field }) => (
+                  <Textarea
+                    {...field}
+                    label="Description"
+                    placeholder="What did you work on?"
+                    error={errors?.description?.message}
+                  />
+                )}
               />
-            )}
-          />
-          <Controller
-            name={`entries.${index}.is_billable`}
-            control={control}
-            render={({ field }) => (
-              <Checkbox
-                checked={field.value}
-                onCheckedChange={field.onChange}
-                label="Billable"
+              <Controller
+                name={`entries.${index}.is_billable`}
+                control={control}
+                render={({ field }) => (
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    label="Billable"
+                  />
+                )}
               />
-            )}
-          />
+            </>
+          )}
         </div>
       )}
     </div>
