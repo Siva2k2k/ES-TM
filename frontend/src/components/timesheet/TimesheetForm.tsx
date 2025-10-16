@@ -443,8 +443,14 @@ interface TimesheetEntryRowProps {
   onRemove: () => void;
   tasks: SelectOption[];
   projects: SelectOption[];
-  control: unknown;
-  errors?: unknown;
+  control: Control<any>;
+  errors?: {
+    task_id?: { message?: string };
+    date?: { message?: string };
+    hours?: { message?: string };
+    description?: { message?: string };
+    is_billable?: { message?: string };
+  };
   projectApprovalsMap?: Record<string, ProjectApproval>;
 }
 
