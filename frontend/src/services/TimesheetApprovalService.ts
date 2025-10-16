@@ -209,6 +209,20 @@ export class TimesheetApprovalService {
     }
   }
 
+  // Wrapper used by EmployeeTimesheetPage
+  static async getEmployeeTimesheets(userId: string): Promise<any[]> {
+    try {
+      const response = await backendApi.get(`/timesheets/user?userId=${userId}`);
+      if (response.success && response.data) {
+        return response.data;
+      }
+      return [];
+    } catch (error) {
+      console.error('Failed to fetch employee timesheets:', error);
+      return [];
+    }
+  }
+
   // Get timesheets for approval (Manager/Management view)
   static async getTimesheetsForApproval(
     approverRole: UserRole,

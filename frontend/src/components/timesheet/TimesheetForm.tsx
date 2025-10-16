@@ -33,9 +33,24 @@ import type { TimeEntry } from '../../types/timesheet.schemas';
 // Project approval type used to determine per-project locking
 export type ProjectApproval = {
   project_id: string;
+  project_name?: string;
+  // lead fields (optional)
+  lead_id?: string;
+  lead_name?: string;
+  lead_status?: 'approved' | 'rejected' | 'pending' | 'not_required';
+  lead_approved_at?: string | Date;
+  lead_rejection_reason?: string;
+
+  // manager fields
+  manager_id?: string;
+  manager_name?: string;
   manager_status: 'approved' | 'rejected' | 'pending' | 'not_required';
   manager_approved_at?: string | Date;
-  manager_name?: string;
+  manager_rejection_reason?: string;
+
+  // project time tracking
+  entries_count?: number;
+  total_hours?: number;
 };
 
 export interface TimesheetFormProps {
@@ -51,12 +66,7 @@ export interface TimesheetFormProps {
   /** Available tasks for selection */
   tasks?: Array<{ id: string; name: string; project_id: string }>;
   /** Optional project approvals (used to lock entries per-project) */
-  projectApprovals?: Array<{
-    project_id: string;
-    manager_status: 'approved' | 'rejected' | 'pending' | 'not_required';
-    manager_approved_at?: string | Date;
-    manager_name?: string;
-  }>;
+  projectApprovals?: ProjectApproval[];
   /** Callback when form is successfully submitted */
   onSuccess?: (timesheetId: string) => void;
   /** Callback when form is cancelled */
@@ -151,7 +161,7 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
   const handleSubmit = async (status: 'draft' | 'submitted') => {
     try {
       await submitTimesheet(status);
-    } catch (err) {
+    } catch {
       // Error is handled by useTimesheetForm
     }
   };
@@ -212,6 +222,31 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
       </CardHeader>
 
       <CardContent className="space-y-6">
+        {/* Project approval summary (if provided) */}
+        {projectApprovals && projectApprovals.length > 0 && (
+          <div className="mb-4">
+            <p className="text-sm font-medium text-gray-700 mb-2">Project approval summary</p>
+            <div className="space-y-2">
+              {projectApprovals.map((pa) => (
+                <div key={pa.project_id} className="px-3 py-2 bg-gray-50 rounded-lg border flex items-start justify-between">
+                  <div>
+                    <div className="font-medium">{pa.project_name || 'Unknown Project'}</div>
+                    <div className="text-sm text-gray-600">
+                      {pa.manager_name ? `${pa.manager_name} — ` : ''}
+                      {pa.manager_status === 'approved' && <span className="text-green-600">Approved</span>}
+                      {pa.manager_status === 'pending' && <span className="text-yellow-600">Pending</span>}
+                      {pa.manager_status === 'rejected' && <span className="text-red-600">Rejected</span>}
+                      {pa.manager_status === 'not_required' && <span className="text-gray-500">Not required</span>}
+                    </div>
+                    {pa.manager_status === 'rejected' && pa.manager_rejection_reason && (
+                      <div className="text-sm text-red-600 mt-1">Reason: {pa.manager_rejection_reason}</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {/* Error Display */}
         {validationWarnings && validationWarnings.length > 0 && (
           <Alert variant="warning">
@@ -382,10 +417,10 @@ const TimesheetEntryRow: React.FC<TimesheetEntryRowProps> = ({
   tasks,
   projects,
   control,
-  errors
+  errors,
+  projectApprovalsMap
 }) => {
   const projectName = projects.find(p => p.value === entry.project_id)?.label || 'Unknown';
-
   const projectApproval = (projectApprovalsMap || {})[entry.project_id];
   const isProjectApproved = projectApproval && projectApproval.manager_status === 'approved';
 

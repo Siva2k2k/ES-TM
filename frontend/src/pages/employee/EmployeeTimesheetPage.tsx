@@ -92,6 +92,7 @@ export const EmployeeTimesheetPage: React.FC = () => {
       approved_at: ts.approved_at,
       approved_by: ts.approved_by_name,
       rejection_reason: ts.rejection_reason,
+      project_approvals: ts.project_approvals || [],
       created_at: ts.created_at
     }));
   };
@@ -255,6 +256,7 @@ export const EmployeeTimesheetPage: React.FC = () => {
             }}
             projects={projects}
             tasks={tasks}
+            projectApprovals={editingProjectApprovals || []}
             onSuccess={handleEditSuccess}
             onCancel={editModal.close}
           />

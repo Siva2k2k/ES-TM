@@ -12,3 +12,4 @@ export {
   type TimesheetEntryProps,
   type GroupedTimesheetEntriesProps
 } from './TimesheetEntry';
+export { ApprovalHistoryModal } from './ApprovalHistoryModal';

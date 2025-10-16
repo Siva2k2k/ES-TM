@@ -188,6 +188,44 @@ export class TimesheetService {
             ]
           }
         },
+        // Lookup project-specific approvals for this timesheet
+        {
+          $lookup: {
+            from: 'timesheetprojectapprovals',
+            localField: '_id',
+            foreignField: 'timesheet_id',
+            as: 'project_approvals',
+            pipeline: [
+              {
+                $lookup: {
+                  from: 'projects',
+                  localField: 'project_id',
+                  foreignField: '_id',
+                  as: 'project',
+                  pipeline: [{ $project: { name: 1 } }]
+                }
+              },
+              {
+                $lookup: {
+                  from: 'users',
+                  localField: 'manager_id',
+                  foreignField: '_id',
+                  as: 'manager',
+                  pipeline: [{ $project: { full_name: 1 } }]
+                }
+              },
+              {
+                $lookup: {
+                  from: 'users',
+                  localField: 'lead_id',
+                  foreignField: '_id',
+                  as: 'lead',
+                  pipeline: [{ $project: { full_name: 1 } }]
+                }
+              }
+            ]
+          }
+        },
         {
           $lookup: {
             from: 'users',
@@ -216,6 +254,16 @@ export class TimesheetService {
 
         const user = ts.user[0];
 
+        // Map project approvals (if any) to a simple shape
+        const projectApprovals = (ts.project_approvals || []).map((pa: any) => ({
+          project_id: pa.project_id?.toString(),
+          project_name: pa.project?.[0]?.name || undefined,
+          manager_id: pa.manager?.[0]?._id?.toString() || pa.manager_id?.toString(),
+          manager_name: pa.manager?.[0]?.full_name || undefined,
+          manager_status: pa.manager_status,
+          manager_rejection_reason: pa.manager_rejection_reason
+        }));
+
         return {
           ...ts,
           id: ts._id.toString(),
@@ -226,6 +274,7 @@ export class TimesheetService {
           user: user,
           billableHours,
           nonBillableHours,
+          project_approvals: projectApprovals,
           can_edit: ['draft', 'manager_rejected', 'management_rejected'].includes(ts.status),
           can_submit: ts.status === 'draft' && ts.total_hours > 0,
           can_approve: false, // Determined by role in component

@@ -11,6 +11,7 @@ import { TeamReviewApprovalService } from '../services/TeamReviewApprovalService
 import { ApprovalHistory } from '../models/ApprovalHistory';
 import { Timesheet } from '../models/Timesheet';
 import { TimeEntry } from '../models/TimeEntry';
+import { TimesheetProjectApproval } from '../models/TimesheetProjectApproval';
 import { logger } from '../config/logger';
 import { UserRole } from '@/models/User';
 import mongoose from 'mongoose';
@@ -235,6 +236,15 @@ export class TeamReviewController {
         .populate('task_id', 'name')
         .lean() as any[];
 
+      // Load per-project approvals for this timesheet and include manager/lead names
+      const projectApprovals = await (TimesheetProjectApproval as any).find({
+        timesheet_id: new mongoose.Types.ObjectId(timesheetId)
+      })
+        .populate('project_id', 'name')
+        .populate('lead_id', 'name')
+        .populate('manager_id', 'name')
+        .lean() as any[];
+
       const history = await (ApprovalHistory as any).find({
         timesheet_id: new mongoose.Types.ObjectId(timesheetId)
       })
@@ -243,9 +253,28 @@ export class TeamReviewController {
         .sort({ created_at: -1 })
         .lean() as any[];
 
+      // Map projectApprovals to the frontend-friendly shape
+      const mappedProjectApprovals = projectApprovals.map(pa => ({
+        project_id: pa.project_id?.id || pa.project_id?._id?.toString(),
+        project_name: pa.project_id?.name || '',
+        lead_id: pa.lead_id?.id || pa.lead_id?._id?.toString(),
+        lead_name: pa.lead_id?.name || undefined,
+        lead_status: pa.lead_status,
+        lead_approved_at: pa.lead_approved_at,
+        lead_rejection_reason: pa.lead_rejection_reason,
+        manager_id: pa.manager_id?.id || pa.manager_id?._id?.toString(),
+        manager_name: pa.manager_id?.name || undefined,
+        manager_status: pa.manager_status,
+        manager_approved_at: pa.manager_approved_at,
+        manager_rejection_reason: pa.manager_rejection_reason,
+        entries_count: pa.entries_count,
+        total_hours: pa.total_hours
+      }));
+
       res.status(200).json({
         timesheet,
         entries,
+        project_approvals: mappedProjectApprovals,
         approval_history: history
       });
     } catch (error) {

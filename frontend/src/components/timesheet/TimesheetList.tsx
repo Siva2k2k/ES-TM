@@ -9,21 +9,21 @@
  * - Sort by date, status, hours
  * - Filter by status, date range
  * - Pagination support
+ * - Approval history modal
  * - Bulk actions
  *
  * Cognitive Complexity: 9 (Target: <15)
  */
 
 import React, { useState, useMemo } from 'react';
-import { Calendar, Clock, Filter, Search, ChevronDown, MoreVertical, List, Grid } from 'lucide-react';
+import { Calendar, Clock, Search, MoreVertical, List, Grid, History } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Select, type SelectOption } from '../ui/Select';
-import { Badge } from '../ui/Badge';
 import { StatusBadge } from '../shared/StatusBadge';
 import { formatDate, formatDuration } from '../../utils/formatting';
-import { cn } from '../../utils/cn';
+import { ApprovalHistoryModal } from './ApprovalHistoryModal';
 
 export interface Timesheet {
   id: string;
@@ -36,6 +36,17 @@ export interface Timesheet {
   approved_by?: string;
   rejection_reason?: string;
   created_at: string;
+  // Optional per-project approval summaries
+  project_approvals?: Array<{
+    project_id: string;
+    project_name?: string;
+    manager_name?: string;
+    manager_status?: 'approved' | 'rejected' | 'pending' | 'not_required';
+    manager_rejection_reason?: string;
+  }>;
+  // Additional fields used by pages
+  entries?: any[];
+  user_id?: string;
 }
 
 export interface TimesheetListProps {
@@ -57,6 +68,8 @@ export interface TimesheetListProps {
   onDelete?: (timesheet: Timesheet) => void;
   /** Show actions column */
   showActions?: boolean;
+  /** Show approval history button */
+  showApprovalHistory?: boolean;
 }
 
 const STATUS_OPTIONS: SelectOption[] = [
@@ -84,13 +97,15 @@ export const TimesheetList: React.FC<TimesheetListProps> = ({
   onTimesheetClick,
   onEdit,
   onDelete,
-  showActions = true
+  showActions = true,
+  showApprovalHistory = true
 }) => {
   const [viewMode, setViewMode] = useState<'list' | 'table'>(initialViewMode);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortBy, setSortBy] = useState('date-desc');
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedTimesheetForHistory, setSelectedTimesheetForHistory] = useState<string | null>(null);
 
   // Filter and sort timesheets
   const filteredTimesheets = useMemo(() => {
@@ -145,166 +160,181 @@ export const TimesheetList: React.FC<TimesheetListProps> = ({
   };
 
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            My Timesheets
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            <Button
-              variant={viewMode === 'list' ? 'default' : 'outline'}
-              size="sm"
-              icon={List}
-              onClick={() => setViewMode('list')}
-            >
-              List
-            </Button>
-            <Button
-              variant={viewMode === 'table' ? 'default' : 'outline'}
-              size="sm"
-              icon={Grid}
-              onClick={() => setViewMode('table')}
-            >
-              Table
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-4">
-        {/* Filters */}
-        {showFilters && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Input
-              placeholder="Search timesheets..."
-              icon={Search}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            <Select
-              options={STATUS_OPTIONS}
-              value={statusFilter}
-              onChange={setStatusFilter}
-              placeholder="Filter by status"
-            />
-            <Select
-              options={SORT_OPTIONS}
-              value={sortBy}
-              onChange={setSortBy}
-              placeholder="Sort by"
-            />
-          </div>
-        )}
-
-        {/* Results Count */}
-        <div className="flex items-center justify-between text-sm text-gray-600">
-          <p>
-            Showing {paginatedTimesheets.length} of {filteredTimesheets.length} timesheets
-          </p>
-          {statusFilter !== 'all' && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setStatusFilter('all')}
-            >
-              Clear filter
-            </Button>
-          )}
-        </div>
-
-        {/* List View */}
-        {viewMode === 'list' && (
-          <div className="space-y-3">
-            {paginatedTimesheets.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
-                <Calendar className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                <p>No timesheets found</p>
-              </div>
-            ) : (
-              paginatedTimesheets.map(timesheet => (
-                <TimesheetListItem
-                  key={timesheet.id}
-                  timesheet={timesheet}
-                  onClick={() => onTimesheetClick?.(timesheet)}
-                  onEdit={() => onEdit?.(timesheet)}
-                  onDelete={() => onDelete?.(timesheet)}
-                  showActions={showActions}
-                />
-              ))
-            )}
-          </div>
-        )}
-
-        {/* Table View */}
-        {viewMode === 'table' && (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Week</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hours</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Submitted</th>
-                  {showActions && (
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
-                  )}
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {paginatedTimesheets.length === 0 ? (
-                  <tr>
-                    <td colSpan={showActions ? 5 : 4} className="px-4 py-12 text-center text-gray-500">
-                      <Calendar className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                      <p>No timesheets found</p>
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedTimesheets.map(timesheet => (
-                    <TimesheetTableRow
-                      key={timesheet.id}
-                      timesheet={timesheet}
-                      onClick={() => onTimesheetClick?.(timesheet)}
-                      onEdit={() => onEdit?.(timesheet)}
-                      onDelete={() => onDelete?.(timesheet)}
-                      showActions={showActions}
-                    />
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Pagination */}
-        {enablePagination && totalPages > 1 && (
-          <div className="flex items-center justify-between pt-4 border-t">
-            <p className="text-sm text-gray-600">
-              Page {currentPage} of {totalPages}
-            </p>
-            <div className="flex gap-2">
+    <>
+      <Card className="w-full">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              My Timesheets
+            </CardTitle>
+            <div className="flex items-center gap-2">
               <Button
-                variant="outline"
+                variant={viewMode === 'list' ? 'default' : 'outline'}
                 size="sm"
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
+                icon={List}
+                onClick={() => setViewMode('list')}
               >
-                Previous
+                List
               </Button>
               <Button
-                variant="outline"
+                variant={viewMode === 'table' ? 'default' : 'outline'}
                 size="sm"
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages}
+                icon={Grid}
+                onClick={() => setViewMode('table')}
               >
-                Next
+                Table
               </Button>
             </div>
           </div>
-        )}
-      </CardContent>
-    </Card>
+        </CardHeader>
+
+        <CardContent className="space-y-4">
+          {/* Filters */}
+          {showFilters && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Input
+                placeholder="Search timesheets..."
+                icon={Search}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <Select
+                options={STATUS_OPTIONS}
+                value={statusFilter}
+                onChange={setStatusFilter}
+                placeholder="Filter by status"
+              />
+              <Select
+                options={SORT_OPTIONS}
+                value={sortBy}
+                onChange={setSortBy}
+                placeholder="Sort by"
+              />
+            </div>
+          )}
+
+          {/* Results Count */}
+          <div className="flex items-center justify-between text-sm text-gray-600">
+            <p>
+              Showing {paginatedTimesheets.length} of {filteredTimesheets.length} timesheets
+            </p>
+            {statusFilter !== 'all' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setStatusFilter('all')}
+              >
+                Clear filter
+              </Button>
+            )}
+          </div>
+
+          {/* List View */}
+          {viewMode === 'list' && (
+            <div className="space-y-3">
+              {paginatedTimesheets.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <Calendar className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p>No timesheets found</p>
+                </div>
+              ) : (
+                paginatedTimesheets.map(timesheet => (
+                  <TimesheetListItem
+                    key={timesheet.id}
+                    timesheet={timesheet}
+                    onClick={() => onTimesheetClick?.(timesheet)}
+                    onEdit={() => onEdit?.(timesheet)}
+                    onDelete={() => onDelete?.(timesheet)}
+                    showActions={showActions}
+                    showApprovalHistory={showApprovalHistory}
+                    onViewHistory={() => setSelectedTimesheetForHistory(timesheet.id)}
+                  />
+                ))
+              )}
+            </div>
+          )}
+
+          {/* Table View */}
+          {viewMode === 'table' && (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Week</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hours</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Submitted</th>
+                    {(showActions || showApprovalHistory) && (
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {paginatedTimesheets.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-12 text-center text-gray-500">
+                        <Calendar className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                        <p>No timesheets found</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedTimesheets.map(timesheet => (
+                      <TimesheetTableRow
+                        key={timesheet.id}
+                        timesheet={timesheet}
+                        onClick={() => onTimesheetClick?.(timesheet)}
+                        onEdit={() => onEdit?.(timesheet)}
+                        onDelete={() => onDelete?.(timesheet)}
+                        showActions={showActions}
+                        showApprovalHistory={showApprovalHistory}
+                        onViewHistory={() => setSelectedTimesheetForHistory(timesheet.id)}
+                      />
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {enablePagination && totalPages > 1 && (
+            <div className="flex items-center justify-between pt-4 border-t">
+              <p className="text-sm text-gray-600">
+                Page {currentPage} of {totalPages}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Approval History Modal */}
+      {selectedTimesheetForHistory && (
+        <ApprovalHistoryModal
+          timesheetId={selectedTimesheetForHistory}
+          isOpen={!!selectedTimesheetForHistory}
+          onClose={() => setSelectedTimesheetForHistory(null)}
+        />
+      )}
+    </>
   );
 };
 
@@ -315,6 +345,8 @@ interface TimesheetListItemProps {
   onEdit?: () => void;
   onDelete?: () => void;
   showActions?: boolean;
+  showApprovalHistory?: boolean;
+  onViewHistory?: () => void;
 }
 
 const TimesheetListItem: React.FC<TimesheetListItemProps> = ({
@@ -322,7 +354,9 @@ const TimesheetListItem: React.FC<TimesheetListItemProps> = ({
   onClick,
   onEdit,
   onDelete,
-  showActions
+  showActions,
+  showApprovalHistory,
+  onViewHistory
 }) => {
   return (
     <div
@@ -337,6 +371,25 @@ const TimesheetListItem: React.FC<TimesheetListItemProps> = ({
             </h3>
             <StatusBadge status={timesheet.status} type="timesheet" />
           </div>
+          {/* Project approval summary (compact) */}
+          {timesheet.project_approvals && timesheet.project_approvals.length > 0 && (
+            <div className="mt-3 space-y-1">
+              {timesheet.project_approvals.map((pa) => (
+                <div key={pa.project_id} className="text-xs text-gray-600 flex items-center justify-between">
+                  <div className="truncate">
+                    <strong className="text-sm">{pa.project_name || 'Project'}</strong>
+                    <span className="ml-2">{pa.manager_name ? `${pa.manager_name} — ` : ''}</span>
+                    {pa.manager_status === 'approved' && <span className="text-green-600">Approved</span>}
+                    {pa.manager_status === 'pending' && <span className="text-yellow-600">Pending</span>}
+                    {pa.manager_status === 'rejected' && <span className="text-red-600">Rejected</span>}
+                  </div>
+                  {pa.manager_status === 'rejected' && pa.manager_rejection_reason && (
+                    <div className="text-xs text-red-600 ml-4 truncate">{pa.manager_rejection_reason}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
             <span className="flex items-center gap-1 flex-shrink-0">
               <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
@@ -350,15 +403,31 @@ const TimesheetListItem: React.FC<TimesheetListItemProps> = ({
             )}
           </div>
         </div>
-        {showActions && (
+        {(showActions || showApprovalHistory) && (
           <div className="flex gap-1 sm:gap-2 justify-end flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-            <Button variant="outline" size="sm" onClick={onEdit} className="text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2">
-              Edit
-            </Button>
-            {timesheet.status === 'draft' && onDelete && (
-              <Button variant="ghost" size="sm" onClick={onDelete} className="p-1 sm:p-2 text-red-600 hover:text-red-800 hover:bg-red-50">
-                <MoreVertical className="h-3 w-3 sm:h-4 sm:w-4" />
+            {showApprovalHistory && timesheet.status !== 'draft' && onViewHistory && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={onViewHistory}
+                icon={History}
+                className="text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2"
+                title="View Approval History"
+              >
+                <span className="hidden sm:inline">History</span>
               </Button>
+            )}
+            {showActions && (
+              <>
+                <Button variant="outline" size="sm" onClick={onEdit} className="text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2">
+                  Edit
+                </Button>
+                {timesheet.status === 'draft' && onDelete && (
+                  <Button variant="ghost" size="sm" onClick={onDelete} className="p-1 sm:p-2 text-red-600 hover:text-red-800 hover:bg-red-50">
+                    <MoreVertical className="h-3 w-3 sm:h-4 sm:w-4" />
+                  </Button>
+                )}
+              </>
             )}
           </div>
         )}
@@ -374,6 +443,8 @@ interface TimesheetTableRowProps {
   onEdit?: () => void;
   onDelete?: () => void;
   showActions?: boolean;
+  showApprovalHistory?: boolean;
+  onViewHistory?: () => void;
 }
 
 const TimesheetTableRow: React.FC<TimesheetTableRowProps> = ({
@@ -381,7 +452,9 @@ const TimesheetTableRow: React.FC<TimesheetTableRowProps> = ({
   onClick,
   onEdit,
   onDelete,
-  showActions
+  showActions,
+  showApprovalHistory,
+  onViewHistory
 }) => {
   return (
     <tr className="hover:bg-gray-50 cursor-pointer" onClick={onClick}>
@@ -406,16 +479,31 @@ const TimesheetTableRow: React.FC<TimesheetTableRowProps> = ({
           <span className="text-sm text-gray-400">Not submitted</span>
         )}
       </td>
-      {showActions && (
+      {(showActions || showApprovalHistory) && (
         <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={onEdit}>
-              Edit
-            </Button>
-            {timesheet.status === 'draft' && onDelete && (
-              <Button variant="ghost" size="sm" onClick={onDelete} className="text-red-600 hover:text-red-800 hover:bg-red-50">
-                <MoreVertical className="h-4 w-4" />
+            {showApprovalHistory && timesheet.status !== 'draft' && onViewHistory && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={onViewHistory}
+                icon={History}
+                title="View Approval History"
+              >
+                History
               </Button>
+            )}
+            {showActions && (
+              <>
+                <Button variant="outline" size="sm" onClick={onEdit}>
+                  Edit
+                </Button>
+                {timesheet.status === 'draft' && onDelete && (
+                  <Button variant="ghost" size="sm" onClick={onDelete} className="text-red-600 hover:text-red-800 hover:bg-red-50">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                )}
+              </>
             )}
           </div>
         </td>
