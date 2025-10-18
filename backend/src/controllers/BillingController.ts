@@ -153,25 +153,134 @@ export class BillingController {
     }
 
     // Support both query params (GET) and body params (POST)
-    const { startDate, endDate, format } = req.method === 'GET' ? req.query : req.body;
+    const data = req.method === 'GET' ? req.query : req.body;
+    const { startDate, endDate, format } = data;
+    const isDownloadRequest = req.method === 'GET';
+
+    const parseIdList = (value: unknown): string[] => {
+      if (!value) {
+        return [];
+      }
+      if (Array.isArray(value)) {
+        return value
+          .map((id) => (typeof id === 'string' ? id.trim() : ''))
+          .filter((id) => id.length > 0);
+      }
+      if (typeof value === 'string') {
+        return value
+          .split(',')
+          .map((id) => id.trim())
+          .filter((id) => id.length > 0);
+      }
+      return [];
+    };
+
+    const parseRoles = (value: unknown): string[] => {
+      if (!value) {
+        return [];
+      }
+      if (Array.isArray(value)) {
+        return value
+          .map((role) => (typeof role === 'string' ? role.trim().toLowerCase() : ''))
+          .filter((role) => role.length > 0);
+      }
+      if (typeof value === 'string') {
+        return value
+          .split(',')
+          .map((role) => role.trim().toLowerCase())
+          .filter((role) => role.length > 0);
+      }
+      return [];
+    };
+
+    const parseView = (value: unknown): 'weekly' | 'monthly' | 'custom' => {
+      if (value === 'weekly') {
+        return 'weekly';
+      }
+      if (value === 'custom' || value === 'timeline') {
+        return 'custom';
+      }
+      return 'monthly';
+    };
+
+    const search =
+      typeof data.search === 'string' && data.search.trim().length > 0
+        ? data.search.trim()
+        : undefined;
+
+    const projectIds = parseIdList((data as any).projectIds);
+    const clientIds = parseIdList((data as any).clientIds);
+    const roles = parseRoles((data as any).roles);
+    const view = parseView((data as any).view);
+
     const result = await BillingService.exportBillingReport(
       startDate as string,
       endDate as string,
       format as 'csv' | 'pdf' | 'excel',
-      req.user
+      req.user,
+      {
+        projectIds,
+        clientIds,
+        roles,
+        search,
+        view
+      },
+      { generateFile: isDownloadRequest }
     );
 
     if (!result.success) {
+      if (isDownloadRequest) {
+        return res.status(400).json({
+          success: false,
+          error: result.error
+        });
+      }
       return res.status(400).json({
         success: false,
         error: result.error
       });
     }
 
+    if (isDownloadRequest) {
+      res.setHeader('Content-Type', result.contentType ?? 'text/csv');
+      if (result.filename) {
+        res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+      } else {
+        res.setHeader('Content-Disposition', 'attachment; filename="project-billing.csv"');
+      }
+
+      if (result.deliveredFormat) {
+        res.setHeader('X-Delivered-Format', result.deliveredFormat);
+      }
+
+      return res.send(result.buffer ?? Buffer.from([]));
+    }
+
+    const query = new URLSearchParams({
+      startDate: startDate as string,
+      endDate: endDate as string,
+      format: format as string,
+      view
+    });
+
+    if (projectIds.length > 0) {
+      query.set('projectIds', projectIds.join(','));
+    }
+    if (clientIds.length > 0) {
+      query.set('clientIds', clientIds.join(','));
+    }
+    if (roles.length > 0) {
+      query.set('roles', roles.join(','));
+    }
+    if (search) {
+      query.set('search', search);
+    }
+
     res.json({
       success: true,
       message: 'Billing report export initiated',
-      downloadUrl: result.downloadUrl
+      downloadUrl: `/billing/export?${query.toString()}`,
+      deliveredFormat: result.deliveredFormat
     });
   });
 

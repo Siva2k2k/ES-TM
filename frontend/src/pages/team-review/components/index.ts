@@ -9,6 +9,7 @@ export { PaginationControls } from './PaginationControls';
 export { ProjectWeekCard } from './ProjectWeekCard';
 export { UserTimesheetDetails } from './UserTimesheetDetails';
 export { ProjectWeekApprovalModal } from './ProjectWeekApprovalModal';
+export { ApprovalStatusBadges } from './ApprovalStatusBadges';
 
 // Legacy Components (V1)
 export { ProjectTimesheetAccordion } from './ProjectTimesheetAccordion';

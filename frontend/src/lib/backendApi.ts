@@ -418,8 +418,37 @@ export class BackendApiClient {
   /**
    * Export billing report
    */
-  async exportBillingReport(startDate: string, endDate: string, format: string): Promise<any> {
-    return this.post('/billing/export', { startDate, endDate, format });
+  async exportBillingReport(
+    startDate: string,
+    endDate: string,
+    format: string,
+    options: {
+      projectIds?: string[];
+      clientIds?: string[];
+      view?: string;
+      roles?: string[];
+      search?: string;
+    } = {}
+  ): Promise<any> {
+    const payload: Record<string, unknown> = { startDate, endDate, format };
+
+    if (options.view) {
+      payload.view = options.view;
+    }
+    if (options.projectIds && options.projectIds.length > 0) {
+      payload.projectIds = options.projectIds;
+    }
+    if (options.clientIds && options.clientIds.length > 0) {
+      payload.clientIds = options.clientIds;
+    }
+    if (options.roles && options.roles.length > 0) {
+      payload.roles = options.roles;
+    }
+    if (options.search && options.search.trim().length > 0) {
+      payload.search = options.search.trim();
+    }
+
+    return this.post('/billing/export', payload);
   }
 
   // === TIMESHEET SERVICE METHODS ===

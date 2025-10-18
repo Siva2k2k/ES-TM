@@ -134,7 +134,7 @@ export function useBillingData() {
   }, [loadSummary, loadMetrics]);
 
   const exportReport = useCallback(async (format: 'csv' | 'pdf' | 'excel') => {
-    const { success, downloadUrl, error } = await BillingService.exportBillingReport(
+    const { success, filename, deliveredFormat, error } = await BillingService.exportBillingReport(
       dateRange.start,
       dateRange.end,
       format
@@ -145,10 +145,10 @@ export function useBillingData() {
       return;
     }
 
-    showSuccess(`Billing report generated${downloadUrl ? ' - Download ready' : ''}`);
-    if (downloadUrl) {
-      window.open(downloadUrl, '_blank', 'noopener,noreferrer');
-    }
+    const finalFormat = deliveredFormat ?? format;
+    const formatLabel = finalFormat.toUpperCase();
+    const suffix = filename ? ` (${filename})` : ` as ${formatLabel}`;
+    showSuccess(`Billing report generated${suffix}`);
   }, [dateRange.start, dateRange.end]);
 
   const refreshAll = useCallback(async () => {

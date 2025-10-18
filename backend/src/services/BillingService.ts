@@ -1,3 +1,7 @@
+import PDFDocument from 'pdfkit';
+
+type PdfKitInstance = InstanceType<typeof PDFDocument>;
+import { ProjectBillingController } from '@/controllers/ProjectBillingController';
 import { BillingSnapshot, IBillingSnapshot } from '@/models/BillingSnapshot';
 import { Timesheet } from '@/models/Timesheet';
 import { UserRole } from '@/models/User';
@@ -710,34 +714,92 @@ export class BillingService {
     startDate: string,
     endDate: string,
     format: 'csv' | 'pdf' | 'excel',
-    currentUser: AuthUser
-  ): Promise<{ success: boolean; downloadUrl?: string; error?: string }> {
+    currentUser: AuthUser,
+    filters: {
+      projectIds?: string[];
+      clientIds?: string[];
+      roles?: string[];
+      search?: string;
+      view?: 'weekly' | 'monthly' | 'custom' | 'timeline';
+    } = {},
+    options: { generateFile?: boolean } = {}
+  ): Promise<{
+    success: boolean;
+    error?: string;
+    deliveredFormat?: 'csv' | 'pdf';
+    filename?: string;
+    contentType?: string;
+    buffer?: Buffer;
+  }> {
     try {
       this.requireManagementRole(currentUser);
 
-      const snapshots = (await (BillingSnapshot as any).find({
-        week_start_date: { $gte: startDate },
-        week_end_date: { $lte: endDate },
-        deleted_at: null
-      })
-      .populate('user_id', 'full_name email')
-      .populate('timesheet_id', 'week_start_date week_end_date')
-      .sort({ week_start_date: 1 })) as IBillingSnapshot[];
+      const normalizedView = this.normalizeView(filters.view);
+      const resolvedFormat = this.resolveExportFormat(format);
 
-      if (snapshots.length === 0) {
+      if (!resolvedFormat) {
+        return { success: false, error: `${format.toUpperCase()} export is not supported yet` };
+      }
+
+      const projects = await this.fetchProjectBillingData({
+        startDate,
+        endDate,
+        view: normalizedView,
+        projectIds: filters.projectIds ?? [],
+        clientIds: filters.clientIds ?? []
+      });
+
+      const filteredProjects = this.filterProjectsByResourceCriteria(projects, {
+        roles: filters.roles,
+        search: filters.search
+      });
+
+      if (filteredProjects.length === 0) {
         return { success: false, error: 'No billing data found for the specified date range' };
       }
 
-      // In real implementation, this would generate the actual file
-      // For now, return a mock download URL
-      const timestamp = Date.now();
-      const downloadUrl = `/api/v1/billing/export/${timestamp}.${format}`;
+      if (!options.generateFile) {
+        return {
+          success: true,
+          deliveredFormat: resolvedFormat
+        };
+      }
 
-      console.log(`Would export ${snapshots.length} billing records in ${format} format`);
+      const filename = this.buildBillingFilename({
+        format: resolvedFormat,
+        startDate,
+        endDate,
+        view: normalizedView
+      });
+
+      if (resolvedFormat === 'pdf') {
+        const pdfBuffer = await this.generateProjectBillingPdf(filteredProjects, {
+          startDate,
+          endDate,
+          view: normalizedView
+        });
+
+        return {
+          success: true,
+          deliveredFormat: 'pdf',
+          filename,
+          contentType: 'application/pdf',
+          buffer: pdfBuffer
+        };
+      }
+
+      const csvContent = this.generateProjectBillingCsv(filteredProjects, {
+        startDate,
+        endDate,
+        view: normalizedView
+      });
 
       return {
         success: true,
-        downloadUrl
+        deliveredFormat: 'csv',
+        filename,
+        contentType: 'text/csv',
+        buffer: Buffer.from(csvContent, 'utf-8')
       };
     } catch (error: any) {
       console.error('Error exporting billing report:', error);
@@ -746,6 +808,500 @@ export class BillingService {
       }
       return { success: false, error: 'Failed to export billing report' };
     }
+  }
+
+  private static resolveExportFormat(format: 'csv' | 'pdf' | 'excel'): 'csv' | 'pdf' | null {
+    if (format === 'csv' || format === 'excel') {
+      return 'csv';
+    }
+    if (format === 'pdf') {
+      return 'pdf';
+    }
+    return null;
+  }
+
+  private static normalizeView(
+    view?: 'weekly' | 'monthly' | 'custom' | 'timeline'
+  ): 'weekly' | 'monthly' | 'custom' {
+    if (view === 'weekly') {
+      return 'weekly';
+    }
+    if (view === 'custom' || view === 'timeline') {
+      return 'custom';
+    }
+    return 'monthly';
+  }
+
+  private static normalizeRoles(roles?: string[]): string[] {
+    if (!Array.isArray(roles) || roles.length === 0) {
+      return [];
+    }
+
+    return roles
+      .map((role) => (typeof role === 'string' ? role.trim().toLowerCase() : ''))
+      .filter((role) => role.length > 0);
+  }
+
+  private static async fetchProjectBillingData(options: {
+    startDate: string;
+    endDate: string;
+    view: 'weekly' | 'monthly' | 'custom';
+    projectIds: string[];
+    clientIds: string[];
+  }): Promise<any[]> {
+    const { startDate, endDate, projectIds, clientIds, view } = options;
+    const controllerRef = ProjectBillingController as unknown as {
+      buildProjectBillingData: (params: {
+        startDate: string;
+        endDate: string;
+        projectIds?: string[];
+        clientIds?: string[];
+        view: 'weekly' | 'monthly' | 'custom';
+      }) => Promise<any[]>;
+    };
+
+    if (typeof controllerRef.buildProjectBillingData !== 'function') {
+      throw new Error('Project billing data builder is not available');
+    }
+
+    return controllerRef.buildProjectBillingData({
+      startDate,
+      endDate,
+      projectIds,
+      clientIds,
+      view
+    });
+  }
+
+  private static filterProjectsByResourceCriteria(
+    projects: any[],
+    criteria: { roles?: string[]; search?: string }
+  ): any[] {
+    const roles = this.normalizeRoles(criteria.roles);
+    const searchTerm =
+      typeof criteria.search === 'string' ? criteria.search.trim().toLowerCase() : '';
+
+    if (roles.length === 0 && searchTerm.length === 0) {
+      return projects;
+    }
+
+    return projects
+      .map((project) => {
+        const filteredResources = (project.resources ?? []).filter((resource: any) => {
+          const roleMatches =
+            roles.length === 0 || roles.includes(String(resource.role ?? '').toLowerCase());
+          const searchMatches =
+            searchTerm.length === 0 ||
+            String(resource.user_name ?? '').toLowerCase().includes(searchTerm);
+          return roleMatches && searchMatches;
+        });
+
+        if (filteredResources.length === 0) {
+          return null;
+        }
+
+        const totals = filteredResources.reduce(
+          (acc: { total: number; billable: number; nonBillable: number; amount: number }, item: any) => {
+            acc.total += Number(item.total_hours ?? 0);
+            acc.billable += Number(item.billable_hours ?? 0);
+            acc.nonBillable += Number(item.non_billable_hours ?? 0);
+            acc.amount += Number(item.total_amount ?? 0);
+            return acc;
+          },
+          { total: 0, billable: 0, nonBillable: 0, amount: 0 }
+        );
+
+        return {
+          ...project,
+          total_hours: totals.total,
+          billable_hours: totals.billable,
+          non_billable_hours: totals.nonBillable,
+          total_amount: totals.amount,
+          resources: filteredResources
+        };
+      })
+      .filter((project): project is any => project !== null);
+  }
+
+  private static async generateProjectBillingPdf(
+    projects: any[],
+    metadata: {
+      startDate: string;
+      endDate: string;
+      view: 'weekly' | 'monthly' | 'custom';
+    }
+  ): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ size: 'A4', margin: 36 });
+      const chunks: Buffer[] = [];
+
+      doc.on('data', (chunk) => {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      });
+
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const headingColor = '#0f172a';
+      const subheadingColor = '#475569';
+
+      doc.font('Helvetica-Bold').fontSize(18).fillColor(headingColor).text('Project Billing Report');
+      doc.moveDown(0.25);
+      doc.font('Helvetica').fontSize(10).fillColor(subheadingColor);
+      doc.text(`Period: ${metadata.startDate} to ${metadata.endDate}`);
+      doc.text(`View: ${metadata.view}`);
+      doc.moveDown(0.75);
+
+      const summaryColumns = [
+        { header: 'Project', width: 160 },
+        { header: 'Client', width: 120 },
+        { header: 'Total Hours', width: 70, align: 'right' as const },
+        { header: 'Billable Hours', width: 70, align: 'right' as const },
+        { header: 'Non-Billable Hours', width: 70, align: 'right' as const },
+        { header: 'Total Amount', width: 80, align: 'right' as const }
+      ];
+
+      const summaryTotals = {
+        totalHours: 0,
+        billableHours: 0,
+        nonBillableHours: 0,
+        totalAmount: 0
+      };
+
+      const summaryRows = projects.map((project) => {
+        summaryTotals.totalHours += Number(project.total_hours ?? 0);
+        summaryTotals.billableHours += Number(project.billable_hours ?? 0);
+        summaryTotals.nonBillableHours += Number(project.non_billable_hours ?? 0);
+        summaryTotals.totalAmount += Number(project.total_amount ?? 0);
+
+        return [
+          project.project_name ?? 'Unnamed Project',
+          project.client_name ?? '—',
+          this.formatNumber(project.total_hours),
+          this.formatNumber(project.billable_hours),
+          this.formatNumber(project.non_billable_hours),
+          this.formatCurrency(project.total_amount)
+        ];
+      });
+
+      summaryRows.push([
+        'Totals',
+        '',
+        this.formatNumber(summaryTotals.totalHours),
+        this.formatNumber(summaryTotals.billableHours),
+        this.formatNumber(summaryTotals.nonBillableHours),
+        this.formatCurrency(summaryTotals.totalAmount)
+      ]);
+
+      this.drawSimpleTable(doc, summaryColumns, summaryRows, { rowHeight: 22 });
+      doc.moveDown(0.5);
+
+      projects.forEach((project) => {
+        this.ensurePageSpace(doc, 80);
+
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(12)
+          .fillColor(headingColor)
+          .text(project.project_name ?? 'Unnamed Project');
+
+        doc.font('Helvetica').fontSize(9).fillColor(subheadingColor);
+        doc.text(`Client: ${project.client_name ?? '—'}`);
+        doc.text(
+          `Worked Hours: ${this.formatNumber(project.total_hours)} | Billable: ${this.formatNumber(project.billable_hours)} | Non-Billable: ${this.formatNumber(project.non_billable_hours)}`
+        );
+        doc.text(`Total Amount: ${this.formatCurrency(project.total_amount)}`);
+        doc.moveDown(0.4);
+
+        const resourceColumns = [
+          { header: 'Team Member', width: 150 },
+          { header: 'Role', width: 90 },
+          { header: 'Total Hours', width: 55, align: 'right' as const },
+          { header: 'Billable Hours', width: 60, align: 'right' as const },
+          { header: 'Non-Billable Hours', width: 60, align: 'right' as const },
+          { header: 'Hourly Rate', width: 55, align: 'right' as const },
+          { header: 'Amount', width: 70, align: 'right' as const }
+        ];
+
+        const resourceRows =
+          (project.resources ?? []).map((resource: any) => [
+            resource.user_name ?? 'Unknown',
+            resource.role ?? '—',
+            this.formatNumber(resource.total_hours),
+            this.formatNumber(resource.billable_hours),
+            this.formatNumber(resource.non_billable_hours),
+            this.formatCurrency(resource.hourly_rate),
+            this.formatCurrency(resource.total_amount)
+          ]) ?? [];
+
+        if (resourceRows.length === 0) {
+          resourceRows.push(['—', '—', '0.00', '0.00', '0.00', '$0.00', '$0.00']);
+        }
+
+        this.drawSimpleTable(doc, resourceColumns, resourceRows, {
+          rowHeight: 20,
+          zebra: true
+        });
+
+        doc.moveDown(0.75);
+      });
+
+      doc.end();
+    });
+  }
+
+  private static ensurePageSpace(doc: PdfKitInstance, requiredSpace: number): void {
+    const bottomMargin = doc.page.margins?.bottom ?? 36;
+    if (doc.y + requiredSpace > doc.page.height - bottomMargin) {
+      doc.addPage();
+      doc.x = doc.page.margins?.left ?? doc.x;
+      doc.y = doc.page.margins?.top ?? doc.y;
+    }
+  }
+
+  private static drawSimpleTable(
+    doc: PdfKitInstance,
+    columns: Array<{ header: string; width: number; align?: 'left' | 'center' | 'right' }>,
+    rows: string[][],
+    options: {
+      rowHeight?: number;
+      headerFill?: string;
+      zebra?: boolean;
+      columnPadding?: number;
+    } = {}
+  ): void {
+    if (columns.length === 0) {
+      return;
+    }
+
+    const rowHeight = options.rowHeight ?? 20;
+    const headerFill = options.headerFill ?? '#e2e8f0';
+    const zebra = options.zebra ?? false;
+    const padding = options.columnPadding ?? 6;
+    const bottomMargin = doc.page.margins?.bottom ?? 36;
+    const totalWidth = columns.reduce((sum, column) => sum + column.width, 0);
+
+    const ensureSpace = (height: number) => {
+      if (doc.y + height > doc.page.height - bottomMargin) {
+        doc.addPage();
+        doc.x = doc.page.margins?.left ?? doc.x;
+        doc.y = doc.page.margins?.top ?? doc.y;
+      }
+    };
+
+    const drawHeader = () => {
+      const startX = doc.x;
+      const headerY = doc.y;
+
+      doc.save();
+      doc.fillColor(headerFill);
+      doc.rect(startX, headerY, totalWidth, rowHeight).fill();
+      doc.restore();
+
+      doc.save();
+      doc.font('Helvetica-Bold').fontSize(9).fillColor('#0f172a');
+      let currentX = startX;
+      columns.forEach((column) => {
+        doc.text(column.header, currentX + padding, headerY + 6, {
+          width: column.width - padding * 2,
+          align: column.align ?? 'left'
+        });
+        currentX += column.width;
+      });
+      doc.restore();
+
+      doc.save();
+      doc.lineWidth(0.5).strokeColor('#cbd5f5');
+      doc.moveTo(startX, headerY).lineTo(startX + totalWidth, headerY).stroke();
+      doc.moveTo(startX, headerY + rowHeight).lineTo(startX + totalWidth, headerY + rowHeight).stroke();
+      doc.restore();
+
+      doc.x = startX;
+      doc.y = headerY + rowHeight;
+    };
+
+    ensureSpace(rowHeight);
+    drawHeader();
+
+    rows.forEach((row, index) => {
+      ensureSpace(rowHeight);
+
+      const startX = doc.x;
+      const rowY = doc.y;
+
+      if (zebra && index % 2 === 0) {
+        doc.save();
+        doc.fillColor('#f8fafc');
+        doc.rect(startX, rowY, totalWidth, rowHeight).fill();
+        doc.restore();
+      }
+
+      doc.save();
+      doc.font('Helvetica').fontSize(9).fillColor('#0f172a');
+      let currentX = startX;
+      columns.forEach((column, columnIndex) => {
+        const value = row[columnIndex] ?? '';
+        doc.text(value, currentX + padding, rowY + 6, {
+          width: column.width - padding * 2,
+          align: column.align ?? 'left'
+        });
+        currentX += column.width;
+      });
+      doc.restore();
+
+      doc.save();
+      doc.lineWidth(0.5).strokeColor('#e2e8f0');
+      doc.moveTo(startX, rowY + rowHeight).lineTo(startX + totalWidth, rowY + rowHeight).stroke();
+      doc.restore();
+
+      doc.x = startX;
+      doc.y = rowY + rowHeight;
+    });
+
+    doc.moveDown(0.5);
+  }
+
+  private static generateProjectBillingCsv(
+    projects: any[],
+    metadata: {
+      startDate: string;
+      endDate: string;
+      view: 'weekly' | 'monthly' | 'custom';
+    }
+  ): string {
+    const rows: string[] = [];
+    rows.push(this.csvRow(['Project Billing Report']));
+    rows.push(
+      this.csvRow([
+        'Date Range',
+        metadata.startDate,
+        metadata.endDate,
+        `View: ${metadata.view}`
+      ])
+    );
+    rows.push('');
+
+    rows.push(this.csvRow(['Project Summary']));
+    rows.push(
+      this.csvRow([
+        'Project',
+        'Client',
+        'Total Hours',
+        'Billable Hours',
+        'Non-Billable Hours',
+        'Total Amount'
+      ])
+    );
+
+    const summaryTotals = {
+      totalHours: 0,
+      billableHours: 0,
+      nonBillableHours: 0,
+      totalAmount: 0
+    };
+
+    projects.forEach((project) => {
+      summaryTotals.totalHours += Number(project.total_hours ?? 0);
+      summaryTotals.billableHours += Number(project.billable_hours ?? 0);
+      summaryTotals.nonBillableHours += Number(project.non_billable_hours ?? 0);
+      summaryTotals.totalAmount += Number(project.total_amount ?? 0);
+
+      rows.push(
+        this.csvRow([
+          project.project_name ?? 'Unnamed Project',
+          project.client_name ?? '',
+          this.formatNumber(project.total_hours),
+          this.formatNumber(project.billable_hours),
+          this.formatNumber(project.non_billable_hours),
+          this.formatCurrency(project.total_amount)
+        ])
+      );
+    });
+
+    rows.push(
+      this.csvRow([
+        'Totals',
+        '',
+        this.formatNumber(summaryTotals.totalHours),
+        this.formatNumber(summaryTotals.billableHours),
+        this.formatNumber(summaryTotals.nonBillableHours),
+        this.formatCurrency(summaryTotals.totalAmount)
+      ])
+    );
+
+    rows.push('');
+    rows.push(this.csvRow(['Team Member Detail']));
+    rows.push(
+      this.csvRow([
+        'Project',
+        'Team Member',
+        'Role',
+        'Total Hours',
+        'Billable Hours',
+        'Non-Billable Hours',
+        'Hourly Rate',
+        'Amount'
+      ])
+    );
+
+    projects.forEach((project) => {
+      (project.resources ?? []).forEach((resource: any) => {
+        rows.push(
+          this.csvRow([
+            project.project_name ?? 'Unnamed Project',
+            resource.user_name ?? 'Unknown',
+            resource.role ?? '',
+            this.formatNumber(resource.total_hours),
+            this.formatNumber(resource.billable_hours),
+            this.formatNumber(resource.non_billable_hours),
+            this.formatCurrency(resource.hourly_rate),
+            this.formatCurrency(resource.total_amount)
+          ])
+        );
+      });
+    });
+
+    return rows.join('\r\n');
+  }
+
+  private static csvRow(values: Array<string | number>): string {
+    return values.map((value) => this.csvEscape(value)).join(',');
+  }
+
+  private static csvEscape(value: string | number): string {
+    const stringValue = value === null || value === undefined ? '' : String(value);
+    if (/[",\r\n]/.test(stringValue)) {
+      return `"${stringValue.replace(/"/g, '""')}"`;
+    }
+    return stringValue;
+  }
+
+  private static formatNumber(value: unknown): string {
+    const numeric = Number(value);
+    if (Number.isNaN(numeric)) {
+      return '0';
+    }
+    return numeric.toFixed(2);
+  }
+
+  private static formatCurrency(value: unknown): string {
+    const numeric = Number(value);
+    if (Number.isNaN(numeric)) {
+      return '$0.00';
+    }
+    return `$${numeric.toFixed(2)}`;
+  }
+
+  private static buildBillingFilename(options: {
+    format: 'csv' | 'pdf';
+    startDate: string;
+    endDate: string;
+    view: 'weekly' | 'monthly' | 'custom';
+  }): string {
+    const { format, startDate, endDate, view } = options;
+    const safeStart = startDate.replace(/[^0-9-]/g, '');
+    const safeEnd = endDate.replace(/[^0-9-]/g, '');
+    return `project-billing_${view}_${safeStart}_to_${safeEnd}.${format}`;
   }
 
   static async getBillingSnapshotById(

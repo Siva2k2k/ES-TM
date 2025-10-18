@@ -14,6 +14,7 @@ interface UserTimesheetDetailsProps {
   onApproveUser?: () => void;
   onRejectUser?: () => void;
   canApprove?: boolean;
+  approvalRole?: 'lead' | 'manager' | 'management';
 }
 
 export const UserTimesheetDetails: React.FC<UserTimesheetDetailsProps> = ({
@@ -22,7 +23,8 @@ export const UserTimesheetDetails: React.FC<UserTimesheetDetailsProps> = ({
   onToggle,
   onApproveUser,
   onRejectUser,
-  canApprove = false
+  canApprove = false,
+  approvalRole = 'manager'
 }) => {
   const getStatusIcon = () => {
     switch (user.approval_status) {
@@ -81,6 +83,19 @@ export const UserTimesheetDetails: React.FC<UserTimesheetDetailsProps> = ({
             <div className="flex items-center gap-2">
               <span className="font-medium text-gray-900">{user.user_name}</span>
               {getStatusBadge()}
+
+              {/* Approval Path Indicator for Manager role */}
+              {approvalRole === 'manager' && user.timesheet_status === 'lead_approved' && (
+                <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded border border-blue-300">
+                  Via Lead
+                </span>
+              )}
+              {approvalRole === 'manager' && user.timesheet_status === 'submitted' && user.user_role === 'employee' && (
+                <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded border border-purple-300">
+                  Direct
+                </span>
+              )}
+
               {/* Per-user Approve/Reject buttons */}
               {user.approval_status === 'pending' && canApprove && (
                 <div className="ml-3 flex items-center gap-2">
@@ -105,6 +120,12 @@ export const UserTimesheetDetails: React.FC<UserTimesheetDetailsProps> = ({
               <span>{user.user_email}</span>
               <span className="text-gray-400">•</span>
               <span className="capitalize">{user.project_role}</span>
+              {approvalRole === 'manager' && user.user_role === 'lead' && (
+                <>
+                  <span className="text-gray-400">•</span>
+                  <span className="text-green-600 font-medium">Team Lead</span>
+                </>
+              )}
             </div>
           </div>
 

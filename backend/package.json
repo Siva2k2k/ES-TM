@@ -41,7 +41,9 @@
     "passport-jwt": "^4.0.1",
     "passport-local": "^1.0.0",
     "passport-microsoft": "^2.1.0",
+    "pdfkit": "^0.15.1",
     "puppeteer": "^24.23.0",
+    "timesheet-management-system": "file:..",
     "winston": "^3.17.0"
   },
   "devDependencies": {
@@ -61,6 +63,7 @@
     "@types/passport-jwt": "^4.0.1",
     "@types/passport-local": "^1.0.38",
     "@types/passport-microsoft": "^2.1.0",
+    "@types/pdfkit": "^0.13.7",
     "concurrently": "^9.2.1",
     "nodemon": "^3.1.10",
     "ts-node": "^10.9.2",

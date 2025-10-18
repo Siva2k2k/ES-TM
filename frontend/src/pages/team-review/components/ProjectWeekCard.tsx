@@ -245,19 +245,48 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
               No users found for this project-week
             </div>
           ) : (
-            <div className="divide-y divide-gray-200">
-              {projectWeek.users.map(user => (
-                <UserTimesheetDetails
-                  key={user.user_id}
-                  user={user}
-                  isExpanded={expandedUsers.has(user.user_id)}
-                  onToggle={() => toggleUserExpansion(user.user_id)}
-                  onApproveUser={() => onApproveUser && onApproveUser(user.user_id, projectWeek.project_id)}
-                  onRejectUser={() => onRejectUser && onRejectUser(user.user_id, projectWeek.project_id)}
-                  canApprove={!!canApprove}
-                />
-              ))}
-            </div>
+            <>
+              {/* Show approval path groupings for Manager role */}
+              {approvalRole === 'manager' && (
+                <div className="bg-gray-50 px-6 py-3 border-b border-gray-200">
+                  <div className="flex items-center gap-4 text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                      <span className="text-gray-700">
+                        Lead Approved: {projectWeek.users.filter(u => u.timesheet_status === 'lead_approved').length}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+                      <span className="text-gray-700">
+                        Direct Submit: {projectWeek.users.filter(u => u.timesheet_status === 'submitted' && u.user_role === 'employee').length}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                      <span className="text-gray-700">
+                        Team Leads: {projectWeek.users.filter(u => u.user_role === 'lead').length}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="divide-y divide-gray-200">
+                {projectWeek.users.map(user => (
+                  <UserTimesheetDetails
+                    key={user.user_id}
+                    user={user}
+                    isExpanded={expandedUsers.has(user.user_id)}
+                    onToggle={() => toggleUserExpansion(user.user_id)}
+                    onApproveUser={() => onApproveUser && onApproveUser(user.user_id, projectWeek.project_id)}
+                    onRejectUser={() => onRejectUser && onRejectUser(user.user_id, projectWeek.project_id)}
+                    canApprove={!!canApprove}
+                    approvalRole={approvalRole}
+                  />
+                ))}
+              </div>
+            </>
           )}
         </div>
       )}

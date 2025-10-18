@@ -206,10 +206,17 @@ export function UserBillingPage() {
   }, [editing, updateProjectHours]);
 
   const handleExport = useCallback(async (format: 'csv' | 'pdf' | 'excel') => {
-    const { success, error } = await BillingService.exportBillingReport(
+    const { success, error, filename, deliveredFormat } = await BillingService.exportBillingReport(
       params.startDate,
       params.endDate,
-      format
+      format,
+      {
+        view: params.view,
+        projectIds: params.projectIds,
+        clientIds: params.clientIds,
+        roles: params.roles,
+        search: params.search
+      }
     );
 
     if (!success) {
@@ -217,8 +224,19 @@ export function UserBillingPage() {
       return;
     }
 
-    showSuccess(`Export ready${format === 'pdf' ? ' as PDF' : format === 'csv' ? ' as CSV' : ''}`);
-  }, [params.endDate, params.startDate]);
+    const finalFormat = deliveredFormat ?? format;
+    const formatLabel = finalFormat.toUpperCase();
+    const suffix = filename ? ` (${filename})` : ` as ${formatLabel}`;
+    showSuccess(`Export ready${suffix}`);
+  }, [
+    params.clientIds,
+    params.endDate,
+    params.projectIds,
+    params.roles,
+    params.search,
+    params.startDate,
+    params.view
+  ]);
 
   const summaryCards = useMemo(() => {
     if (!data) {

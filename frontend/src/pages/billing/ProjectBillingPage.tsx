@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
+import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Lock, X } from 'lucide-react';
 import type { Project } from '../../types';
 import type { ProjectBillingRecord } from '../../types/billing';
 import { useBillingContext } from '../../store/contexts/BillingContext';
@@ -234,17 +234,25 @@ export function ProjectBillingPage() {
     await refresh();
   }, [params.endDate, params.startDate, projectAdjustment, refresh]);
   const handleExport = useCallback(async (format: 'csv' | 'pdf' | 'excel') => {
-    const { success, error } = await BillingService.exportBillingReport(
+    const { success, error, filename, deliveredFormat } = await BillingService.exportBillingReport(
       params.startDate,
       params.endDate,
-      format
+      format,
+      {
+        view: params.view,
+        projectIds: params.projectIds,
+        clientIds: params.clientIds
+      }
     );
     if (!success) {
       showError(error ?? 'Failed to export billing data');
       return;
     }
-    showSuccess(`Export ready${format === 'pdf' ? ' as PDF' : format === 'csv' ? ' as CSV' : ''}`);
-  }, [params.endDate, params.startDate]);
+    const finalFormat = deliveredFormat ?? format;
+    const formatLabel = finalFormat.toUpperCase();
+    const suffix = filename ? ` (${filename})` : ` as ${formatLabel}`;
+    showSuccess(`Export ready${suffix}`);
+  }, [params.clientIds, params.endDate, params.projectIds, params.startDate, params.view]);
   const projectSelectedValues = params.projectIds;
   const clientSelectedValues = params.clientIds;
   return (

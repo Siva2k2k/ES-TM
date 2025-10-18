@@ -263,25 +263,51 @@ export class BillingService {
   static async exportBillingReport(
     startDate: string,
     endDate: string,
-    format: 'csv' | 'pdf' | 'excel'
-  ): Promise<{ success: boolean; downloadUrl?: string; error?: string }> {
+    format: 'csv' | 'pdf' | 'excel',
+    options: {
+      projectIds?: string[];
+      clientIds?: string[];
+      view?: BillingPeriodView | 'custom';
+      roles?: string[];
+      search?: string;
+    } = {}
+  ): Promise<{ success: boolean; filename?: string; deliveredFormat?: 'csv' | 'pdf'; error?: string }> {
     try {
-      const response = await backendApi.post('/billing/export', {
-        startDate,
-        endDate,
-        format
-      });
+      const response = await backendApi.exportBillingReport(startDate, endDate, format, options);
 
-      if (response.success) {
+      if (!response.success) {
+        return {
+          success: false,
+          error: response.message || response.error || 'Failed to export billing report'
+        };
+      }
+
+      const downloadUrl: string | undefined = response.downloadUrl;
+      const deliveredFormat: ('csv' | 'pdf') | undefined = response.deliveredFormat;
+
+      if (!downloadUrl) {
         return {
           success: true,
-          downloadUrl: response.downloadUrl
+          deliveredFormat
+        };
+      }
+
+      const downloadResult = await this.fetchAndDownloadBillingReport(
+        downloadUrl,
+        deliveredFormat ?? (format === 'pdf' ? 'pdf' : 'csv')
+      );
+
+      if (!downloadResult.success) {
+        return {
+          success: false,
+          error: downloadResult.error
         };
       }
 
       return {
-        success: false,
-        error: response.message || 'Failed to export billing report'
+        success: true,
+        filename: downloadResult.filename,
+        deliveredFormat: downloadResult.format as 'csv' | 'pdf'
       };
     } catch (error: unknown) {
       console.error('Error in exportBillingReport:', error);
@@ -290,6 +316,87 @@ export class BillingService {
         error: error instanceof Error ? error.message : 'Failed to export billing report'
       };
     }
+  }
+
+  private static async fetchAndDownloadBillingReport(
+    downloadUrl: string,
+    fallbackFormat: 'csv' | 'pdf'
+  ): Promise<{ success: boolean; filename?: string; format?: 'csv' | 'pdf'; error?: string }> {
+    try {
+      const token = localStorage.getItem('accessToken');
+      const baseURL = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1').replace(
+        /\/+$/,
+        ''
+      );
+
+      const resolvedUrl = downloadUrl.startsWith('http')
+        ? downloadUrl
+        : `${baseURL}${downloadUrl.startsWith('/') ? downloadUrl : `/${downloadUrl}`}`;
+
+      const response = await fetch(resolvedUrl, {
+        method: 'GET',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+
+      if (!response.ok) {
+        let message = `Failed to download billing report (${response.status})`;
+        try {
+          const errorPayload = await response.json();
+          if (errorPayload?.error) {
+            message = errorPayload.error;
+          }
+        } catch {
+          // ignore JSON parse errors
+        }
+        return { success: false, error: message };
+      }
+
+      const deliveredFormatHeader = response.headers.get('X-Delivered-Format');
+      const normalizedFormat = (deliveredFormatHeader || fallbackFormat || 'csv').toLowerCase();
+      const deliveredFormat = (normalizedFormat === 'pdf' ? 'pdf' : 'csv') as 'csv' | 'pdf';
+      const contentDisposition = response.headers.get('Content-Disposition');
+      const blob = await response.blob();
+
+      if (blob.size === 0) {
+        return { success: false, error: 'Received empty billing report file' };
+      }
+
+      let filename = `project-billing-report.${deliveredFormat}`;
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (match && match[1]) {
+          filename = match[1].replace(/['"]/g, '');
+        }
+      }
+
+      this.triggerBrowserDownload(blob, filename);
+
+      return {
+        success: true,
+        filename,
+        format: deliveredFormat
+      };
+    } catch (error: unknown) {
+      console.error('Failed while downloading billing report:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to download billing report'
+      };
+    }
+  }
+
+  private static triggerBrowserDownload(blob: Blob, filename: string): void {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
   }
 
   /**
