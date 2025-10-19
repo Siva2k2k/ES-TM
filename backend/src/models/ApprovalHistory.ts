@@ -74,6 +74,8 @@ const ApprovalHistorySchema: Schema = new Schema({
     enum: [
       'draft',
       'submitted',
+      'lead_approved',
+      'lead_rejected',
       'manager_approved',
       'manager_rejected',
       'management_pending',
@@ -88,6 +90,8 @@ const ApprovalHistorySchema: Schema = new Schema({
     enum: [
       'draft',
       'submitted',
+      'lead_approved',
+      'lead_rejected',
       'manager_approved',
       'manager_rejected',
       'management_pending',

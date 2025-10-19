@@ -55,9 +55,7 @@ import RateManagementPage from './pages/billing/RateManagementPage';
 
 // Reports & Admin
 import ReportsHub from './components/ReportsHub';
-import { AuditLogs } from './components/AuditLogs';
-import { DeletedItemsView } from './components/admin/DeletedItemsView';
-import { ClientManagement } from './components/ClientManagement';
+import { AuditLogsPage, DeletedItemsPage, ClientManagementPage } from './pages/admin';
 
 const App: React.FC = () => {
   const { requirePasswordChange } = useAuth();
@@ -128,10 +126,10 @@ const App: React.FC = () => {
             </ProtectedRoute>
           } />
 
-          {/* Client Management - Admin Only */}
+          {/* Client Management - Admin/Management Only */}
           <Route path="clients" element={
             <ProtectedRoute requiredRoles={['super_admin', 'management']}>
-              <ClientManagement />
+              <ClientManagementPage />
             </ProtectedRoute>
           } />
 
@@ -253,21 +251,16 @@ const App: React.FC = () => {
             </ProtectedRoute>
           } />
 
-          {/* Admin Routes - Super Admin Only */}
+          {/* Admin Routes - Super Admin/Management Only */}
           <Route path="admin">
             <Route path="audit-logs" element={
-              <ProtectedRoute requiredRoles={['super_admin']}>
-                <AuditLogs />
-              </ProtectedRoute>
-            } />
-            <Route path="audit-cleanup" element={
-              <ProtectedRoute requiredRoles={['super_admin']}>
-                <AuditLogs />
+              <ProtectedRoute requiredRoles={['super_admin', 'management']}>
+                <AuditLogsPage />
               </ProtectedRoute>
             } />
             <Route path="deleted-items" element={
-              <ProtectedRoute requiredRoles={['super_admin']}>
-                <DeletedItemsView />
+              <ProtectedRoute requiredRoles={['super_admin', 'management']}>
+                <DeletedItemsPage />
               </ProtectedRoute>
             } />
           </Route>

@@ -550,6 +550,18 @@ export class TimesheetService {
             removed_at: null
           }).lean().exec();
 
+          // Check if user is a project member
+          const userIsMember = await ProjectMember.findOne({
+            project_id: new mongoose.Types.ObjectId(projectId),
+            user_id: timesheet.user_id,
+            deleted_at: null,
+            removed_at: null
+          }).lean().exec();
+
+          if (!userIsMember) {
+            console.warn(`⚠️  User ${timesheet.user_id} submitted timesheet for project ${projectId} but is NOT a project member`);
+          }
+
           // Calculate hours and entries for this project
           const projectEntries = entries.filter((e: any) => e.project_id?.toString() === projectId);
           const totalHours = projectEntries.reduce((sum: number, e: any) => sum + (e.hours || 0), 0);
@@ -563,7 +575,8 @@ export class TimesheetService {
             manager_id: project.primary_manager_id,
             manager_status: 'pending',
             entries_count: projectEntries.length,
-            total_hours: totalHours
+            total_hours: totalHours,
+            user_not_in_project: !userIsMember
           });
 
           console.log(`Created approval record: timesheet ${timesheetId}, project ${projectId}`);
@@ -1068,25 +1081,81 @@ export class TimesheetService {
         throw new TimesheetError('Cannot update entries for timesheet in current status');
       }
 
-      // Validate each time entry
-      for (const entryData of entries) {
-        const validation = await this.validateTimeEntry(timesheetId, entryData);
-        if (!validation.valid) {
-          throw new ValidationError(`Entry validation failed: ${validation.error}`);
-        }
-      }
-
-      // Get existing entries for audit logging
+      // Fetch existing entries for this timesheet (will be soft-deleted and replaced)
       const existingEntries = await (TimeEntry.find as any)({
         timesheet_id: new mongoose.Types.ObjectId(timesheetId),
         deleted_at: null
       }).lean().exec();
 
+      // We will validate the incoming batch against itself (to detect duplicates in the payload)
+      // and against any other existing entries that are NOT being replaced (none in this flow since we soft-delete all),
+      // so build an in-memory list representing final state: start with entries that would remain (none) then
+      // validate the new entries among themselves.
+
+      // Helper: convert an entry to a comparable shape for duplicate checks
+      const normalize = (e: any) => ({
+        date: new Date(e.date).toISOString().split('T')[0],
+        entry_type: e.entry_type,
+        project_id: e.project_id ? (e.project_id.toString ? e.project_id.toString() : e.project_id) : undefined,
+        task_id: e.task_id ? (e.task_id.toString ? e.task_id.toString() : e.task_id) : undefined,
+        custom_task_description: e.custom_task_description ? String(e.custom_task_description).trim() : undefined,
+        hours: Number(e.hours) || 0
+      });
+
+      const payloadNormalized = entries.map(normalize);
+
+      // Check duplicates within payload
+      for (let i = 0; i < payloadNormalized.length; i++) {
+        const a = payloadNormalized[i];
+        // Business rule: hours must be > 0
+        if (a.hours <= 0) {
+          throw new ValidationError(`Entry validation failed: Hours must be greater than zero`);
+        }
+
+        // Check duplicates for project_task
+        if (a.entry_type === 'project_task' && a.project_id && a.task_id) {
+          for (let j = 0; j < payloadNormalized.length; j++) {
+            if (i === j) continue;
+            const b = payloadNormalized[j];
+            if (b.date === a.date && b.entry_type === 'project_task' && b.project_id === a.project_id && b.task_id === a.task_id) {
+              throw new ValidationError('Entry validation failed: A time entry for this project and task already exists on this date. Please update the existing entry instead.');
+            }
+          }
+        }
+
+        // Check duplicates for custom_task
+        if (a.entry_type === 'custom_task' && a.custom_task_description) {
+          for (let j = 0; j < payloadNormalized.length; j++) {
+            if (i === j) continue;
+            const b = payloadNormalized[j];
+            if (b.date === a.date && b.entry_type === 'custom_task' && b.custom_task_description === a.custom_task_description) {
+              throw new ValidationError('Entry validation failed: A custom task with this description already exists on this date. Please update the existing entry instead.');
+            }
+          }
+        }
+
+        // Check daily hours limit across payload + existingEntries (existingEntries will be deleted, so we only consider payload)
+      }
+
+      // Validate daily hours limits for payload grouped by date
+      const hoursByDate: Record<string, number> = {};
+      payloadNormalized.forEach((p) => {
+        hoursByDate[p.date] = (hoursByDate[p.date] || 0) + (p.hours || 0);
+      });
+
+      for (const [date, total] of Object.entries(hoursByDate)) {
+        if (total > 10) {
+          throw new ValidationError(`Entry validation failed: Total hours for ${date} would exceed the maximum limit of 10 hours (${total}h)`);
+        }
+      }
+
+      // existingEntries already fetched above for validation/audit logging
+
       // Delete all existing entries for this timesheet (soft delete)
       await (TimeEntry.updateMany as any)(
         { timesheet_id: new mongoose.Types.ObjectId(timesheetId), deleted_at: null },
         { deleted_at: new Date(), updated_at: new Date() }
-      );
+      ).exec();
 
       // Audit log: Time entries deleted (bulk update)
       if (existingEntries.length > 0) {

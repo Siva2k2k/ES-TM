@@ -9,6 +9,15 @@ import { BillingAdjustment } from '@/models/BillingAdjustment';
 import { BillingRateService } from '@/services/BillingRateService';
 import mongoose from 'mongoose';
 
+const BILLING_ELIGIBLE_STATUSES: string[] = [
+  'lead_approved',
+  'manager_approved',
+  'management_pending',
+  'management_approved',
+  'frozen',
+  'billed'
+];
+
 interface ProjectBillingData {
   project_id: string;
   project_name: string;
@@ -233,9 +242,7 @@ export class ProjectBillingController {
             {
               $match: {
                 'timesheet.user_id': { $ne: null },
-                'timesheet.status': {
-                  $in: ['frozen', 'approved', 'manager_approved', 'management_approved']
-                }
+                'timesheet.status': { $in: BILLING_ELIGIBLE_STATUSES }
               }
             },
             {
@@ -683,12 +690,7 @@ export class ProjectBillingController {
       // Get time entries from timesheets for the period
       const timesheets = await (Timesheet as any).find({
         user_id: { $ne: null },
-        $or: [
-          { status: 'frozen' },
-          { status: 'approved' }, 
-          { status: 'manager_approved' },
-          { status: 'management_approved' }
-        ]
+        status: { $in: BILLING_ELIGIBLE_STATUSES }
       }).populate('user_id', 'full_name email').exec();
 
       const timeEntries: any[] = [];

@@ -136,7 +136,20 @@ export class TeamReviewServiceV2 {
           if (!approval) return false;
 
           // Role-based visibility filtering
-          return this.isTimesheetVisibleToRole(ts, approval, approverRole, approverId, leadInfo);
+          const isVisible = this.isTimesheetVisibleToRole(ts, approval, approverRole, approverId, leadInfo);
+
+          // Debug logging for management role
+          if (approverRole === 'management' && ts.status === 'manager_approved') {
+            logger.info(`Checking timesheet visibility for Management:`, {
+              timesheet_id: ts._id.toString(),
+              timesheet_status: ts.status,
+              user: ts.user_id?.full_name,
+              project: project.name,
+              isVisible
+            });
+          }
+
+          return isVisible;
         });
 
         // Group by week
@@ -158,13 +171,21 @@ export class TeamReviewServiceV2 {
 
           const projectWeekKey = `${project._id}_${weekKey}`;
 
+          // Collect visible timesheet IDs for this project-week
+          const visibleTimesheetIds = new Set(weekTimesheets.map(ts => ts._id.toString()));
+
           // Determine approval status for this project-week
           const projectWeekApprovals = approvals.filter(a =>
             a.project_id.toString() === project._id.toString() &&
             weekTimesheets.some(ts => ts._id.toString() === a.timesheet_id.toString())
           );
 
-          const approvalStatus = this.determineProjectWeekStatus(projectWeekApprovals, status, approverRole);
+          const approvalStatus = this.determineProjectWeekStatus(
+            projectWeekApprovals,
+            visibleTimesheetIds,
+            status,
+            approverRole
+          );
           if (approvalStatus === null) continue; // Skip if doesn't match filter
 
           // Build users for this project-week
@@ -412,10 +433,17 @@ export class TeamReviewServiceV2 {
       // Management can see:
       // 1. manager_approved (for verification/freezing)
       // 2. management_pending (manager's own timesheets)
-      return (
+      const visible = (
         timesheetStatus === 'manager_approved' ||
         timesheetStatus === 'management_pending'
       );
+
+      // Debug logging
+      if (visible) {
+        logger.info(`Management can see timesheet ${timesheet._id}: status=${timesheetStatus}, user=${timesheet.user_id?.full_name}`);
+      }
+
+      return visible;
     }
 
     return false;
@@ -423,39 +451,49 @@ export class TeamReviewServiceV2 {
 
   /**
    * Determine approval status for a project-week based on approver role
+   * CRITICAL FIX: Only consider approvals for VISIBLE timesheets
    */
   private static determineProjectWeekStatus(
     approvals: any[],
+    visibleTimesheetIds: Set<string>,
     statusFilter: string,
     approverRole?: string
   ): 'pending' | 'approved' | 'rejected' | null {
     if (approvals.length === 0) return null;
 
+    // CRITICAL: Filter approvals to only include VISIBLE timesheets
+    // This prevents late submissions from affecting the status of already-approved project-weeks
+    const visibleApprovals = approvals.filter(a =>
+      visibleTimesheetIds.has(a.timesheet_id.toString())
+    );
+
+    if (visibleApprovals.length === 0) return null;
+
     let hasRejected = false;
     let hasPending = false;
     let allApproved = false;
 
-    // Check status based on approver role
+    // Check status based on approver role - using ONLY visible approvals
     if (approverRole === 'lead') {
       // For Lead: check lead_status
-      hasRejected = approvals.some(a => a.lead_status === 'rejected');
-      hasPending = approvals.some(a => a.lead_status === 'pending');
-      allApproved = approvals.every(a => a.lead_status === 'approved' || a.lead_status === 'not_required');
+      hasRejected = visibleApprovals.some(a => a.lead_status === 'rejected');
+      hasPending = visibleApprovals.some(a => a.lead_status === 'pending');
+      allApproved = visibleApprovals.every(a => a.lead_status === 'approved' || a.lead_status === 'not_required');
     } else if (approverRole === 'manager' || approverRole === 'super_admin') {
       // For Manager: check manager_status
-      hasRejected = approvals.some(a => a.manager_status === 'rejected');
-      hasPending = approvals.some(a => a.manager_status === 'pending');
-      allApproved = approvals.every(a => a.manager_status === 'approved');
+      hasRejected = visibleApprovals.some(a => a.manager_status === 'rejected');
+      hasPending = visibleApprovals.some(a => a.manager_status === 'pending');
+      allApproved = visibleApprovals.every(a => a.manager_status === 'approved');
     } else if (approverRole === 'management') {
       // For Management: check management_status
-      hasRejected = approvals.some(a => a.management_status === 'rejected');
-      hasPending = approvals.some(a => a.management_status === 'pending');
-      allApproved = approvals.every(a => a.management_status === 'approved');
+      hasRejected = visibleApprovals.some(a => a.management_status === 'rejected');
+      hasPending = visibleApprovals.some(a => a.management_status === 'pending');
+      allApproved = visibleApprovals.every(a => a.management_status === 'approved');
     } else {
       // Default to manager_status for backward compatibility
-      hasRejected = approvals.some(a => a.manager_status === 'rejected');
-      hasPending = approvals.some(a => a.manager_status === 'pending');
-      allApproved = approvals.every(a => a.manager_status === 'approved');
+      hasRejected = visibleApprovals.some(a => a.manager_status === 'rejected');
+      hasPending = visibleApprovals.some(a => a.manager_status === 'pending');
+      allApproved = visibleApprovals.every(a => a.manager_status === 'approved');
     }
 
     let status: 'pending' | 'approved' | 'rejected';

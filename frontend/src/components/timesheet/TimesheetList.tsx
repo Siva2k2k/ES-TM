@@ -16,7 +16,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { Calendar, Clock, Search, MoreVertical, List, Grid, History } from 'lucide-react';
+import { Calendar, Clock, Search, MoreVertical, List, Grid, History, Send, Edit as EditIcon, Trash2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -66,6 +66,8 @@ export interface TimesheetListProps {
   onEdit?: (timesheet: Timesheet) => void;
   /** Callback when timesheet is deleted */
   onDelete?: (timesheet: Timesheet) => void;
+  /** Callback when timesheet is submitted for approval */
+  onSubmit?: (timesheet: Timesheet) => void;
   /** Show actions column */
   showActions?: boolean;
   /** Show approval history button */
@@ -97,6 +99,7 @@ export const TimesheetList: React.FC<TimesheetListProps> = ({
   onTimesheetClick,
   onEdit,
   onDelete,
+  onSubmit,
   showActions = true,
   showApprovalHistory = true
 }) => {
@@ -246,6 +249,7 @@ export const TimesheetList: React.FC<TimesheetListProps> = ({
                     onClick={() => onTimesheetClick?.(timesheet)}
                     onEdit={() => onEdit?.(timesheet)}
                     onDelete={() => onDelete?.(timesheet)}
+                    onSubmit={() => onSubmit?.(timesheet)}
                     showActions={showActions}
                     showApprovalHistory={showApprovalHistory}
                     onViewHistory={() => setSelectedTimesheetForHistory(timesheet.id)}
@@ -286,6 +290,7 @@ export const TimesheetList: React.FC<TimesheetListProps> = ({
                         onClick={() => onTimesheetClick?.(timesheet)}
                         onEdit={() => onEdit?.(timesheet)}
                         onDelete={() => onDelete?.(timesheet)}
+                        onSubmit={() => onSubmit?.(timesheet)}
                         showActions={showActions}
                         showApprovalHistory={showApprovalHistory}
                         onViewHistory={() => setSelectedTimesheetForHistory(timesheet.id)}
@@ -344,6 +349,7 @@ interface TimesheetListItemProps {
   onClick?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onSubmit?: () => void;
   showActions?: boolean;
   showApprovalHistory?: boolean;
   onViewHistory?: () => void;
@@ -354,6 +360,7 @@ const TimesheetListItem: React.FC<TimesheetListItemProps> = ({
   onClick,
   onEdit,
   onDelete,
+  onSubmit,
   showActions,
   showApprovalHistory,
   onViewHistory
@@ -405,29 +412,59 @@ const TimesheetListItem: React.FC<TimesheetListItemProps> = ({
         </div>
         {(showActions || showApprovalHistory) && (
           <div className="flex gap-1 sm:gap-2 justify-end flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+            {/* Submit button (only for draft timesheets) */}
+            {showActions && timesheet.status === 'draft' && onSubmit && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={onSubmit}
+                className="text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2"
+                title="Submit for Approval"
+              >
+                <Send className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
+                <span className="hidden sm:inline">Submit</span>
+              </Button>
+            )}
+
+            {/* Approval History button */}
             {showApprovalHistory && timesheet.status !== 'draft' && onViewHistory && (
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={onViewHistory}
-                icon={History}
                 className="text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2"
                 title="View Approval History"
               >
+                <History className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
                 <span className="hidden sm:inline">History</span>
               </Button>
             )}
-            {showActions && (
-              <>
-                <Button variant="outline" size="sm" onClick={onEdit} className="text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2">
-                  Edit
-                </Button>
-                {timesheet.status === 'draft' && onDelete && (
-                  <Button variant="ghost" size="sm" onClick={onDelete} className="p-1 sm:p-2 text-red-600 hover:text-red-800 hover:bg-red-50">
-                    <MoreVertical className="h-3 w-3 sm:h-4 sm:w-4" />
-                  </Button>
-                )}
-              </>
+
+            {/* Edit button (icon only on mobile) */}
+            {showActions && onEdit && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onEdit}
+                className="text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2"
+                title="Edit Timesheet"
+              >
+                <EditIcon className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
+                <span className="hidden sm:inline">Edit</span>
+              </Button>
+            )}
+
+            {/* Delete button (only for draft timesheets) */}
+            {showActions && timesheet.status === 'draft' && onDelete && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onDelete}
+                className="p-1 sm:p-2 text-red-600 hover:text-red-800 hover:bg-red-50"
+                title="Delete Timesheet"
+              >
+                <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+              </Button>
             )}
           </div>
         )}
@@ -442,6 +479,7 @@ interface TimesheetTableRowProps {
   onClick?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onSubmit?: () => void;
   showActions?: boolean;
   showApprovalHistory?: boolean;
   onViewHistory?: () => void;
@@ -452,6 +490,7 @@ const TimesheetTableRow: React.FC<TimesheetTableRowProps> = ({
   onClick,
   onEdit,
   onDelete,
+  onSubmit,
   showActions,
   showApprovalHistory,
   onViewHistory
@@ -482,28 +521,56 @@ const TimesheetTableRow: React.FC<TimesheetTableRowProps> = ({
       {(showActions || showApprovalHistory) && (
         <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
           <div className="flex justify-end gap-2">
+            {/* Submit button (only for draft timesheets) */}
+            {showActions && timesheet.status === 'draft' && onSubmit && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={onSubmit}
+                title="Submit for Approval"
+              >
+                <Send className="h-4 w-4 mr-1" />
+                Submit
+              </Button>
+            )}
+
+            {/* Approval History button */}
             {showApprovalHistory && timesheet.status !== 'draft' && onViewHistory && (
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={onViewHistory}
-                icon={History}
                 title="View Approval History"
               >
+                <History className="h-4 w-4 mr-1" />
                 History
               </Button>
             )}
-            {showActions && (
-              <>
-                <Button variant="outline" size="sm" onClick={onEdit}>
-                  Edit
-                </Button>
-                {timesheet.status === 'draft' && onDelete && (
-                  <Button variant="ghost" size="sm" onClick={onDelete} className="text-red-600 hover:text-red-800 hover:bg-red-50">
-                    <MoreVertical className="h-4 w-4" />
-                  </Button>
-                )}
-              </>
+
+            {/* Edit button */}
+            {showActions && onEdit && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onEdit}
+                title="Edit Timesheet"
+              >
+                <EditIcon className="h-4 w-4 mr-1" />
+                Edit
+              </Button>
+            )}
+
+            {/* Delete button (only for draft timesheets) */}
+            {showActions && timesheet.status === 'draft' && onDelete && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onDelete}
+                className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                title="Delete Timesheet"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
             )}
           </div>
         </td>

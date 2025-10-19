@@ -31,6 +31,13 @@ export const ProjectWeekApprovalModal: React.FC<ProjectWeekApprovalModalProps> =
 
   if (!isOpen || !projectWeek) return null;
 
+  // Calculate these values before using them
+  const isManagementMode = approvalRole === 'management';
+  const affectedUsers = isManagementMode
+    ? projectWeek.users.filter(u => u.timesheet_status === 'manager_approved')
+    : projectWeek.users.filter(u => u.approval_status === 'pending');
+  const totalAffectedHours = affectedUsers.reduce((sum, user) => sum + (user.total_hours_for_project || 0), 0);
+
   const modalTitle = action === 'approve'
     ? (isManagementMode ? 'Verify Project-Week' : 'Approve Project-Week')
     : 'Reject Project-Week';
@@ -67,12 +74,6 @@ export const ProjectWeekApprovalModal: React.FC<ProjectWeekApprovalModalProps> =
       onClose();
     }
   };
-
-  const isManagementMode = approvalRole === 'management';
-  const affectedUsers = isManagementMode
-    ? projectWeek.users.filter(u => u.timesheet_status === 'manager_approved')
-    : projectWeek.users.filter(u => u.approval_status === 'pending');
-  const totalAffectedHours = affectedUsers.reduce((sum, user) => sum + (user.total_hours_for_project || 0), 0);
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">

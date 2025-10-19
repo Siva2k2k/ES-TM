@@ -993,8 +993,13 @@ export class BillingService {
         this.formatCurrency(summaryTotals.totalAmount)
       ]);
 
-      this.drawSimpleTable(doc, summaryColumns, summaryRows, { rowHeight: 22 });
-      doc.moveDown(0.5);
+      this.drawSimpleTable(doc, summaryColumns, summaryRows, {
+        rowHeight: 24,
+        columnPadding: 10,
+        zebra: true,
+        emphasizeLastRow: true
+      });
+      doc.moveDown(1);
 
       projects.forEach((project) => {
         this.ensurePageSpace(doc, 80);
@@ -1011,7 +1016,7 @@ export class BillingService {
           `Worked Hours: ${this.formatNumber(project.total_hours)} | Billable: ${this.formatNumber(project.billable_hours)} | Non-Billable: ${this.formatNumber(project.non_billable_hours)}`
         );
         doc.text(`Total Amount: ${this.formatCurrency(project.total_amount)}`);
-        doc.moveDown(0.4);
+        doc.moveDown(0.6);
 
         const resourceColumns = [
           { header: 'Team Member', width: 150 },
@@ -1039,11 +1044,12 @@ export class BillingService {
         }
 
         this.drawSimpleTable(doc, resourceColumns, resourceRows, {
-          rowHeight: 20,
+          rowHeight: 22,
+          columnPadding: 8,
           zebra: true
         });
 
-        doc.moveDown(0.75);
+        doc.moveDown(1);
       });
 
       doc.end();
@@ -1068,6 +1074,7 @@ export class BillingService {
       headerFill?: string;
       zebra?: boolean;
       columnPadding?: number;
+      emphasizeLastRow?: boolean;
     } = {}
   ): void {
     if (columns.length === 0) {
@@ -1079,18 +1086,20 @@ export class BillingService {
     const zebra = options.zebra ?? false;
     const padding = options.columnPadding ?? 6;
     const bottomMargin = doc.page.margins?.bottom ?? 36;
+    const topMargin = doc.page.margins?.top ?? 36;
     const totalWidth = columns.reduce((sum, column) => sum + column.width, 0);
+    const totalHeight = rowHeight * (rows.length + 1) + 8;
 
-    const ensureSpace = (height: number) => {
-      if (doc.y + height > doc.page.height - bottomMargin) {
-        doc.addPage();
-        doc.x = doc.page.margins?.left ?? doc.x;
-        doc.y = doc.page.margins?.top ?? doc.y;
-      }
-    };
+    if (doc.y + totalHeight > doc.page.height - bottomMargin) {
+      doc.addPage();
+      doc.x = doc.page.margins?.left ?? doc.x;
+      doc.y = topMargin;
+    }
+
+    const startX = doc.page.margins?.left ?? doc.x;
+    doc.x = startX;
 
     const drawHeader = () => {
-      const startX = doc.x;
       const headerY = doc.y;
 
       doc.save();
@@ -1120,25 +1129,30 @@ export class BillingService {
       doc.y = headerY + rowHeight;
     };
 
-    ensureSpace(rowHeight);
     drawHeader();
 
     rows.forEach((row, index) => {
-      ensureSpace(rowHeight);
+      if (doc.y + rowHeight > doc.page.height - bottomMargin) {
+        doc.addPage();
+        doc.x = startX;
+        doc.y = topMargin;
+        drawHeader();
+      }
 
-      const startX = doc.x;
+      const rowStartX = doc.x;
       const rowY = doc.y;
 
       if (zebra && index % 2 === 0) {
         doc.save();
         doc.fillColor('#f8fafc');
-        doc.rect(startX, rowY, totalWidth, rowHeight).fill();
+        doc.rect(rowStartX, rowY, totalWidth, rowHeight).fill();
         doc.restore();
       }
 
       doc.save();
-      doc.font('Helvetica').fontSize(9).fillColor('#0f172a');
-      let currentX = startX;
+      const isSummaryRow = options.emphasizeLastRow && index === rows.length - 1;
+      doc.font(isSummaryRow ? 'Helvetica-Bold' : 'Helvetica').fontSize(9).fillColor('#0f172a');
+      let currentX = rowStartX;
       columns.forEach((column, columnIndex) => {
         const value = row[columnIndex] ?? '';
         doc.text(value, currentX + padding, rowY + 6, {
@@ -1151,14 +1165,14 @@ export class BillingService {
 
       doc.save();
       doc.lineWidth(0.5).strokeColor('#e2e8f0');
-      doc.moveTo(startX, rowY + rowHeight).lineTo(startX + totalWidth, rowY + rowHeight).stroke();
+      doc.moveTo(rowStartX, rowY + rowHeight).lineTo(rowStartX + totalWidth, rowY + rowHeight).stroke();
       doc.restore();
 
-      doc.x = startX;
+      doc.x = rowStartX;
       doc.y = rowY + rowHeight;
     });
 
-    doc.moveDown(0.5);
+    doc.moveDown(0.75);
   }
 
   private static generateProjectBillingCsv(

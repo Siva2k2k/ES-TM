@@ -252,6 +252,23 @@ export const EmployeeTimesheetPage: React.FC = () => {
     }
   };
 
+  const handleSubmit = async (timesheet: Timesheet) => {
+    const confirmSubmit = confirm('Submit this timesheet for approval?');
+    if (!confirmSubmit) return;
+
+    try {
+      const result = await TimesheetService.submitTimesheet(timesheet.id);
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to submit timesheet');
+      }
+      showSuccess('Timesheet submitted successfully');
+      await loadData();
+    } catch (error) {
+      console.error('Error submitting timesheet:', error);
+      showError('Failed to submit timesheet');
+    }
+  };
+
   const handleCalendarEntryClick = useCallback((entry: CalendarEntryDetail) => {
     void openTimesheetForEdit(entry.timesheetId);
   }, [openTimesheetForEdit]);
@@ -349,6 +366,7 @@ export const EmployeeTimesheetPage: React.FC = () => {
             onTimesheetClick={handleTimesheetClick}
             onEdit={handleEdit}
             onDelete={handleDelete}
+            onSubmit={handleSubmit}
             showActions={true}
             showApprovalHistory={true}
           />

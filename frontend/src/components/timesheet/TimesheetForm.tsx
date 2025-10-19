@@ -16,7 +16,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Controller, type Control, type UseFormSetValue } from 'react-hook-form';
-import { Calendar, Plus, AlertTriangle, Save, Send, Lock, Copy } from 'lucide-react';
+import { Calendar, Plus, AlertTriangle, Save, Send, Lock, Copy, MoveLeftIcon, MoveLeft, ArrowLeft, ArrowRight } from 'lucide-react';
 import { useTimesheetForm, type TimesheetSubmitResult } from '../../hooks/useTimesheetForm';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -414,20 +414,113 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
           </Alert>
         )}
 
-        {/* Week Selector */}
+        {/* Week Selector - simplified week picker (prev/next + week input) */}
         <Controller
           name="week_start_date"
           control={control}
-          render={({ field }) => (
-            <Input
-              {...field}
-              type="date"
-              label="Week Starting"
-              icon={Calendar}
-              disabled={mode === 'edit'}
-              error={errors.week_start_date?.message}
-            />
-          )}
+          render={({ field }) => {
+            // Convert the current week_start_date (YYYY-MM-DD) to an input[type=week] value (YYYY-Www)
+            const mondayToIsoWeek = (mondayStr: string) => {
+              try {
+                const d = new Date(mondayStr);
+                // compute ISO week number for the given date
+                const target = new Date(d.valueOf());
+                const dayNr = (d.getDay() + 6) % 7; // Monday=0, Sunday=6
+                target.setDate(d.getDate() - dayNr + 3); // Thursday of this week
+                const jan4 = new Date(target.getFullYear(), 0, 4);
+                const weekNo = 1 + Math.round(((target.getTime() - jan4.getTime()) / 86400000 - 3 + ((jan4.getDay() + 6) % 7)) / 7);
+                const year = target.getFullYear();
+                return `${year}-W${String(weekNo).padStart(2, '0')}`;
+              } catch {
+                return '';
+              }
+            };
+
+            // Convert input[type=week] value (YYYY-Www) to Monday YYYY-MM-DD
+            const isoWeekToMonday = (isoWeek: string) => {
+              try {
+                const parts = isoWeek.split('-W');
+                if (parts.length !== 2) return '';
+                const year = parseInt(parts[0], 10);
+                const week = parseInt(parts[1], 10);
+
+                // ISO week 1 is the week with Jan 4th. Find Monday of week 1.
+                const jan4 = new Date(Date.UTC(year, 0, 4));
+                const dayOfWeek = jan4.getUTCDay() || 7; // Sunday -> 7
+                const mondayOfWeek1 = new Date(jan4);
+                mondayOfWeek1.setUTCDate(jan4.getUTCDate() - (dayOfWeek - 1));
+
+                const target = new Date(mondayOfWeek1);
+                target.setUTCDate(mondayOfWeek1.getUTCDate() + (week - 1) * 7);
+
+                // convert to local date string YYYY-MM-DD
+                const local = new Date(target.getUTCFullYear(), target.getUTCMonth(), target.getUTCDate());
+                return local.toISOString().split('T')[0];
+              } catch {
+                return '';
+              }
+            };
+
+            const weekInputValue = mondayToIsoWeek(String(field.value || weekStartDate));
+
+            const goDeltaWeek = (delta: number) => {
+              try {
+                const cur = new Date(String(field.value || weekStartDate));
+                cur.setDate(cur.getDate() + delta * 7);
+                const newVal = cur.toISOString().split('T')[0];
+                field.onChange(newVal);
+                setValue('week_start_date', newVal, { shouldValidate: true, shouldDirty: true });
+              } catch (e) {
+                // ignore
+              }
+            };
+
+            return (
+              <div className="flex items-center gap-3">
+                <label htmlFor="week-start-input" className="text-sm font-medium text-gray-700">Week Starting</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="px-2 py-1 rounded border bg-white"
+                    onClick={() => goDeltaWeek(-1)}
+                    aria-label="Previous week"
+                    disabled={mode === 'edit'}
+                  >
+                    <ArrowLeft />
+                  </button>
+                  <input
+                    id="week-start-input"
+                    type="week"
+                    className="border rounded px-2 py-1"
+                    value={weekInputValue}
+                    onChange={(e) => {
+                      const monday = isoWeekToMonday(e.target.value);
+                      if (monday) {
+                        field.onChange(monday);
+                        setValue('week_start_date', monday, { shouldValidate: true, shouldDirty: true });
+                      }
+                    }}
+                    disabled={mode === 'edit'}
+                  />
+                  <button
+                    type="button"
+                    className="px-2 py-1 rounded border bg-white"
+                    onClick={() => goDeltaWeek(1)}
+                    aria-label="Next week"
+                    disabled={mode === 'edit'}
+                  >
+                    <ArrowRight />
+                  </button>
+                  <div className="ml-3 text-sm text-gray-500">
+                    {formatDate(field.value || weekStartDate)} - {formatDate(new Date((new Date(field.value || weekStartDate)).setDate(new Date(field.value || weekStartDate).getDate() + 4)))}
+                  </div>
+                </div>
+                {errors.week_start_date?.message && (
+                  <div className="text-red-600 text-sm">{errors.week_start_date?.message}</div>
+                )}
+              </div>
+            );
+          }}
         />
 
         {/* Daily Totals Summary */}
@@ -535,6 +628,42 @@ function getCurrentWeekMonday(): string {
   const diff = today.getDate() - day + (day === 0 ? -6 : 1);
   const monday = new Date(today.setDate(diff));
   return monday.toISOString().split('T')[0];
+}
+
+// Helper function to get Monday of a specific week
+function getMondayOfWeek(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  d.setDate(diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+// Helper function to generate week options (past 8 weeks + current + next 4 weeks)
+function generateWeekOptions(): SelectOption[] {
+  const options: SelectOption[] = [];
+  const today = new Date();
+  const currentMonday = getMondayOfWeek(today);
+
+  // Generate weeks: 8 past weeks + current week + 4 future weeks
+  for (let i = -8; i <= 4; i++) {
+    const monday = new Date(currentMonday);
+    monday.setDate(currentMonday.getDate() + (i * 7));
+
+    const friday = new Date(monday);
+    friday.setDate(monday.getDate() + 4);
+
+    const mondayStr = monday.toISOString().split('T')[0];
+    const label = `Week of ${formatDate(mondayStr)} - ${formatDate(friday.toISOString().split('T')[0])}`;
+
+    options.push({
+      value: mondayStr,
+      label
+    });
+  }
+
+  return options.reverse(); // Most recent first
 }
 
 // Separate component for entry row to reduce complexity

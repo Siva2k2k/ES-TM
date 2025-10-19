@@ -17,7 +17,8 @@ export const timeEntrySchema = z.object({
   hours: z.number()
     .min(0.5, 'Minimum 0.5 hours')
     .max(24, 'Maximum 24 hours per day'),
-  description: z.string().min(1, 'Description is required').max(500, 'Description too long'),
+  // Description is optional in the UI; make it optional here to avoid blocking submissions
+  description: z.string().max(500, 'Description too long').optional(),
   is_billable: z.boolean().default(true),
   entry_type: entryTypeSchema.default('project_task'),
   custom_task_description: z.string().optional(),
@@ -58,17 +59,21 @@ export const timesheetFormSchema = z.object({
 }).refine(
   (data) => {
     // Validate daily totals (8-10 hours per day)
-    const dailyTotals: Record<string, number> = {};
+      const dailyTotals: Record<string, number> = {};
 
-    data.entries.forEach((entry) => {
-      dailyTotals[entry.date] = (dailyTotals[entry.date] || 0) + entry.hours;
-    });
+      // Only enforce daily 8-10 hour rule for weekdays (Mon-Fri).
+      // Weekend days (Saturday/Sunday) are optional and should not cause validation failures.
+      data.entries.forEach((entry) => {
+        const d = new Date(entry.date);
+        const day = d.getDay(); // Sunday=0, Saturday=6
+        // skip weekends when computing the required daily totals
+        if (day === 0 || day === 6) return;
+        dailyTotals[entry.date] = (dailyTotals[entry.date] || 0) + entry.hours;
+      });
 
-    const invalidDays = Object.entries(dailyTotals).filter(
-      ([_, total]) => total < 8 || total > 10
-    );
+      const invalidDays = Object.values(dailyTotals).filter((total) => total < 8 || total > 10);
 
-    return invalidDays.length === 0;
+      return invalidDays.length === 0;
   },
   {
     message: 'Each day must have between 8-10 hours',

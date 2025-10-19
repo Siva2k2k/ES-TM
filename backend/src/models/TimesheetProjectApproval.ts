@@ -35,6 +35,9 @@ export interface ITimesheetProjectApproval extends Document {
   entries_count: number;
   total_hours: number;
 
+  // Edge case: User submitted timesheet but is not a project member
+  user_not_in_project?: boolean;
+
   created_at: Date;
   updated_at: Date;
 }
@@ -124,6 +127,13 @@ const TimesheetProjectApprovalSchema: Schema = new Schema({
     type: Number,
     default: 0,
     min: 0
+  },
+
+  // Edge case flag
+  user_not_in_project: {
+    type: Boolean,
+    default: false,
+    required: false
   }
 }, {
   timestamps: {

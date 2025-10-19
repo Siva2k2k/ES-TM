@@ -144,6 +144,7 @@ export function useTimesheetForm(
 
         if (status === 'submitted') {
           const isValid = await form.trigger();
+          console.error(isValid);
 
           if (!isValid) {
             const errors = form.formState.errors;
