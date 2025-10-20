@@ -19,6 +19,7 @@ import {
   requireManagerRole,
   canManageRoleHierarchy
 } from '@/utils/auth';
+import { requireSuperAdmin } from '@/utils/authorization';
 import { AuditLogService } from '@/services/AuditLogService';
 import { ValidationUtils } from '@/utils/validation';
 
@@ -82,7 +83,6 @@ export class ProjectService {
         { name: project.name, status: project.status, is_billable: project.is_billable }
       );
 
-      console.log('Project created:', project.id);
       return { project };
     } catch (error) {
       console.error('Error in createProject:', error);
@@ -139,7 +139,6 @@ export class ProjectService {
         );
       }
 
-      console.log(`Updated project ${projectId}`);
       return { success: true };
     } catch (error) {
       console.error('Error in updateProject:', error);
@@ -308,7 +307,6 @@ export class ProjectService {
         .populate('created_by_user_id', 'full_name')
         .sort({ created_at: -1 });
 
-      console.log(tasks, "......................");
 
       return { tasks };
     } catch (error) {
@@ -371,7 +369,6 @@ export class ProjectService {
         throw new NotFoundError('Project not found');
       }
 
-      console.log(`Updated project ${projectId} status to: ${status}`);
       return { success: true };
     } catch (error) {
       console.error('Error in updateProjectStatus:', error);
@@ -493,7 +490,6 @@ export class ProjectService {
 
       await client.save();
 
-      console.log('Client created:', client.id);
       return { client };
     } catch (error) {
       console.error('Error in createClient:', error);
@@ -582,7 +578,6 @@ export class ProjectService {
         }
       );
 
-      console.log(`Cascade deleted ${taskUpdateResult.modifiedCount} tasks for project: ${projectId}`);
 
       // Audit log: Project deleted
       await AuditLogService.logEvent(
@@ -601,7 +596,6 @@ export class ProjectService {
         { deleted_by: currentUser.id, deleted_at: new Date(), deleted_reason: reason }
       );
 
-      console.log(`Soft deleted project: ${projectId}`);
       return { success: true };
     } catch (error) {
       console.error('Error in deleteProject:', error);
@@ -716,7 +710,6 @@ export class ProjectService {
       const taskDeleteResult = await (Task.deleteMany as any)({ project_id: projectId });
       const memberDeleteResult = await (ProjectMember.deleteMany as any)({ project_id: projectId });
 
-      console.log(`Cascade hard deleted ${taskDeleteResult.deletedCount} tasks and ${memberDeleteResult.deletedCount} members for project: ${projectId}`);
 
       // Log audit event BEFORE deleting
       await AuditLogService.logEvent(
@@ -744,7 +737,6 @@ export class ProjectService {
         throw new NotFoundError('Project not found or already deleted');
       }
 
-      console.log(`Hard deleted project: ${projectId}`);
       return { success: true };
     } catch (error) {
       console.error('Error in hardDeleteProject:', error);
@@ -800,7 +792,6 @@ export class ProjectService {
         { deleted_at: null, deleted_by: null, deleted_reason: null }
       );
 
-      console.log(`Restored project: ${projectId}`);
       return { success: true };
     } catch (error) {
       console.error('Error in restoreProject:', error);
@@ -984,8 +975,6 @@ export class ProjectService {
             tasks: transformedTasks
           };
           
-          console.log(`🔍 Transformed project: ${project.name} - ID: ${result.id}`);
-          console.log(`🔍 Project has ${transformedTasks.length} tasks`);
           
           return result;
         })
@@ -1103,7 +1092,6 @@ export class ProjectService {
 
       await projectMember.save();
 
-      console.log(`Added user ${userId} to project ${projectId} with role ${projectRole}`);
       return { success: true };
     } catch (error) {
       console.error('Error in addUserToProject:', error);
@@ -1696,7 +1684,6 @@ export class ProjectService {
 
       await projectMember.save();
 
-      console.log(`Added user ${userId} to project ${projectId} with role ${projectRole} (manager access: ${hasManagerAccess})`);
       return { success: true };
 
     } catch (error) {
@@ -1776,7 +1763,6 @@ export class ProjectService {
         user_id: userId
       }, updates);
 
-      console.log(`Updated user ${userId} in project ${projectId} to role ${newProjectRole} (manager access: ${hasManagerAccess})`);
       return { success: true };
 
     } catch (error) {

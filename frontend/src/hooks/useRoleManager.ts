@@ -184,7 +184,6 @@ export const useRoleManager = (): UseRoleManagerReturn => {
       }
 
       // Log the role change for debugging
-      console.log(`Role switched from ${currentUserRole} to ${newRole}`);
 
     } catch (error) {
       console.error('Failed to switch role:', error);
@@ -376,7 +375,6 @@ export const useRoleManager = (): UseRoleManagerReturn => {
   const resetToDefaultSection = useCallback(() => {
     // This would typically trigger navigation reset
     // Implementation depends on your routing/navigation setup
-    console.log('Resetting to default section for role:', currentUserRole);
   }, [currentUserRole]);
 
   return {

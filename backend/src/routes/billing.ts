@@ -8,10 +8,6 @@ import {
 } from '@/controllers/BillingController';
 import { requireAuth, requireManagement } from '@/middleware/auth';
 
-// Import sub-route handlers
-import billingRatesRouter from './billingRates';
-import invoicesRouter from './invoices';
-
 const router = Router();
 
 // Apply authentication to all billing routes
@@ -91,16 +87,7 @@ router.post('/export', exportBillingReportValidation, BillingController.exportBi
 router.get('/export', exportBillingReportValidation, BillingController.exportBillingReport);
 
 // Mount sub-routes
-/**
- * @route /api/v1/billing/rates/*
- * @desc Billing rate management routes
- */
-router.use('/rates', billingRatesRouter);
-
-/**
- * @route /api/v1/billing/invoices/*
- * @desc Invoice management routes
- */
-router.use('/invoices', invoicesRouter);
+// Note: Billing rates and invoices functionality is handled by projectBilling routes
+// See /api/v1/project-billing for rate and invoice management
 
 export default router;

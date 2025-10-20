@@ -1,5 +1,4 @@
 import { backendApi } from '../lib/backendApi';
-import { supabase } from '../lib/supabase';
 import type { Timesheet, TimeEntry, TimesheetStatus, TimesheetWithDetails } from '../types';
 
 /**
@@ -54,7 +53,6 @@ export class BackendTimesheetService {
    */
   static async createTimesheet(userId: string, weekStartDate: string): Promise<{ timesheet?: Timesheet; error?: string }> {
     try {
-      console.log('BackendTimesheetService.createTimesheet called with:', { userId, weekStartDate });
 
       const response = await backendApi.createTimesheet({
         userId,
@@ -62,7 +60,6 @@ export class BackendTimesheetService {
       });
 
       if (response.success) {
-        console.log('Timesheet created successfully:', response.data);
         return { timesheet: response.data as Timesheet };
       } else {
         return { error: 'Failed to create timesheet' };
@@ -96,12 +93,10 @@ export class BackendTimesheetService {
    */
   static async submitTimesheet(timesheetId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      console.log('BackendTimesheetService.submitTimesheet called for ID:', timesheetId);
 
       const response = await backendApi.submitTimesheet(timesheetId);
 
       if (response.success) {
-        console.log('Timesheet submitted successfully:', timesheetId);
         return { success: true };
       } else {
         return { success: false, error: 'Failed to submit timesheet' };
@@ -129,7 +124,6 @@ export class BackendTimesheetService {
       const response = await backendApi.managerApproveRejectTimesheet(timesheetId, action, options);
 
       if (response.success) {
-        console.log(`Manager ${action}ed timesheet: ${timesheetId}`);
         return { success: true };
       } else {
         return { success: false, error: `Failed to ${action} timesheet` };
@@ -157,7 +151,6 @@ export class BackendTimesheetService {
       const response = await backendApi.managementApproveRejectTimesheet(timesheetId, action, options);
 
       if (response.success) {
-        console.log(`Management ${action}ed timesheet: ${timesheetId}`);
         return { success: true };
       } else {
         return { success: false, error: `Failed to ${action} timesheet` };
@@ -185,7 +178,6 @@ export class BackendTimesheetService {
     }
   ): Promise<{ entry?: TimeEntry; error?: string }> {
     try {
-      console.log('BackendTimesheetService.addTimeEntry called with:', { timesheetId, entryData });
 
       const response = await backendApi.addTimeEntry(timesheetId, {
         date: entryData.date,
@@ -199,7 +191,6 @@ export class BackendTimesheetService {
       });
 
       if (response.success) {
-        console.log('Time entry created successfully:', response.data);
         return { entry: response.data as TimeEntry };
       } else {
         return { error: 'Failed to add time entry' };
@@ -207,81 +198,6 @@ export class BackendTimesheetService {
     } catch (error: any) {
       console.error('Error in addTimeEntry:', error);
       return { error: error.message };
-    }
-  }
-
-  /**
-   * Get timesheet dashboard data
-   * Note: This method still uses Supabase as it's for dashboard statistics
-   */
-  static async getTimesheetDashboard(): Promise<{
-    totalTimesheets: number;
-    pendingApproval: number;
-    pendingManagement: number;
-    pendingBilling: number;
-    verified: number;
-    billed: number;
-    totalHours: number;
-    averageHoursPerWeek: number;
-    completionRate: number;
-    error?: string;
-  }> {
-    try {
-      const { data, error } = await supabase
-        .from('timesheets')
-        .select('status, total_hours')
-        .is('deleted_at', null);
-
-      if (error) {
-        console.error('Error fetching timesheet dashboard:', error);
-        return {
-          totalTimesheets: 0,
-          pendingApproval: 0,
-          pendingManagement: 0,
-          pendingBilling: 0,
-          verified: 0,
-          billed: 0,
-          totalHours: 0,
-          averageHoursPerWeek: 0,
-          completionRate: 0,
-          error: error.message
-        };
-      }
-
-      const timesheets = data as { status: TimesheetStatus; total_hours: number }[];
-      const totalTimesheets = timesheets.length;
-      const pendingApproval = timesheets.filter(ts => ts.status === 'submitted').length;
-      const pendingManagement = timesheets.filter(ts => ts.status === 'management_pending').length;
-      const pendingBilling = timesheets.filter(ts => ts.status === 'frozen').length;
-      const verified = timesheets.filter(ts => ts.status === 'frozen').length;
-      const billed = timesheets.filter(ts => ts.status === 'billed').length;
-      const totalHours = timesheets.reduce((sum, ts) => sum + ts.total_hours, 0);
-
-      return {
-        totalTimesheets,
-        pendingApproval,
-        pendingManagement,
-        pendingBilling,
-        verified,
-        billed,
-        totalHours,
-        averageHoursPerWeek: totalHours / Math.max(totalTimesheets, 1),
-        completionRate: (verified / Math.max(totalTimesheets, 1)) * 100
-      };
-    } catch (error) {
-      console.error('Error in getTimesheetDashboard:', error);
-      return {
-        totalTimesheets: 0,
-        pendingApproval: 0,
-        pendingManagement: 0,
-        pendingBilling: 0,
-        verified: 0,
-        billed: 0,
-        totalHours: 0,
-        averageHoursPerWeek: 0,
-        completionRate: 0,
-        error: 'Failed to fetch dashboard data'
-      };
     }
   }
 

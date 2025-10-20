@@ -76,9 +76,6 @@ export const TaskBillingView: React.FC = () => {
   const loadTaskBillingData = async () => {
     setLoading(true);
     try {
-      // First test the connection
-      console.log('Testing connection to project billing endpoints...');
-      
       const params = new URLSearchParams({
         startDate,
         endDate

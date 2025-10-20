@@ -306,8 +306,6 @@ export class TimesheetService {
     currentUser: AuthUser
   ): Promise<{ timesheet?: ITimesheet; error?: string }> {
     try {
-      console.log('TimesheetService.createTimesheet called with:', { userId, weekStartDate });
-
       // Validate inputs
       const userIdError = ValidationUtils.validateObjectId(userId, 'User ID', true);
       if (userIdError) {
@@ -366,7 +364,6 @@ export class TimesheetService {
         timesheetData
       );
 
-      console.log('Timesheet created successfully:', timesheet);
       return { timesheet };
     } catch (error) {
       console.error('Error in createTimesheet:', error);
@@ -471,7 +468,6 @@ export class TimesheetService {
     currentUser: AuthUser
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      console.log('TimesheetService.submitTimesheet called for ID:', timesheetId);
 
       // Get timesheet
       const timesheet = await (Timesheet.findOne as any)({
@@ -531,14 +527,12 @@ export class TimesheetService {
           }).exec();
 
           if (existingApproval) {
-            console.log(`Approval record already exists for timesheet ${timesheetId} project ${projectId}`);
             continue;
           }
 
           // Get project to find manager
           const project = await Project.findById(projectId).lean().exec();
           if (!project) {
-            console.warn(`Project not found: ${projectId}`);
             continue;
           }
 
@@ -559,7 +553,6 @@ export class TimesheetService {
           }).lean().exec();
 
           if (!userIsMember) {
-            console.warn(`⚠️  User ${timesheet.user_id} submitted timesheet for project ${projectId} but is NOT a project member`);
           }
 
           // Calculate hours and entries for this project
@@ -579,7 +572,6 @@ export class TimesheetService {
             user_not_in_project: !userIsMember
           });
 
-          console.log(`Created approval record: timesheet ${timesheetId}, project ${projectId}`);
         }
       }
 
@@ -596,7 +588,6 @@ export class TimesheetService {
         { status: nextStatus, submitted_at: new Date() }
       );
 
-      console.log('Timesheet submitted successfully:', timesheetId);
       return { success: true };
     } catch (error) {
       console.error('Error in submitTimesheet:', error);
@@ -676,7 +667,6 @@ export class TimesheetService {
         updateData
       );
 
-      console.log(`Manager ${action}ed timesheet: ${timesheetId}`);
       return { success: true };
     } catch (error) {
       console.error('Error in managerApproveRejectTimesheet:', error);
@@ -757,7 +747,6 @@ export class TimesheetService {
         updateData
       );
 
-      console.log(`Management ${action}ed timesheet: ${timesheetId}`);
       return { success: true };
     } catch (error) {
       console.error('Error in managementApproveRejectTimesheet:', error);
@@ -779,7 +768,6 @@ export class TimesheetService {
     currentUser: AuthUser
   ): Promise<{ entry?: ITimeEntry; error?: string }> {
     try {
-      console.log('TimesheetService.addTimeEntry called with:', { timesheetId, entryData });
 
       // Get timesheet to validate permissions
       const timesheet = await (Timesheet.findOne as any)({
@@ -841,7 +829,6 @@ export class TimesheetService {
       // Update timesheet total hours
       await this.updateTimesheetTotalHours(timesheetId);
 
-      console.log('Time entry created successfully:', entry);
       return { entry };
     } catch (error) {
       console.error('Error in addTimeEntry:', error);
@@ -932,7 +919,6 @@ export class TimesheetService {
    */
   private static async updateTimesheetTotalHours(timesheetId: string): Promise<void> {
     try {
-      console.log('Updating total hours for timesheet:', timesheetId);
 
       // Calculate total hours from time entries
       const entries = await (TimeEntry.find as any)({
@@ -941,7 +927,6 @@ export class TimesheetService {
       }).exec();
 
       const totalHours = entries.reduce((sum, entry) => sum + entry.hours, 0);
-      console.log('Calculated total hours:', totalHours);
 
       // Update timesheet
       await (Timesheet.findByIdAndUpdate as any)(timesheetId, {
@@ -949,7 +934,6 @@ export class TimesheetService {
         updated_at: new Date()
       }).exec();
 
-      console.log('Timesheet total hours updated successfully');
     } catch (error) {
       console.error('Error in updateTimesheetTotalHours:', error);
     }
@@ -1065,7 +1049,6 @@ export class TimesheetService {
     currentUser: AuthUser
   ): Promise<{ updatedEntries?: ITimeEntry[]; error?: string }> {
     try {
-      console.log('TimesheetService.updateTimesheetEntries called with:', { timesheetId, entryCount: entries.length });
 
       // Get timesheet to validate permissions
       const timesheet = await (Timesheet.findOne as any)({
@@ -1211,7 +1194,6 @@ export class TimesheetService {
       // Update timesheet total hours
       await this.updateTimesheetTotalHours(timesheetId);
 
-      console.log('Timesheet entries updated successfully:', { count: updatedEntries.length });
       return { updatedEntries };
     } catch (error) {
       console.error('Error in updateTimesheetEntries:', error);
@@ -1227,7 +1209,6 @@ export class TimesheetService {
     currentUser: AuthUser
   ): Promise<{ entries?: ITimeEntry[]; error?: string }> {
     try {
-      console.log('TimesheetService.getTimeEntries called with:', { timesheetId });
 
       // Get timesheet to validate permissions
       const timesheet = await (Timesheet.findOne as any)({
@@ -1251,7 +1232,6 @@ export class TimesheetService {
         .sort({ date: 1, created_at: 1 })
         .exec();
 
-      console.log('Time entries retrieved successfully:', { count: entries.length });
       return { entries };
     } catch (error) {
       console.error('Error in getTimeEntries:', error);
@@ -1268,7 +1248,6 @@ export class TimesheetService {
     currentUser: AuthUser
   ): Promise<{ updatedEntries?: ITimeEntry[]; error?: string }> {
     try {
-      console.log('TimesheetService.addMultipleEntries called with:', { timesheetId, entryCount: entries.length });
 
       // Get timesheet to validate permissions
       const timesheet = await (Timesheet.findOne as any)({
@@ -1316,7 +1295,6 @@ export class TimesheetService {
       // Update timesheet total hours
       await this.updateTimesheetTotalHours(timesheetId);
 
-      console.log('Multiple entries added successfully:', { count: addedEntries.length });
       return { updatedEntries: addedEntries };
     } catch (error) {
       console.error('Error in addMultipleEntries:', error);
@@ -1334,7 +1312,6 @@ export class TimesheetService {
     currentUser: AuthUser
   ): Promise<{ calendarData?: CalendarData; error?: string }> {
     try {
-      console.log(`getCalendarData called for user ${userId}, year ${year}, month ${month}`);
 
       // Validate access permissions
       validateTimesheetAccess(currentUser, userId, 'view');
@@ -1343,7 +1320,6 @@ export class TimesheetService {
       const startDate = new Date(year, month - 1, 1); // month is 0-indexed in Date constructor
       const endDate = new Date(year, month, 0); // Last day of the month
 
-      console.log(`Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
       // Aggregation pipeline to get time entries grouped by date
       const pipeline = [
@@ -1430,7 +1406,6 @@ export class TimesheetService {
         });
       });
 
-      console.log(`Calendar data processed: ${Object.keys(calendarData).length} days with data`);
       return { calendarData };
     } catch (error) {
       console.error('Error in getCalendarData:', error);
@@ -1561,7 +1536,6 @@ export class TimesheetService {
     currentUser: AuthUser
   ): Promise<{ timesheet?: TimesheetWithDetails; error?: string }> {
     try {
-      console.log('TimesheetService.getTimesheetById called with:', { timesheetId });
 
       const timesheet = await (Timesheet.findOne as any)({
         _id: new mongoose.Types.ObjectId(timesheetId),
@@ -1602,7 +1576,6 @@ export class TimesheetService {
         next_action: this.getNextAction(timesheet.status, currentUser, timesheet.user_id._id.toString())
       };
 
-      console.log('Timesheet retrieved successfully:', timesheetId);
       return { timesheet: detailedTimesheet };
     } catch (error) {
       console.error('Error in getTimesheetById:', error);
@@ -1733,7 +1706,6 @@ export class TimesheetService {
         { deleted_at: new Date(), deleted_by: currentUser.id, deleted_reason: reason }
       );
 
-      console.log(`Timesheet soft deleted: ${timesheetId} by ${currentUser.full_name}`);
       return { success: true };
     } catch (error) {
       console.error('Error in softDeleteTimesheet:', error);
@@ -1812,7 +1784,6 @@ export class TimesheetService {
         { deleted: true }
       );
 
-      console.log(`Timesheet deleted: ${timesheetId} by ${currentUser.full_name}`);
       return { success: true };
     } catch (error) {
       console.error('Error in deleteTimesheet:', error);
@@ -1892,7 +1863,6 @@ export class TimesheetService {
         { is_hard_deleted: true, hard_deleted_at: new Date(), hard_deleted_by: currentUser.id }
       );
 
-      console.warn(`Timesheet permanently deleted: ${timesheetId} by ${currentUser.full_name}`);
       return { success: true };
     } catch (error) {
       console.error('Error in hardDeleteTimesheet:', error);
@@ -1960,7 +1930,6 @@ export class TimesheetService {
         { deleted_at: null }
       );
 
-      console.log(`Timesheet restored: ${timesheetId} by ${currentUser.full_name}`);
       return { success: true };
     } catch (error) {
       console.error('Error in restoreTimesheet:', error);

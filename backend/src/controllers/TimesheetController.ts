@@ -181,8 +181,6 @@ export class TimesheetController {
         } else {
           await NotificationService.notifyTimesheetRejection(recipientId, timesheetId, 'manager', reason || 'No reason provided');
         }
-      } else {
-        console.warn('Timesheet owner not found, skipping notification for timesheet:', timesheetId);
       }
     } catch (notificationError) {
       console.error('Failed to send notification:', notificationError);
@@ -234,8 +232,6 @@ export class TimesheetController {
         } else {
           await NotificationService.notifyTimesheetRejection(recipientId, timesheetId, 'Management', reason || 'No reason provided');
         }
-      } else {
-        console.warn('Timesheet owner not found, skipping notification for timesheet:', timesheetId);
       }
     } catch (notificationError) {
       console.error('Failed to send notification:', notificationError);

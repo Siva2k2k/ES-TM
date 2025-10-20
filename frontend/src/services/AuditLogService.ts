@@ -37,16 +37,6 @@ export class AuditLogService {
     oldData?: Record<string, unknown>,
     newData?: Record<string, unknown>
   ): Promise<{ success: boolean; error?: string }> {
-    console.warn('Frontend audit logging detected. Audit logs should be created server-side for security.');
-    console.log('Audit Event (Client-side log only):', { 
-      tableName, 
-      recordId, 
-      action, 
-      actor: actor.full_name,
-      details,
-      metadata 
-    });
-    
     // Return success but don't actually log to database from frontend
     return { success: true };
   }
@@ -238,7 +228,6 @@ export class AuditLogService {
     format: 'csv' | 'json' | 'pdf'
   ): Promise<{ success: boolean; downloadUrl?: string; error?: string }> {
     try {
-      console.log(`Exporting audit logs from ${startDate} to ${endDate} in ${format} format`);
 
       // Backend limits to 1000 per request, so we'll fetch in batches
       const BATCH_SIZE = 1000;
@@ -283,7 +272,6 @@ export class AuditLogService {
         return { success: false, error: 'PDF export not yet implemented' };
       }
 
-      console.log(`Exported ${allLogs.length} audit logs successfully`);
       return {
         success: true,
         downloadUrl: `Exported ${allLogs.length} audit logs`
@@ -391,7 +379,6 @@ export class AuditLogService {
       }
 
       const deletedCount = response.deletedCount || 0;
-      console.log(`Cleared ${deletedCount} old audit logs older than ${retentionDays} days`);
       
       return { deletedCount };
     } catch (error) {

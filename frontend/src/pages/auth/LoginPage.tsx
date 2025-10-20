@@ -39,7 +39,6 @@ export function LoginPage() {
     setServerError('');
 
     try {
-      console.log('🔐 LoginPage - Starting sign in process...');
       const result = await signIn(data.email, data.password);
 
       if (result.error) {
@@ -47,17 +46,14 @@ export function LoginPage() {
           // Ensure the error is a string before setting it in state to avoid React object render errors
           setServerError(typeof result.error === 'string' ? result.error : String(result.error));
       } else {
-        console.log('🔐 LoginPage - Sign in successful');
         
         // Check if password change is required
         if (result.requirePasswordChange) {
-          console.log('🔐 LoginPage - Password change required, staying on current flow');
           // The requirePasswordChange state in AuthContext will trigger ForcePasswordChangePage
           return;
         }
 
         // Navigate to intended destination or dashboard on successful login
-        console.log(`🔐 LoginPage - Navigating to ${from}...`);
         navigate(from, { replace: true });
       }
     } catch (err) {

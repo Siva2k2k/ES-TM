@@ -425,7 +425,6 @@ export class TimesheetApprovalService {
   // Create new timesheet
   static async createTimesheet(userId: string, weekStartDate: string): Promise<Timesheet | null> {
     try {
-      console.log('TimesheetApprovalService.createTimesheet called with:', { userId, weekStartDate });
       
       const result = await TimesheetService.createTimesheet(userId, weekStartDate);
       
@@ -434,7 +433,6 @@ export class TimesheetApprovalService {
         return null;
       }
       
-      console.log('Timesheet created successfully in TimesheetApprovalService:', result.timesheet);
       return result.timesheet || null;
     } catch (error) {
       console.error('Error in TimesheetApprovalService.createTimesheet:', error);
@@ -575,19 +573,13 @@ export class TimesheetApprovalService {
   // Submit timesheet
   static async submitTimesheet(timesheetId: string, userId: string): Promise<boolean> {
     try {
-      console.log('🔄 TimesheetApprovalService: Processing submission for timesheet:', timesheetId);
       
       // Skip ALL validation and try direct submission to test if writes work
-      console.log('� BYPASSING ALL VALIDATION - Testing direct submission...');
-      console.log('� User ID:', userId, 'Timesheet ID:', timesheetId);
       
-      console.log('✅ Skipping validation, proceeding directly to submission...');
       const result = await TimesheetService.submitTimesheet(timesheetId);
       
-      console.log('📤 Direct submission result:', result);
       
       if (result.success) {
-        console.log('✅ Timesheet submission completed successfully');
       } else {
         console.error('❌ Timesheet submission failed:', result.error);
       }
@@ -674,7 +666,6 @@ export class TimesheetApprovalService {
     }
   }> {
     try {
-      console.log(`📅 TimesheetApprovalService.getCalendarData called for user ${userId}, month ${month}, year ${year}`);
       
       // Use the existing TimesheetService method that's already integrated
       const result = await TimesheetService.getCalendarData(userId, parseInt(year), parseInt(month));
@@ -684,7 +675,6 @@ export class TimesheetApprovalService {
         return {};
       }
       
-      console.log(`📅 TimesheetApprovalService received calendar data with ${Object.keys(result.calendarData || {}).length} days`);
       
       // Transform the data to ensure proper typing
       const transformedData: { [date: string]: { status: TimesheetStatus; hours: number; entries: TimeEntry[]; } } = {};
@@ -700,7 +690,6 @@ export class TimesheetApprovalService {
         });
       }
       
-      console.log(`📅 TimesheetApprovalService returning transformed data with ${Object.keys(transformedData).length} days`);
       
       return transformedData;
     } catch (error) {

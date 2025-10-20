@@ -242,7 +242,6 @@ export class TimesheetService {
    */
   private static async updateTimesheetTotalHours(timesheetId: string): Promise<void> {
     // This is now handled automatically by the backend when entries are updated
-    console.log('✅ Timesheet total hours updated automatically by backend:', timesheetId);
   }
 
   /**
@@ -305,7 +304,6 @@ export class TimesheetService {
    */
   static async getTimesheetById(timesheetId: string): Promise<{ timesheet?: TimesheetWithDetails; error?: string }> {
     try {
-      console.log('🔍 TimesheetService.getTimesheetById called with ID:', timesheetId);
 
       const response = await backendApi.get(`/timesheets/details/${timesheetId}`);
 
@@ -329,14 +327,6 @@ export class TimesheetService {
           can_reject: false, // Will be determined by role in component
           next_action: this.getNextAction(timesheetData.status)
         };
-
-        console.log('✅ Enhanced timesheet created:', {
-          id: enhancedTimesheet.id,
-          status: enhancedTimesheet.status,
-          total_hours: enhancedTimesheet.total_hours,
-          can_submit: enhancedTimesheet.can_submit,
-          entries_count: enhancedTimesheet.time_entries?.length || 0
-        });
 
         return { timesheet: enhancedTimesheet };
       } else {
@@ -382,12 +372,10 @@ export class TimesheetService {
     error?: string;
   }> {
     try {
-      console.log(`📅 Loading calendar data for user ${userId}, year ${year}, month ${month}`);
 
       const response = await backendApi.get(`/timesheets/calendar/${userId}/${year}/${month}`);
 
       if (response.success && response.data) {
-        console.log(`📅 Calendar data keys: ${Object.keys(response.data).length} days with data`);
         return { calendarData: response.data };
       } else {
         return { calendarData: {}, error: response.message || 'Failed to fetch calendar data' };

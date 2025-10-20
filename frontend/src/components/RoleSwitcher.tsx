@@ -106,9 +106,6 @@ const RoleSwitcher: React.FC<RoleSwitcherProps> = ({ onRoleChange, className = '
       // Close dropdown
       setIsOpen(false);
 
-      // Show success feedback
-      console.log(`Successfully switched to ${newRole} role`);
-      
     } catch (error) {
       console.error('Error switching roles:', error);
     } finally {

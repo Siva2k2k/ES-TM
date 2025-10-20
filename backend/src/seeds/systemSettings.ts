@@ -6,13 +6,11 @@ import { User } from '../models/User';
  * Run this to populate initial system configuration
  */
 export async function seedSystemSettings() {
-  console.log('🌱 Seeding system settings...');
 
   try {
     // Find a super admin to set as the creator
   const superAdmin = await (User as any).findOne({ role: 'super_admin' });
     if (!superAdmin) {
-      console.log('❌ No super admin found. Create a super admin user first.');
       return;
     }
 
@@ -228,13 +226,10 @@ export async function seedSystemSettings() {
       );
     }
 
-    console.log(`✅ Seeded ${defaultSettings.length} system settings successfully!`);
     
     // Display some key settings
     const publicSettings = await SystemSettings.find({ is_public: true }).select('setting_key setting_value category');
-    console.log('\n📋 Public Settings:');
     publicSettings.forEach(setting => {
-      console.log(`  ${setting.setting_key}: ${setting.setting_value} (${setting.category})`);
     });
 
   } catch (error) {

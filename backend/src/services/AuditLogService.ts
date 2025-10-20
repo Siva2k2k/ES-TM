@@ -66,13 +66,6 @@ export class AuditLogService {
 
       await auditLog.save();
 
-      console.log('Audit Event Logged:', {
-        tableName,
-        recordId,
-        action,
-        actor: actorName
-      });
-
       return { success: true };
     } catch (error: any) {
       console.error('Error logging audit event:', error);
@@ -327,8 +320,6 @@ export class AuditLogService {
       const timestamp = Date.now();
       const downloadUrl = `/api/v1/audit/export/${timestamp}.${format}`;
 
-      console.log(`Would export ${result.logs.length} audit log entries in ${format} format`);
-
       return {
         success: true,
         downloadUrl
@@ -404,7 +395,6 @@ export class AuditLogService {
       );
 
       const deletedCount = result.modifiedCount;
-      console.log(`Cleared ${deletedCount} old audit logs older than ${retentionDays} days`);
 
       return { deletedCount };
     } catch (error: any) {

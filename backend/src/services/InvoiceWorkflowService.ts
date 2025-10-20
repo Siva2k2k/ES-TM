@@ -342,7 +342,6 @@ export class InvoiceWorkflowService {
   private static async notifyApprovers(invoice: IInvoice): Promise<void> {
     // Implementation would depend on notification system
     // For now, just log the notification requirement
-    console.log(`Notification required: Invoice ${invoice.invoice_number} (${invoice.total_amount}) pending approval`);
     
     // Future implementation:
     // - Find users with approval permissions for the amount

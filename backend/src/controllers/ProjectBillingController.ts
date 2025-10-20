@@ -389,10 +389,7 @@ export class ProjectBillingController {
             day_of_week: 1
           });
         } catch (rateError) {
-          console.warn(
-            `No billing rate found for user ${userId} on project ${project._id}. Using default rate:`,
-            rateError
-          );
+          // No billing rate found, using default
         }
 
         const taskBuckets = new Map<
@@ -644,8 +641,6 @@ export class ProjectBillingController {
    */
   static async getTaskBillingView(req: Request, res: Response): Promise<void> {
     try {
-      console.log('Task billing view called with query:', req.query);
-      
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         res.status(400).json({
@@ -826,7 +821,7 @@ export class ProjectBillingController {
               });
               rate = rateResult.effective_rate;
             } catch (rateError) {
-              console.warn('Rate calculation failed, using default:', rateError);
+              // Rate calculation failed, using default
             }
 
             const taskResource: TaskResourceData = {
@@ -1374,19 +1369,14 @@ export class ProjectBillingController {
             const tempSystemUser = new (User as any)(systemUserData);
             await tempSystemUser.save();
             adjustedBy = tempSystemUser._id;
-            console.log('Created new system user with ID:', adjustedBy);
           }
         }
       } catch (userError) {
         console.error('Error getting adjusted_by user:', userError);
         // As a last resort, create a valid ObjectId
         adjustedBy = new mongoose.Types.ObjectId();
-        console.warn('Using fallback ObjectId for adjusted_by:', adjustedBy);
       }
 
-      console.log('Final adjusted_by user ID:', adjustedBy);
-      console.log('Is valid ObjectId?', mongoose.Types.ObjectId.isValid(adjustedBy));
-      
       // Check if adjustment already exists
       const existingAdjustment = await (BillingAdjustment as any).findOne({
         user_id: mongoose.Types.ObjectId.createFromHexString(user_id),

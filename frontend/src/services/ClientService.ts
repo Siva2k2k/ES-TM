@@ -32,13 +32,11 @@ export class ClientService {
         payload
       );
 
-      console.log(response);
 
       if (!response.success) {
         return { error: response.message || 'Failed to create client' };
       }
 
-      console.log('Client created:', response.data);
       return { client: response.data };
     } catch (error: any) {
       console.error('Error in createClient:', error);
@@ -114,7 +112,6 @@ export class ClientService {
         return { success: false, error: response.message || 'Failed to update client' };
       }
 
-      console.log(`Updated client ${clientId}`);
       return { success: true, client: response.data };
     } catch (error) {
       console.error('Error in updateClient:', error);
@@ -136,7 +133,6 @@ export class ClientService {
         return { success: false, error: response.message || 'Failed to deactivate client' };
       }
 
-      console.log(`Deactivated client ${clientId}`);
       return { success: true };
     } catch (error) {
       console.error('Error in deactivateClient:', error);
@@ -158,7 +154,6 @@ export class ClientService {
         return { success: false, error: response.message || 'Failed to reactivate client' };
       }
 
-      console.log(`Reactivated client ${clientId}`);
       return { success: true };
     } catch (error) {
       console.error('Error in reactivateClient:', error);
@@ -181,7 +176,6 @@ export class ClientService {
         return { success: false, error: response.message || 'Failed to delete client' };
       }
 
-      console.log(`Soft deleted client ${clientId}`);
       return { success: true };
     } catch (error) {
       console.error('Error in deleteClient:', error);
@@ -203,7 +197,6 @@ export class ClientService {
         return { success: false, error: response.message || 'Failed to permanently delete client' };
       }
 
-      console.log(`Hard deleted client ${clientId}`);
       return { success: true };
     } catch (error) {
       console.error('Error in hardDeleteClient:', error);
@@ -225,7 +218,6 @@ export class ClientService {
         return { success: false, error: response.message || 'Failed to restore client' };
       }
 
-      console.log(`Restored client ${clientId}`);
       return { success: true };
     } catch (error) {
       console.error('Error in restoreClient:', error);

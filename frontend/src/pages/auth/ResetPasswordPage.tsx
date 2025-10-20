@@ -53,7 +53,6 @@ export function ResetPasswordPage() {
 
     if (tokenParam && tokenParam.length > 10) {
       setToken(tokenParam);
-      console.log('✅ Token extracted from URL');
     } else {
       setServerError('Invalid or missing reset token. Please request a new password reset.');
     }

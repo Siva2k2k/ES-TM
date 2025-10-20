@@ -138,7 +138,6 @@ export class BillingService {
           }
         } catch (rateError) {
           // Fall back to user's base rate if smart calculation fails
-          console.warn('Smart rate calculation failed, using base rate:', rateError);
         }
 
         const snapshotData = {

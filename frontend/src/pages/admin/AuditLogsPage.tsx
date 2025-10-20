@@ -221,7 +221,6 @@ export const AuditLogsPage: React.FC = () => {
 
   const handleViewDetails = (log: AuditLog) => {
     // Could open a modal with full log details
-    console.log('View log details:', log);
   };
 
   if (!canViewAuditLogs) {

@@ -186,7 +186,6 @@ export class UserService {
 
       await user.save();
 
-      console.log('User created for approval:', user.id);
       return { user };
     } catch (error) {
       console.error('Error in createUserForApproval:', error);
@@ -223,7 +222,6 @@ export class UserService {
         const user: any = await (User.findById as any)(userId);
 
         if (user) {
-          console.log("Email sending is in process....")
           // If the user has no credentials yet (Management-created), generate them
           
             const temporaryPassword = PasswordSecurity.generateTemporaryPassword(16);
@@ -257,9 +255,6 @@ export class UserService {
             logger.warn(`Failed to send approval email to ${user.email}`);
           }
         }
-        else {
-          console.log('No such User exists')
-        }
       } catch (emailError) {
         logger.error('Error sending approval email:', emailError);
         // Do not fail the approval process if email fails
@@ -281,7 +276,6 @@ export class UserService {
         );
       }
 
-      console.log(`Super Admin approved user: ${userId}`);
       return { success: true };
     } catch (error) {
       console.error('Error in approveUser:', error);
@@ -336,7 +330,6 @@ export class UserService {
         { is_active: isActive }
       );
 
-      console.log(`Setting user ${userId} status to: ${isActive ? 'active' : 'inactive'}`);
       return { success: true };
     } catch (error) {
       console.error('Error in setUserStatus:', error);
@@ -396,7 +389,6 @@ export class UserService {
         { hourly_rate: hourlyRate }
       );
 
-      console.log(`Setting billing for user ${userId}: $${hourlyRate}/hr`);
       return { success: true };
     } catch (error) {
       console.error('Error in setUserBilling:', error);
@@ -533,7 +525,6 @@ export class UserService {
         );
       }
 
-      console.log(`Updated user ${userId}`);
       return { success: true };
     } catch (error) {
       console.error('Error in updateUser:', error);
@@ -1004,7 +995,6 @@ export class UserService {
         }
       );
 
-      console.log(`Set credentials for user: ${userId}`);
       return { success: true };
     } catch (error) {
       console.error('Error in setUserCredentials:', error);
@@ -1194,9 +1184,6 @@ export class UserService {
       // Generate secure reset token
       const resetToken = PasswordSecurity.generateResetToken();
       const resetExpiry = PasswordSecurity.generatePasswordExpiry(1); // 1 hour to reset
-      
-      // Temporary logging for development
-      console.log(`🔐 Password reset token for ${email}: ${resetToken}`);
 
       // Save reset token
       await (User.updateOne as any)(

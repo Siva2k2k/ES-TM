@@ -32,7 +32,6 @@ export class BackendApiClient {
   private async getAuthToken(): Promise<string | null> {
     // Get token from local storage (our MongoDB backend auth system)
     const token = localStorage.getItem('accessToken');
-    console.log('Retrieved token from localStorage:', token ? `${token.substring(0, 20)}...` : 'null');
     return token;
   }
 
@@ -69,8 +68,7 @@ export class BackendApiClient {
 
         try {
           errorData = await response.json();
-          console.log('Error response data:', errorData);
-          
+
           if (errorData && errorData.error) {
             errorMessage = typeof errorData.error === 'string' && errorData.error ? 
               errorData.error : 

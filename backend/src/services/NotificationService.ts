@@ -29,11 +29,6 @@ export class NotificationService {
    * Create a new notification
    */
   static async create(params: CreateNotificationParams): Promise<INotification> {
-    console.log('Creating notification for:', {
-      recipient_id: params.recipient_id,
-      sender_id: params.sender_id,
-    });
-
     const validObjectId = (id: any) =>
       mongoose.Types.ObjectId.isValid(id) && new mongoose.Types.ObjectId(id).toString() === id; 
 

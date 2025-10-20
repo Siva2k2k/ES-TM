@@ -143,13 +143,6 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
   useEffect(() => {
     if (initialData) {
       try {
-        // Debug log to diagnose empty edit form issues
-        // eslint-disable-next-line no-console
-        console.debug('TimesheetForm: resetting form with initialData', {
-          week_start_date: initialData.week_start_date,
-          entriesCount: Array.isArray(initialData.entries) ? initialData.entries.length : 0
-        });
-
         // Ensure each entry has a stable client-side UID to keep Controller bindings stable
         const entriesWithUid = Array.isArray(initialData.entries)
           ? initialData.entries.map(e => ({ ...(e as any), _uid: (e as any)._uid || generateUid() }))
@@ -166,7 +159,6 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
         setSelectedProject(firstProjectEntry?.project_id ?? '');
       } catch (err) {
         // non-fatal: avoid breaking the form if reset fails
-        // eslint-disable-next-line no-console
         console.error('Failed to reset TimesheetForm with initialData', err);
       }
     } else if (mode === 'create') {
@@ -289,8 +281,6 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
 
     // If anything new was added, set entries once to avoid races and ensure validation runs once
     if (newEntries.length !== currentEntries.length) {
-      // eslint-disable-next-line no-console
-      console.debug('Copying entries, added', newEntries.length - currentEntries.length, 'entries');
       setValue('entries', newEntries, { shouldValidate: true, shouldDirty: true });
     }
   };

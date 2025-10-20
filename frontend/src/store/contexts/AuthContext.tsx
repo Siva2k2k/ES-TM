@@ -61,7 +61,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Sign out function
   const signOut = useCallback(async (): Promise<void> => {
     try {
-      console.log('🚪 === SIGN OUT PROCESS START ===');
       setIsLoading(true);
 
       // Clear local state immediately to ensure UI updates
@@ -72,7 +71,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Sign out from backend (clears tokens)
       await BackendAuthService.logout();
 
-      console.log('🚪 === SIGN OUT PROCESS END ===');
     } catch (error) {
       console.error('Sign out error:', error);
     } finally {
@@ -120,7 +118,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           if (BackendAuthService.shouldRefreshToken()) {
             const refreshResult = await BackendAuthService.refreshToken();
             if (!refreshResult.success) {
-              console.log('Token refresh failed, user needs to log in again');
               setIsLoading(false);
               return;
             }
@@ -136,8 +133,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setIsLoading(false);
         }
       }
-
-      console.log('🔍 === BACKEND AUTH INITIALIZED ===');
     };
 
     // Initialize

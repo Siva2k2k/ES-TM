@@ -126,7 +126,6 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
         await SettingsService.updateUserSettings({ theme: newTheme });
       } catch (error) {
         // Silent fail - theme is already saved in localStorage
-        console.debug('Theme not saved to backend (user may not be authenticated)');
       }
     }
   };

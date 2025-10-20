@@ -643,7 +643,6 @@ export const REPORT_TEMPLATE_SEEDS = [
  */
 export async function seedReportTemplates(createdBy: string): Promise<void> {
   try {
-    console.log('🌱 Seeding report templates...');
 
     for (const template of REPORT_TEMPLATE_SEEDS) {
       await ReportTemplate.findOneAndUpdate(
@@ -653,7 +652,6 @@ export async function seedReportTemplates(createdBy: string): Promise<void> {
       );
     }
 
-    console.log(`✅ Successfully seeded ${REPORT_TEMPLATE_SEEDS.length} report templates`);
   } catch (error) {
     console.error('❌ Error seeding report templates:', error);
     throw error;

@@ -26,7 +26,19 @@
       "Bash(tasklist:*)",
       "Read(//d//**)",
       "Bash(cat -A)",
-      "Bash(test -d \"frontend/e2e\")"
+      "Bash(test -d \"frontend/e2e\")",
+      "Bash(npm uninstall @supabase/supabase-js faker jest @types/jest ts-jest dotenv)",
+      "Bash(npm uninstall bcrypt passport-apple passport-microsoft multer)",
+      "Bash(do echo \"Processing $file:\")",
+      "Bash(do if [ -f \"$file\" ])",
+      "Bash(then echo \"=== $file ===\")",
+      "Bash(fi)",
+      "Bash(then echo \"$file\")",
+      "Bash(git checkout -- src/services/NotificationService.ts src/controllers/ProjectBillingController.ts src/services/AuditLogService.ts)",
+      "Bash(git checkout -- src/components/TeamReview.tsx)",
+      "Bash(git checkout -- src/components/EmployeeTimesheet.tsx)",
+      "Bash(xargs -I {} basename {})",
+      "Bash(do [ -f \"$file\" ])"
     ],
     "deny": [],
     "ask": []

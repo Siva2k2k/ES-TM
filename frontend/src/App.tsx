@@ -38,7 +38,6 @@ const ProjectSelector: React.FC = () => {
 
 // Timesheet Management
 import { EmployeeTimesheetPage } from './pages/employee/EmployeeTimesheetPage';
-import TeamReview from './components/TeamReview';
 import TimesheetStatusView from './components/TimesheetStatusView';
 
 // Phase 7: Team Review (Project-wise approval)
@@ -149,40 +148,6 @@ const App: React.FC = () => {
               <TimesheetStatusView />
             </ProtectedRoute>
           } />
-
-          {/* Team Review - Manager/Lead Only */}
-          <Route path="team">
-            <Route index element={
-              <ProtectedRoute requiredRoles={['manager', 'lead', 'management', 'super_admin']}>
-                <TeamReview />
-              </ProtectedRoute>
-            } />
-            <Route path="calendar" element={
-              <ProtectedRoute requiredRoles={['manager', 'lead', 'management', 'super_admin']}>
-                <TeamReview />
-              </ProtectedRoute>
-            } />
-            <Route path="list" element={
-              <ProtectedRoute requiredRoles={['manager', 'lead', 'management', 'super_admin']}>
-                <TeamReview />
-              </ProtectedRoute>
-            } />
-            <Route path="approval" element={
-              <ProtectedRoute requiredRoles={['manager', 'lead', 'management', 'super_admin']}>
-                <TeamReview />
-              </ProtectedRoute>
-            } />
-            <Route path="verification" element={
-              <ProtectedRoute requiredRoles={['manager', 'lead', 'management', 'super_admin']}>
-                <TeamReview />
-              </ProtectedRoute>
-            } />
-            <Route path="overview" element={
-              <ProtectedRoute requiredRoles={['manager', 'lead', 'management', 'super_admin']}>
-                <TeamReview />
-              </ProtectedRoute>
-            } />
-          </Route>
 
           {/* Phase 7: Team Review - Project-wise Approval (Lead/Manager/Management) */}
           <Route path="team-review" element={

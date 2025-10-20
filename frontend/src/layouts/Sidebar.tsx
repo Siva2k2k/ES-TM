@@ -92,16 +92,16 @@ export function Sidebar({ isOpen, isCollapsed, onClose }: SidebarProps) {
         { id: 'users', label: 'User Management', icon: Users, path: '/dashboard/users' },
         { id: 'projects', label: 'Project Management', icon: Building2, path: '/dashboard/projects' },
         { id: 'clients', label: 'Client Management', icon: UserCheck, path: '/dashboard/clients' },
-        {
-          id: 'timesheet',
-          label: 'Timesheet Overview',
-          icon: Clock,
-          path: '/dashboard/timesheets',
-          subItems: [
-            { id: 'timesheet-status', label: 'View Data (Read-Only)', path: '/dashboard/timesheets/status' },
-            { id: 'timesheet-reports', label: 'Timesheet Reports', path: '/dashboard/timesheets/status/reports' }
-          ]
-        },
+        // {
+        //   id: 'timesheet',
+        //   label: 'Timesheet Overview',
+        //   icon: Clock,
+        //   path: '/dashboard/timesheets',
+        //   subItems: [
+        //     { id: 'timesheet-status', label: 'View Data (Read-Only)', path: '/dashboard/timesheets/status' },
+        //     { id: 'timesheet-reports', label: 'Timesheet Reports', path: '/dashboard/timesheets/status/reports' }
+        //   ]
+        // },
         { id: 'reports', label: 'Reports & Analytics', icon: TrendingUp, path: '/dashboard/reports' },
         { id: 'billing', label: 'Billing Management', icon: FileText, path: '/dashboard/billing/projects', subItems: billingSubItems },
         {
@@ -109,10 +109,7 @@ export function Sidebar({ isOpen, isCollapsed, onClose }: SidebarProps) {
           label: 'Audit Logs',
           icon: Activity,
           path: '/dashboard/admin/audit-logs',
-          subItems: [
-            { id: 'audit-logs', label: 'View Logs', path: '/dashboard/admin/audit-logs' },
-            { id: 'audit-cleanup', label: 'Data Cleanup', path: '/dashboard/admin/audit-cleanup' }
-          ]
+          subItems: []
         },
         { id: 'deleted-items', label: 'Deleted Items', icon: Trash2, path: '/dashboard/admin/deleted-items' }
       );
@@ -123,17 +120,14 @@ export function Sidebar({ isOpen, isCollapsed, onClose }: SidebarProps) {
         { id: 'clients', label: 'Client Management', icon: UserCheck, path: '/dashboard/clients' },
         { id: 'team', label: 'Team Review', icon: Users, path: '/dashboard/team-review' },
         { id: 'reports', label: 'Reports & Analytics', icon: TrendingUp, path: '/dashboard/reports' },
-        { id: 'billing', label: 'Billing Management', icon: FileText, path: '/dashboard/billing/projects', subItems: billingSubItems },
-        { id: 'deleted-items', label: 'Deleted Items', icon: Trash2, path: '/dashboard/admin/deleted-items' }
+        { id: 'billing', label: 'Billing Management', icon: FileText, path: '/dashboard/billing/projects', subItems: billingSubItems }
       );
     }
 
     // Manager - Team management
     else if (currentUserRole === 'manager') {
       baseItems.push(
-        { id: 'users', label: 'Team Management', icon: Users, path: '/dashboard/users' },
         { id: 'projects', label: 'Project Management', icon: Building2, path: '/dashboard/projects' },
-        { id: 'clients', label: 'Client Management', icon: UserCheck, path: '/dashboard/clients' },
         { id: 'timesheet', label: 'My Timesheet', icon: Clock, path: '/dashboard/timesheets',
           subItems: [
             { id: 'timesheet-list', label: 'List View', path: '/dashboard/timesheets?view=list' },
@@ -141,6 +135,7 @@ export function Sidebar({ isOpen, isCollapsed, onClose }: SidebarProps) {
           ]
         },
         { id: 'team', label: 'Team Review', icon: Users, path: '/dashboard/team-review' },
+        { id: 'timesheet-status', label: 'My Status', icon: Activity, path: '/dashboard/timesheets/status' },
         { id: 'reports', label: 'Reports & Analytics', icon: TrendingUp, path: '/dashboard/reports' }
       );
     }

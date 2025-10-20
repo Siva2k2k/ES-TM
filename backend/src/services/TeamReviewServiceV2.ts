@@ -201,7 +201,6 @@ export class TeamReviewServiceV2 {
 
             // Skip if user_id is null or not populated
             if (!ts.user_id || !ts.user_id._id) {
-              console.warn(`Skipping timesheet ${ts._id} - user_id is null or not populated`);
               continue;
             }
 
