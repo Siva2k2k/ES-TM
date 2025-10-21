@@ -50,6 +50,8 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
         return 'bg-green-50 border-green-200';
       case 'rejected':
         return 'bg-red-50 border-red-200';
+      case 'partially_processed':
+        return 'bg-blue-50 border-blue-200';
       default:
         return 'bg-white border-gray-200';
     }
@@ -62,6 +64,15 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
         return <span className={`${baseClasses} bg-green-100 text-green-800`}>Approved</span>;
       case 'rejected':
         return <span className={`${baseClasses} bg-red-100 text-red-800`}>Rejected</span>;
+      case 'partially_processed':
+        return (
+          <span
+            className={`${baseClasses} bg-blue-100 text-blue-800`}
+            title={projectWeek.sub_status || 'Some timesheets approved, some pending'}
+          >
+            Partially Processed
+          </span>
+        );
       default:
         return <span className={`${baseClasses} bg-yellow-100 text-yellow-800`}>Pending Approval</span>;
     }
@@ -78,7 +89,7 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
 
   const shouldShowActions =
     canApprove &&
-    projectWeek.approval_status === 'pending' &&
+    (projectWeek.approval_status === 'pending' || projectWeek.approval_status === 'partially_processed') &&
     (isManagementMode ? hasManagerApproved : hasPendingApprovals);
 
   const actionButtonDisabled = isLoading || (isManagementMode && !allManagerApproved);
@@ -108,7 +119,20 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
                 {projectWeek.project_name}
               </h3>
               {getStatusBadge()}
+              {projectWeek.is_reopened && (
+                <span
+                  className="px-3 py-1 rounded-full text-sm font-medium bg-orange-100 text-orange-800"
+                  title={`Reopened: ${projectWeek.original_approval_count} timesheets were approved, then new submissions were added`}
+                >
+                  Reopened
+                </span>
+              )}
             </div>
+            {projectWeek.sub_status && (
+              <div className="text-sm text-gray-600 mb-2">
+                <span className="font-medium">{projectWeek.sub_status}</span>
+              </div>
+            )}
             <div className="flex items-center gap-4 text-sm text-gray-600">
               <span className="font-medium">{projectWeek.week_label}</span>
               <span className="text-gray-400">•</span>
@@ -163,9 +187,23 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
               <span className="text-sm text-gray-600">Users</span>
             </div>
             <div className="text-2xl font-bold text-gray-900">{projectWeek.total_users}</div>
-            {hasPendingApprovals && (
-              <div className="text-xs text-yellow-600 mt-1">
-                {pendingUsers.length} pending
+            {(projectWeek.pending_count !== undefined || projectWeek.approved_count !== undefined) && (
+              <div className="text-xs mt-1 space-y-0.5">
+                {projectWeek.approved_count !== undefined && projectWeek.approved_count > 0 && (
+                  <div className="text-green-600">
+                    {projectWeek.approved_count} approved
+                  </div>
+                )}
+                {projectWeek.pending_count !== undefined && projectWeek.pending_count > 0 && (
+                  <div className="text-yellow-600">
+                    {projectWeek.pending_count} pending
+                  </div>
+                )}
+                {projectWeek.rejected_count !== undefined && projectWeek.rejected_count > 0 && (
+                  <div className="text-red-600">
+                    {projectWeek.rejected_count} rejected
+                  </div>
+                )}
               </div>
             )}
           </div>

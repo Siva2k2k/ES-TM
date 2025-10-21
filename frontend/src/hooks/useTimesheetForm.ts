@@ -12,6 +12,31 @@ import { TimesheetApprovalService } from '../services/TimesheetApprovalService';
 import { useAuth } from '../store/contexts/AuthContext';
 import { useToast } from './useToast';
 
+function isWeekendDate(dateStr: string): boolean {
+  try {
+    const date = new Date(dateStr);
+    const day = date.getDay();
+    return day === 0 || day === 6;
+  } catch {
+    return false;
+  }
+}
+
+function prepareEntriesForPersistence(entries: Array<TimeEntry | (TimeEntry & { _uid?: string })>): TimeEntry[] {
+  return (entries || []).map((entry) => {
+    const { _uid, ...rest } = entry as TimeEntry & { _uid?: string };
+    const coercedHours =
+      typeof rest.hours === 'number'
+        ? rest.hours
+        : Number(rest.hours || 0);
+    return {
+      ...rest,
+      hours: coercedHours,
+      is_billable: isWeekendDate(rest.date) ? false : Boolean(rest.is_billable)
+    };
+  });
+}
+
 type TimesheetSubmitStatus = 'saved' | 'submitted';
 
 export interface TimesheetSubmitResult {
@@ -144,8 +169,6 @@ export function useTimesheetForm(
 
         if (status === 'submitted') {
           const isValid = await form.trigger();
-          console.error(isValid);
-
           if (!isValid) {
             const errors = form.formState.errors;
             const errorMessages = Object.values(errors)
@@ -158,11 +181,13 @@ export function useTimesheetForm(
           }
         }
 
+        const sanitizedEntries = prepareEntriesForPersistence(values.entries || []);
+
         // Handle edit flow
         if (mode === 'edit' && options.timesheetId) {
           const updated = await TimesheetApprovalService.updateTimesheetEntries(
             options.timesheetId,
-            values.entries as any
+            sanitizedEntries as any
           );
 
           if (!updated) {
@@ -201,11 +226,10 @@ export function useTimesheetForm(
           throw new Error('Timesheet already exists for this week or could not be created');
         }
 
-        const entriesToPersist = (values.entries || []) as any[];
-        if (entriesToPersist.length > 0) {
+        if (sanitizedEntries.length > 0) {
           const addedEntries = await TimesheetApprovalService.addMultipleEntries(
             created.id,
-            entriesToPersist
+            sanitizedEntries as any
           );
 
           if (!addedEntries) {

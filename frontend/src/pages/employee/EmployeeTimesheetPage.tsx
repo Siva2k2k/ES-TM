@@ -97,6 +97,7 @@ export const  EmployeeTimesheetPage: React.FC = () => {
     setEditingTimesheetDetail(null);
     setEditingTimesheetId(null);
     setEditingProjectApprovals([]);
+    setDetailMode('view');
   }, [editModal]);
 
   const startCreateTimesheet = useCallback((date?: string) => {
@@ -117,6 +118,7 @@ export const  EmployeeTimesheetPage: React.FC = () => {
   const [editingTimesheetId, setEditingTimesheetId] = useState<string | null>(null);
   const [editingTimesheetDetail, setEditingTimesheetDetail] = useState<TimesheetWithDetails | null>(null);
   const [editingProjectApprovals, setEditingProjectApprovals] = useState<any[]>([]);
+  const [detailMode, setDetailMode] = useState<'view' | 'edit'>('view');
   const [isEditingLoading, setIsEditingLoading] = useState(false);
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [tasks, setTasks] = useState<TaskOption[]>([]);
@@ -170,7 +172,7 @@ export const  EmployeeTimesheetPage: React.FC = () => {
   const calendarDayMap = useMemo(() => buildCalendarDayMap(timesheetDetails, projects), [timesheetDetails, projects]);
   const calendarDays = useMemo<CalendarDay[]>(() => buildMonthlyCalendarDays(calendarDate, calendarDayMap), [calendarDate, calendarDayMap]);
 
-  const openTimesheetForEdit = useCallback(async (timesheetId: string) => {
+  const openTimesheetForEdit = useCallback(async (timesheetId: string, mode: 'view' | 'edit' = 'edit') => {
     setIsEditingLoading(true);
     try {
       let detail = timesheetDetails[timesheetId];
@@ -208,6 +210,13 @@ export const  EmployeeTimesheetPage: React.FC = () => {
       if (enhancedDetail.week_start_date) {
         setWeekStartDate(enhancedDetail.week_start_date);
       }
+
+      // Force view mode for submitted/approved timesheets (draft and rejected are editable)
+      const status = detail.status?.toLowerCase();
+      const isEditable = !status || status === 'draft' || status === 'rejected' || status === 'manager_rejected' || status === 'management_rejected';
+      const finalMode = isEditable ? mode : 'view';
+
+      setDetailMode(finalMode);
       editModal.open();
     } catch (error) {
       console.error('Error loading timesheet details:', error);
@@ -218,7 +227,7 @@ export const  EmployeeTimesheetPage: React.FC = () => {
   }, [timesheetDetails, editModal]);
 
   const handleTimesheetClick = (timesheet: Timesheet) => {
-    void openTimesheetForEdit(timesheet.id);
+    void openTimesheetForEdit(timesheet.id, 'view');
   };
 
   const handleCreateSuccess = async (_result: TimesheetSubmitResult) => {
@@ -232,7 +241,7 @@ export const  EmployeeTimesheetPage: React.FC = () => {
   };
 
   const handleEdit = (timesheet: Timesheet) => {
-    void openTimesheetForEdit(timesheet.id);
+    void openTimesheetForEdit(timesheet.id, 'edit');
   };
 
   const handleDelete = async (timesheet: Timesheet) => {
@@ -394,7 +403,7 @@ export const  EmployeeTimesheetPage: React.FC = () => {
       <Modal
         isOpen={editModal.isOpen}
         onClose={closeEditModal}
-        title="Edit Timesheet"
+        title={detailMode === 'edit' ? 'Edit Timesheet' : 'View Timesheet'}
         size="xl"
       >
         {isEditingLoading && !editingTimesheetDetail ? (
@@ -403,7 +412,7 @@ export const  EmployeeTimesheetPage: React.FC = () => {
           </div>
         ) : editingTimesheetDetail ? (
           <TimesheetForm
-            mode="edit"
+            mode={detailMode}
             timesheetId={editingTimesheetId || undefined}
             initialData={{
               week_start_date: editingTimesheetDetail.week_start_date,
@@ -417,7 +426,7 @@ export const  EmployeeTimesheetPage: React.FC = () => {
           />
         ) : (
           <div className="py-12 text-center text-sm text-slate-500">
-            Select a timesheet to edit.
+            Select a timesheet to view.
           </div>
         )}
       </Modal>

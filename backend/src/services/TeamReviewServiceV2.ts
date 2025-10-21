@@ -180,13 +180,13 @@ export class TeamReviewServiceV2 {
             weekTimesheets.some(ts => ts._id.toString() === a.timesheet_id.toString())
           );
 
-          const approvalStatus = this.determineProjectWeekStatus(
+          const statusResult = this.determineProjectWeekStatus(
             projectWeekApprovals,
             visibleTimesheetIds,
             status,
             approverRole
           );
-          if (approvalStatus === null) continue; // Skip if doesn't match filter
+          if (statusResult.status === null) continue; // Skip if doesn't match filter
 
           // Build users for this project-week
           const users: ProjectWeekUser[] = [];
@@ -285,6 +285,29 @@ export class TeamReviewServiceV2 {
             rejectionReason = rejectedApproval?.manager_rejection_reason;
           }
 
+          // Detect reopening - if new timesheets were submitted after bulk approval
+          const reopeningInfo = await this.detectReopening(
+            project._id.toString(),
+            weekStart,
+            weekEnd,
+            projectWeekApprovals,
+            approverRole
+          );
+
+          // If reopened, force status back to pending/partially_processed
+          let finalStatus = statusResult.status;
+          let finalSubStatus = statusResult.sub_status;
+          if (reopeningInfo.is_reopened && statusResult.status === 'approved') {
+            // Was fully approved, but now has late submissions
+            // Check if all non-late submissions are still approved
+            if (statusResult.pending_count > 0) {
+              finalStatus = 'partially_processed';
+              finalSubStatus = statusResult.sub_status || `${statusResult.approved_count} of ${statusResult.approved_count + statusResult.pending_count} approved`;
+            } else {
+              finalStatus = 'pending';
+            }
+          }
+
           projectWeekMap.set(projectWeekKey, {
             project_id: project._id.toString(),
             project_name: project.name,
@@ -296,7 +319,11 @@ export class TeamReviewServiceV2 {
             manager_name: project.primary_manager_id?.full_name || 'Unknown',
             lead_id: leadInfo?.id,
             lead_name: leadInfo?.name,
-            approval_status: approvalStatus,
+            approval_status: finalStatus,
+            sub_status: finalSubStatus,
+            pending_count: statusResult.pending_count,
+            approved_count: statusResult.approved_count,
+            rejected_count: statusResult.rejected_count,
             users,
             total_users: users.length,
             total_hours: totalHours,
@@ -305,7 +332,11 @@ export class TeamReviewServiceV2 {
             rejected_by: rejectedApproval?.rejected_by?.toString(),
             rejected_at: rejectedApproval && rejectedApproval.updated_at ? new Date(rejectedApproval.updated_at).toISOString() : undefined,
             approved_by: approvedApproval?.approved_by?.toString(),
-            approved_at: approvedApproval && approvedApproval.updated_at ? new Date(approvedApproval.updated_at).toISOString() : undefined
+            approved_at: approvedApproval && approvedApproval.updated_at ? new Date(approvedApproval.updated_at).toISOString() : undefined,
+            is_reopened: reopeningInfo.is_reopened,
+            reopened_at: reopeningInfo.reopened_at,
+            reopened_by_submission: reopeningInfo.reopened_by_submission,
+            original_approval_count: reopeningInfo.original_approval_count
           });
         }
       }
@@ -457,8 +488,16 @@ export class TeamReviewServiceV2 {
     visibleTimesheetIds: Set<string>,
     statusFilter: string,
     approverRole?: string
-  ): 'pending' | 'approved' | 'rejected' | null {
-    if (approvals.length === 0) return null;
+  ): {
+    status: 'pending' | 'approved' | 'rejected' | 'partially_processed' | null;
+    pending_count: number;
+    approved_count: number;
+    rejected_count: number;
+    sub_status?: string;
+  } {
+    if (approvals.length === 0) {
+      return { status: null, pending_count: 0, approved_count: 0, rejected_count: 0 };
+    }
 
     // CRITICAL: Filter approvals to only include VISIBLE timesheets
     // This prevents late submissions from affecting the status of already-approved project-weeks
@@ -466,50 +505,173 @@ export class TeamReviewServiceV2 {
       visibleTimesheetIds.has(a.timesheet_id.toString())
     );
 
-    if (visibleApprovals.length === 0) return null;
-
-    let hasRejected = false;
-    let hasPending = false;
-    let allApproved = false;
-
-    // Check status based on approver role - using ONLY visible approvals
-    if (approverRole === 'lead') {
-      // For Lead: check lead_status
-      hasRejected = visibleApprovals.some(a => a.lead_status === 'rejected');
-      hasPending = visibleApprovals.some(a => a.lead_status === 'pending');
-      allApproved = visibleApprovals.every(a => a.lead_status === 'approved' || a.lead_status === 'not_required');
-    } else if (approverRole === 'manager' || approverRole === 'super_admin') {
-      // For Manager: check manager_status
-      hasRejected = visibleApprovals.some(a => a.manager_status === 'rejected');
-      hasPending = visibleApprovals.some(a => a.manager_status === 'pending');
-      allApproved = visibleApprovals.every(a => a.manager_status === 'approved');
-    } else if (approverRole === 'management') {
-      // For Management: check management_status
-      hasRejected = visibleApprovals.some(a => a.management_status === 'rejected');
-      hasPending = visibleApprovals.some(a => a.management_status === 'pending');
-      allApproved = visibleApprovals.every(a => a.management_status === 'approved');
-    } else {
-      // Default to manager_status for backward compatibility
-      hasRejected = visibleApprovals.some(a => a.manager_status === 'rejected');
-      hasPending = visibleApprovals.some(a => a.manager_status === 'pending');
-      allApproved = visibleApprovals.every(a => a.manager_status === 'approved');
+    if (visibleApprovals.length === 0) {
+      return { status: null, pending_count: 0, approved_count: 0, rejected_count: 0 };
     }
 
-    let status: 'pending' | 'approved' | 'rejected';
+    let pendingCount = 0;
+    let approvedCount = 0;
+    let rejectedCount = 0;
 
-    if (hasRejected) {
-      status = 'rejected';
-    } else if (hasPending) {
-      status = 'pending';
-    } else if (allApproved) {
-      status = 'approved';
+    // Count statuses based on approver role - using ONLY visible approvals
+    if (approverRole === 'lead') {
+      // For Lead: check lead_status
+      pendingCount = visibleApprovals.filter(a => a.lead_status === 'pending').length;
+      approvedCount = visibleApprovals.filter(a => a.lead_status === 'approved' || a.lead_status === 'not_required').length;
+      rejectedCount = visibleApprovals.filter(a => a.lead_status === 'rejected').length;
+    } else if (approverRole === 'manager' || approverRole === 'super_admin') {
+      // For Manager: check manager_status
+      pendingCount = visibleApprovals.filter(a => a.manager_status === 'pending').length;
+      approvedCount = visibleApprovals.filter(a => a.manager_status === 'approved').length;
+      rejectedCount = visibleApprovals.filter(a => a.manager_status === 'rejected').length;
+    } else if (approverRole === 'management') {
+      // For Management: check management_status
+      pendingCount = visibleApprovals.filter(a => a.management_status === 'pending').length;
+      approvedCount = visibleApprovals.filter(a => a.management_status === 'approved').length;
+      rejectedCount = visibleApprovals.filter(a => a.management_status === 'rejected').length;
     } else {
+      // Default to manager_status for backward compatibility
+      pendingCount = visibleApprovals.filter(a => a.manager_status === 'pending').length;
+      approvedCount = visibleApprovals.filter(a => a.manager_status === 'approved').length;
+      rejectedCount = visibleApprovals.filter(a => a.manager_status === 'rejected').length;
+    }
+
+    const totalCount = visibleApprovals.length;
+    let status: 'pending' | 'approved' | 'rejected' | 'partially_processed';
+    let subStatus: string | undefined;
+
+    // Determine overall status based on counts
+    if (rejectedCount > 0) {
+      // If ANY are rejected, overall status is rejected
+      status = 'rejected';
+      if (rejectedCount < totalCount) {
+        subStatus = `${rejectedCount} of ${totalCount} rejected`;
+      }
+    } else if (approvedCount === totalCount) {
+      // All approved
+      status = 'approved';
+    } else if (approvedCount > 0 && pendingCount > 0) {
+      // Some approved, some pending - this is partially processed
+      status = 'partially_processed';
+      subStatus = `${approvedCount} of ${totalCount} approved`;
+    } else if (pendingCount > 0) {
+      // All pending (or mix of pending with not_required)
+      status = 'pending';
+    } else {
+      // Fallback
       status = 'pending';
     }
 
     // Apply filter
-    if (statusFilter === 'all') return status;
-    return status === statusFilter ? status : null;
+    // For 'pending' filter, include both 'pending' and 'partially_processed'
+    let shouldInclude = false;
+    if (statusFilter === 'all') {
+      shouldInclude = true;
+    } else if (statusFilter === 'pending') {
+      shouldInclude = status === 'pending' || status === 'partially_processed';
+    } else {
+      shouldInclude = status === statusFilter;
+    }
+
+    return {
+      status: shouldInclude ? status : null,
+      pending_count: pendingCount,
+      approved_count: approvedCount,
+      rejected_count: rejectedCount,
+      sub_status: subStatus
+    };
+  }
+
+  /**
+   * Detect if a project-week has been reopened due to late submissions
+   * Returns reopening metadata if detected
+   */
+  private static async detectReopening(
+    projectId: string,
+    weekStart: Date,
+    weekEnd: Date,
+    currentApprovals: any[],
+    approverRole?: string
+  ): Promise<{
+    is_reopened: boolean;
+    reopened_at?: string;
+    reopened_by_submission?: string;
+    original_approval_count?: number;
+  }> {
+    try {
+      // Get all approval records for this project-week, ordered by creation time
+      const allApprovals = await TimesheetProjectApproval.find({
+        project_id: new mongoose.Types.ObjectId(projectId)
+      })
+        .populate({
+          path: 'timesheet_id',
+          select: 'week_start_date created_at user_id',
+          match: {
+            week_start_date: { $gte: weekStart, $lte: weekEnd }
+          }
+        })
+        .sort({ created_at: 1 });
+
+      // Filter out null timesheets (didn't match week range)
+      const validApprovals = allApprovals.filter(a => a.timesheet_id);
+
+      if (validApprovals.length === 0) {
+        return { is_reopened: false };
+      }
+
+      // Determine which status field to check based on role
+      let statusField: 'lead_status' | 'manager_status' | 'management_status' = 'manager_status';
+      if (approverRole === 'lead') {
+        statusField = 'lead_status';
+      } else if (approverRole === 'management') {
+        statusField = 'management_status';
+      }
+
+      // Find the last time ALL visible approvals were approved
+      let lastBulkApprovalTime: Date | null = null;
+      let countAtLastBulkApproval = 0;
+
+      for (let i = 0; i < validApprovals.length; i++) {
+        const approvalsUpToNow = validApprovals.slice(0, i + 1);
+        const allApprovedAtThisPoint = approvalsUpToNow.every(
+          a => a[statusField] === 'approved' || a[statusField] === 'not_required'
+        );
+
+        if (allApprovedAtThisPoint) {
+          lastBulkApprovalTime = validApprovals[i].updated_at;
+          countAtLastBulkApproval = approvalsUpToNow.length;
+        }
+      }
+
+      // If we never had a bulk approval, not reopened
+      if (!lastBulkApprovalTime) {
+        return { is_reopened: false };
+      }
+
+      // Check if any timesheets were submitted AFTER the last bulk approval
+      const lateSubmissions = validApprovals.filter(a => {
+        const timesheetCreatedAt = (a.timesheet_id as any)?.created_at;
+        return timesheetCreatedAt && new Date(timesheetCreatedAt) > lastBulkApprovalTime!;
+      });
+
+      if (lateSubmissions.length > 0) {
+        // This project-week has been reopened
+        const firstLateSubmission = lateSubmissions[0];
+        const timesheetId = firstLateSubmission.timesheet_id as any;
+
+        return {
+          is_reopened: true,
+          reopened_at: new Date(timesheetId.created_at).toISOString(),
+          reopened_by_submission: timesheetId.user_id?.toString(),
+          original_approval_count: countAtLastBulkApproval
+        };
+      }
+
+      return { is_reopened: false };
+    } catch (error) {
+      logger.error('Error detecting reopening:', error);
+      return { is_reopened: false };
+    }
   }
 
   /**

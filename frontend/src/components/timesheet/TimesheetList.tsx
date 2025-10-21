@@ -15,14 +15,14 @@
  * Cognitive Complexity: 9 (Target: <15)
  */
 
-import React, { useState, useMemo } from 'react';
-import { Calendar, Clock, Search, MoreVertical, List, Grid, History, Send, Edit as EditIcon, Trash2 } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Calendar, Clock, List, Grid, History, Send, Edit as EditIcon, Trash2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Select, type SelectOption } from '../ui/Select';
 import { StatusBadge } from '../shared/StatusBadge';
-import { formatDate, formatDuration } from '../../utils/formatting';
+import { formatDate, formatDuration, formatISODate } from '../../utils/formatting';
 import { ApprovalHistoryModal } from './ApprovalHistoryModal';
 
 export interface Timesheet {
@@ -90,6 +90,16 @@ const SORT_OPTIONS: SelectOption[] = [
   { value: 'status', label: 'Status' },
 ];
 
+const PERIOD_OPTIONS: SelectOption[] = [
+  { value: 'all', label: 'All Time' },
+  { value: 'this-week', label: 'This Week' },
+  { value: 'last-week', label: 'Last Week' },
+  { value: 'this-month', label: 'This Month' },
+  { value: 'last-month', label: 'Last Month' },
+  { value: 'last-90-days', label: 'Last 90 Days' },
+  { value: 'custom', label: 'Custom Range' },
+];
+
 export const TimesheetList: React.FC<TimesheetListProps> = ({
   timesheets,
   viewMode: initialViewMode = 'list',
@@ -104,32 +114,44 @@ export const TimesheetList: React.FC<TimesheetListProps> = ({
   showApprovalHistory = true
 }) => {
   const [viewMode, setViewMode] = useState<'list' | 'table'>(initialViewMode);
-  const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [periodFilter, setPeriodFilter] = useState('all');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [sortBy, setSortBy] = useState('date-desc');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedTimesheetForHistory, setSelectedTimesheetForHistory] = useState<string | null>(null);
 
-  // Filter and sort timesheets
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, startDate, endDate, sortBy, periodFilter, viewMode]);
+
   const filteredTimesheets = useMemo(() => {
     let filtered = [...timesheets];
 
-    // Apply status filter
     if (statusFilter !== 'all') {
       filtered = filtered.filter(ts => ts.status === statusFilter);
     }
 
-    // Apply search
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(ts =>
-        ts.week_start_date.includes(query) ||
-        ts.status.toLowerCase().includes(query) ||
-        ts.id.toLowerCase().includes(query)
-      );
+    const startTimestamp = normalizeDateValue(startDate);
+    const endTimestamp = normalizeDateValue(endDate);
+
+    if (startTimestamp !== null || endTimestamp !== null) {
+      filtered = filtered.filter(ts => {
+        const tsTimestamp = normalizeDateValue(ts.week_start_date);
+        if (tsTimestamp === null) {
+          return false;
+        }
+        if (startTimestamp !== null && tsTimestamp < startTimestamp) {
+          return false;
+        }
+        if (endTimestamp !== null && tsTimestamp > endTimestamp) {
+          return false;
+        }
+        return true;
+      });
     }
 
-    // Apply sorting
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'date-desc':
@@ -148,7 +170,7 @@ export const TimesheetList: React.FC<TimesheetListProps> = ({
     });
 
     return filtered;
-  }, [timesheets, statusFilter, searchQuery, sortBy]);
+  }, [timesheets, statusFilter, startDate, endDate, sortBy]);
 
   // Pagination
   const totalPages = Math.ceil(filteredTimesheets.length / itemsPerPage);
@@ -160,6 +182,19 @@ export const TimesheetList: React.FC<TimesheetListProps> = ({
 
   const handlePageChange = (page: number) => {
     setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  };
+
+  const hasStatusFilter = statusFilter !== 'all';
+  const hasDateFilter = Boolean(startDate) || Boolean(endDate);
+  const hasPresetPeriod = periodFilter !== 'all' && periodFilter !== 'custom';
+  const filtersApplied = hasStatusFilter || hasDateFilter || hasPresetPeriod;
+
+  const clearFilters = () => {
+    setStatusFilter('all');
+    setPeriodFilter('all');
+    setStartDate('');
+    setEndDate('');
+    setCurrentPage(1);
   };
 
   return (
@@ -195,25 +230,67 @@ export const TimesheetList: React.FC<TimesheetListProps> = ({
         <CardContent className="space-y-4">
           {/* Filters */}
           {showFilters && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Input
-                placeholder="Search timesheets..."
-                icon={Search}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <Select
-                options={STATUS_OPTIONS}
-                value={statusFilter}
-                onChange={setStatusFilter}
-                placeholder="Filter by status"
-              />
-              <Select
-                options={SORT_OPTIONS}
-                value={sortBy}
-                onChange={setSortBy}
-                placeholder="Sort by"
-              />
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Select
+                  label="Status"
+                  options={STATUS_OPTIONS}
+                  value={statusFilter}
+                  onChange={setStatusFilter}
+                />
+                <Select
+                  label="Period"
+                  options={PERIOD_OPTIONS}
+                  value={periodFilter}
+                  onChange={(value) => {
+                    setPeriodFilter(value);
+                    if (value === 'custom') {
+                      return;
+                    }
+                    const range = calculatePeriodRange(value);
+                    setStartDate(range.start);
+                    setEndDate(range.end);
+                  }}
+                />
+                <Input
+                  type="date"
+                  label="Start Date"
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    setPeriodFilter('custom');
+                  }}
+                  max={endDate || undefined}
+                />
+                <Input
+                  type="date"
+                  label="End Date"
+                  value={endDate}
+                  onChange={(e) => {
+                    setEndDate(e.target.value);
+                    setPeriodFilter('custom');
+                  }}
+                  min={startDate || undefined}
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <Select
+                  label="Sort By"
+                  options={SORT_OPTIONS}
+                  value={sortBy}
+                  onChange={setSortBy}
+                  className="w-full max-w-xs"
+                />
+                {filtersApplied && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearFilters}
+                  >
+                    Clear filters
+                  </Button>
+                )}
+              </div>
             </div>
           )}
 
@@ -222,14 +299,10 @@ export const TimesheetList: React.FC<TimesheetListProps> = ({
             <p>
               Showing {paginatedTimesheets.length} of {filteredTimesheets.length} timesheets
             </p>
-            {statusFilter !== 'all' && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setStatusFilter('all')}
-              >
-                Clear filter
-              </Button>
+            {filtersApplied && (
+              <span className="text-xs text-gray-500">
+                Filters applied
+              </span>
             )}
           </div>
 
@@ -413,7 +486,7 @@ const TimesheetListItem: React.FC<TimesheetListItemProps> = ({
         {(showActions || showApprovalHistory) && (
           <div className="flex gap-1 sm:gap-2 justify-end flex-shrink-0" onClick={(e) => e.stopPropagation()}>
             {/* Submit button (only for draft timesheets) */}
-            {showActions && timesheet.status === 'draft' && onSubmit && (
+            {showActions && (timesheet.status === 'draft' || timesheet.status === 'rejected') && onSubmit && (
               <Button
                 variant="default"
                 size="sm"
@@ -440,14 +513,19 @@ const TimesheetListItem: React.FC<TimesheetListItemProps> = ({
               </Button>
             )}
 
-            {/* Edit button (icon only on mobile) */}
+            {/* Edit button (icon only on mobile) - Enabled for draft and rejected timesheets */}
             {showActions && onEdit && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={onEdit}
+                disabled={timesheet.status !== 'draft' && timesheet.status !== 'rejected'}
                 className="text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2"
-                title="Edit Timesheet"
+                title={
+                  timesheet.status === 'draft' || timesheet.status === 'rejected'
+                    ? 'Edit Timesheet'
+                    : 'Only draft and rejected timesheets can be edited'
+                }
               >
                 <EditIcon className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
                 <span className="hidden sm:inline">Edit</span>
@@ -547,13 +625,18 @@ const TimesheetTableRow: React.FC<TimesheetTableRowProps> = ({
               </Button>
             )}
 
-            {/* Edit button */}
+            {/* Edit button - Enabled for draft and rejected timesheets */}
             {showActions && onEdit && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={onEdit}
-                title="Edit Timesheet"
+                disabled={timesheet.status !== 'draft' && timesheet.status !== 'rejected'}
+                title={
+                  timesheet.status === 'draft' || timesheet.status === 'rejected'
+                    ? 'Edit Timesheet'
+                    : 'Only draft and rejected timesheets can be edited'
+                }
               >
                 <EditIcon className="h-4 w-4 mr-1" />
                 Edit
@@ -578,3 +661,91 @@ const TimesheetTableRow: React.FC<TimesheetTableRowProps> = ({
     </tr>
   );
 };
+
+function normalizeDateValue(value?: string): number | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+function calculatePeriodRange(period: string): { start: string; end: string } {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let start: Date | null = null;
+  let end: Date | null = null;
+
+  switch (period) {
+    case 'this-week': {
+      start = startOfWeek(today);
+      end = endOfWeek(today);
+      break;
+    }
+    case 'last-week': {
+      start = startOfWeek(today);
+      start.setDate(start.getDate() - 7);
+      end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      break;
+    }
+    case 'this-month': {
+      start = startOfMonth(today);
+      end = endOfMonth(today);
+      break;
+    }
+    case 'last-month': {
+      const reference = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      start = startOfMonth(reference);
+      end = endOfMonth(reference);
+      break;
+    }
+    case 'last-90-days': {
+      start = new Date(today);
+      start.setDate(start.getDate() - 89);
+      end = today;
+      break;
+    }
+    case 'all':
+    case 'custom':
+    default: {
+      return { start: '', end: '' };
+    }
+  }
+
+  return {
+    start: start ? formatISODate(start) : '',
+    end: end ? formatISODate(end) : ''
+  };
+}
+
+function startOfWeek(date: Date): Date {
+  const result = new Date(date);
+  const day = result.getDay();
+  const diff = result.getDate() - day + (day === 0 ? -6 : 1);
+  result.setDate(diff);
+  result.setHours(0, 0, 0, 0);
+  return result;
+}
+
+function endOfWeek(date: Date): Date {
+  const result = startOfWeek(date);
+  result.setDate(result.getDate() + 6);
+  result.setHours(0, 0, 0, 0);
+  return result;
+}
+
+function startOfMonth(date: Date): Date {
+  const result = new Date(date.getFullYear(), date.getMonth(), 1);
+  result.setHours(0, 0, 0, 0);
+  return result;
+}
+
+function endOfMonth(date: Date): Date {
+  const result = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+  result.setHours(0, 0, 0, 0);
+  return result;
+}

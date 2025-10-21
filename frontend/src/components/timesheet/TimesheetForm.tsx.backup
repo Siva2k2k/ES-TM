@@ -78,7 +78,7 @@ export interface TimesheetFormProps {
     entries: TimeEntry[];
   };
   /** Current mode for the form */
-  mode?: 'create' | 'edit' | 'view';
+  mode?: 'create' | 'edit';
   /** Timesheet identifier used in edit mode */
   timesheetId?: string;
   /** Available projects for selection */
@@ -119,7 +119,6 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
 }) => {
   const [selectedProject, setSelectedProject] = useState<string>('');
   const [expandedEntry, setExpandedEntry] = useState<number | null>(null);
-  const isViewMode = mode === 'view';
 
   const {
     form,
@@ -301,56 +300,34 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
 
   const getValidationWarnings = () => {
     const warnings: string[] = [];
-    const blockingErrors: string[] = [];
 
-    // Business Rule 1: Daily logging 8-10 hours for weekdays (strict)
-    Object.entries(dailyTotals).forEach(([date, total]) => {
-      const isWeekendDay = isWeekend(date);
+    // Check daily totals
+      Object.entries(dailyTotals).forEach(([date, total]) => {
+        // Skip weekend totals warnings
+        if (isWeekend(date)) return;
+        if (total < 8) warnings.push(`${formatDate(date)}: Less than 8 hours (${total}h)`);
+        if (total > 10) warnings.push(`${formatDate(date)}: More than 10 hours (${total}h)`);
+      });
 
-      if (isWeekendDay) {
-        // Weekend: Optional, non-billable, warn if > 10 hours
-        if (total > 10) {
-          warnings.push(`${formatDate(date)} (Weekend): Exceeds recommended 10 hours (${total}h)`);
-        }
-      } else {
-        // Weekday: Must be 8-10 hours (BLOCKING)
-        if (total < 8) {
-          blockingErrors.push(`${formatDate(date)}: Minimum 8 hours required for weekday (current: ${total}h)`);
-        } else if (total > 10) {
-          blockingErrors.push(`${formatDate(date)}: Maximum 10 hours allowed for weekday (current: ${total}h)`);
-        }
-      }
-    });
+    // Check weekly total
+    if (weeklyTotal > 56) warnings.push(`Weekly total exceeds 56 hours (${weeklyTotal}h)`);
 
-    // Business Rule 2: Weekly total must not exceed 56 hours (BLOCKING)
-    if (weeklyTotal > 56) {
-      blockingErrors.push(`Weekly total ${weeklyTotal}h exceeds maximum allowed 56 hours`);
-    }
-
-    // Check missing weekdays (Mon-Fri recommended but not blocking)
+    // Check missing days (only Mon-Fri required; weekends are optional)
     const entryDates = new Set(entries.map(e => e.date));
     weekDates.forEach((date, idx) => {
       const dateStr = date.toISOString().split('T')[0];
-      if (isWeekend(dateStr)) return; // Skip weekends - they are optional
+      if (isWeekend(dateStr)) return; // skip weekends
       if (!entryDates.has(dateStr)) {
-        warnings.push(`${WEEKDAYS[idx]}: No entries logged for this weekday`);
+        warnings.push(`${WEEKDAYS[idx]}: No entries`);
       }
     });
 
-    // Business Rule 3: Weekend entries must be non-billable
-    const billableWeekendEntries = entries.filter(e => isWeekend(e.date) && e.is_billable);
-    if (billableWeekendEntries.length > 0) {
-      warnings.push('Weekend entries are automatically set to non-billable');
-    }
-
-    return { warnings, blockingErrors };
+    return warnings;
   };
 
-  const validation = getValidationWarnings();
-  const warnings = validation.warnings;
-  const blockingErrors = validation.blockingErrors;
-  const hasFormErrors = Object.keys(errors).length > 0;
-  const canSubmit = !hasFormErrors && blockingErrors.length === 0 && entries.length > 0;
+  const warnings = getValidationWarnings();
+  const hasErrors = Object.keys(errors).length > 0;
+  const canSubmit = !hasErrors && warnings.length === 0 && entries.length > 0;
 
   return (
     <Card className="w-full">
@@ -375,16 +352,6 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
       </CardHeader>
 
       <CardContent className="space-y-6">
-        {/* View Mode Alert */}
-        {isViewMode && (
-          <Alert variant="info">
-            <AlertTitle>View Only Mode</AlertTitle>
-            <AlertDescription>
-              This timesheet is read-only and cannot be edited. Only draft and rejected timesheets can be modified.
-            </AlertDescription>
-          </Alert>
-        )}
-
         {/* Project approval summary (if provided) */}
         {projectApprovals && projectApprovals.length > 0 && (
           <div className="mb-4">
@@ -410,11 +377,11 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
             </div>
           </div>
         )}
-        {/* Hook Validation Warnings from useTimesheetForm */}
+        {/* Error Display */}
         {validationWarnings && validationWarnings.length > 0 && (
           <Alert variant="warning">
             <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Validation Issues</AlertTitle>
+            <AlertTitle>Validation</AlertTitle>
             <AlertDescription>
               <ul className="list-disc list-inside space-y-1">
                 {validationWarnings.map((w, i) => <li key={i}>{w}</li>)}
@@ -423,26 +390,10 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
           </Alert>
         )}
 
-        {/* Blocking Validation Errors - Must be fixed before submission */}
-        {blockingErrors.length > 0 && (
-          <Alert variant="destructive">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Validation Errors - Cannot Submit</AlertTitle>
-            <AlertDescription>
-              <p className="text-sm mb-2">The following issues must be resolved before submitting:</p>
-              <ul className="list-disc list-inside space-y-1">
-                {blockingErrors.map((error, idx) => (
-                  <li key={idx} className="text-sm font-medium">{error}</li>
-                ))}
-              </ul>
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Non-Blocking Warnings */}
+        {/* Validation Warnings */}
         {warnings.length > 0 && (
           <Alert variant="warning">
-            <AlertTitle>Recommendations</AlertTitle>
+            <AlertTitle>Validation Warnings</AlertTitle>
             <AlertDescription>
               <ul className="list-disc list-inside space-y-1">
                 {warnings.map((warning, idx) => (
@@ -461,34 +412,14 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
             // Convert the current week_start_date (YYYY-MM-DD) to an input[type=week] value (YYYY-Www)
             const mondayToIsoWeek = (mondayStr: string) => {
               try {
-                // Parse date string explicitly to avoid timezone issues
-                const parts = mondayStr.split('-');
-                if (parts.length !== 3) return '';
-                const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-                d.setHours(0, 0, 0, 0);
-
-                // Get Thursday of this week (ISO uses Thursday to determine which year the week belongs to)
-                const thursday = new Date(d);
-                const dayOfWeek = d.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
-                // From Monday (assumed input), add 3 days to get Thursday
-                const daysFromMonToThu = (dayOfWeek === 1) ? 3 : 0; // If it's actually Monday, add 3
-                thursday.setDate(d.getDate() + (4 - ((dayOfWeek || 7) - 1))); // Adjust to Thursday
-                thursday.setHours(0, 0, 0, 0);
-
-                // Get year from Thursday (this determines which year the week belongs to)
-                const year = thursday.getFullYear();
-
-                // Find Monday of ISO week 1 for this year
-                const jan4 = new Date(year, 0, 4);
-                const jan4Day = jan4.getDay();
-                const daysToMonday = (jan4Day === 0) ? 6 : jan4Day - 1;
-                const mondayOfWeek1 = new Date(year, 0, 4 - daysToMonday);
-                mondayOfWeek1.setHours(0, 0, 0, 0);
-
-                // Calculate week number based on days difference
-                const daysDiff = Math.floor((d.getTime() - mondayOfWeek1.getTime()) / 86400000);
-                const weekNo = Math.floor(daysDiff / 7) + 1;
-
+                const d = new Date(mondayStr);
+                // compute ISO week number for the given date
+                const target = new Date(d.valueOf());
+                const dayNr = (d.getDay() + 6) % 7; // Monday=0, Sunday=6
+                target.setDate(d.getDate() - dayNr + 3); // Thursday of this week
+                const jan4 = new Date(target.getFullYear(), 0, 4);
+                const weekNo = 1 + Math.round(((target.getTime() - jan4.getTime()) / 86400000 - 3 + ((jan4.getDay() + 6) % 7)) / 7);
+                const year = target.getFullYear();
                 return `${year}-W${String(weekNo).padStart(2, '0')}`;
               } catch {
                 return '';
@@ -503,28 +434,18 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
                 const year = parseInt(parts[0], 10);
                 const week = parseInt(parts[1], 10);
 
-                // ISO 8601: Week 1 is the first week with a Thursday (week with Jan 4th)
-                // Find the Monday of week 1
-                const jan4 = new Date(year, 0, 4); // Jan 4th in local time
-                const jan4Day = jan4.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+                // ISO week 1 is the week with Jan 4th. Find Monday of week 1.
+                const jan4 = new Date(Date.UTC(year, 0, 4));
+                const dayOfWeek = jan4.getUTCDay() || 7; // Sunday -> 7
+                const mondayOfWeek1 = new Date(jan4);
+                mondayOfWeek1.setUTCDate(jan4.getUTCDate() - (dayOfWeek - 1));
 
-                // Calculate days to subtract to get to Monday of the week containing Jan 4
-                const daysToMonday = (jan4Day === 0) ? 6 : jan4Day - 1; // Sunday special case
+                const target = new Date(mondayOfWeek1);
+                target.setUTCDate(mondayOfWeek1.getUTCDate() + (week - 1) * 7);
 
-                // Monday of ISO week 1
-                const mondayOfWeek1 = new Date(year, 0, 4 - daysToMonday);
-                mondayOfWeek1.setHours(0, 0, 0, 0);
-
-                // Add (week - 1) weeks to get to the target week
-                const targetMonday = new Date(mondayOfWeek1);
-                targetMonday.setDate(mondayOfWeek1.getDate() + (week - 1) * 7);
-                targetMonday.setHours(0, 0, 0, 0);
-
-                // Return as YYYY-MM-DD in local timezone
-                const year2 = targetMonday.getFullYear();
-                const month = String(targetMonday.getMonth() + 1).padStart(2, '0');
-                const day = String(targetMonday.getDate()).padStart(2, '0');
-                return `${year2}-${month}-${day}`;
+                // convert to local date string YYYY-MM-DD
+                const local = new Date(target.getUTCFullYear(), target.getUTCMonth(), target.getUTCDate());
+                return local.toISOString().split('T')[0];
               } catch {
                 return '';
               }
@@ -553,7 +474,7 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
                     className="px-2 py-1 rounded border bg-white"
                     onClick={() => goDeltaWeek(-1)}
                     aria-label="Previous week"
-                    disabled={mode === 'edit' || mode === 'view'}
+                    disabled={mode === 'edit'}
                   >
                     <ArrowLeft />
                   </button>
@@ -569,14 +490,14 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
                         setValue('week_start_date', monday, { shouldValidate: true, shouldDirty: true });
                       }
                     }}
-                    disabled={mode === 'edit' || mode === 'view'}
+                    disabled={mode === 'edit'}
                   />
                   <button
                     type="button"
                     className="px-2 py-1 rounded border bg-white"
                     onClick={() => goDeltaWeek(1)}
                     aria-label="Next week"
-                    disabled={mode === 'edit' || mode === 'view'}
+                    disabled={mode === 'edit'}
                   >
                     <ArrowRight />
                   </button>
@@ -612,29 +533,27 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
           })}
         </div>
 
-        {/* Add Entry Section - Hidden in view mode */}
-        {!isViewMode && (
-          <div className="border-t pt-6">
-            <div className="flex gap-4 items-end mb-4">
-              <div className="flex-1">
-                <Select
-                  label="Select Project"
-                  options={activeProjects}
-                  value={selectedProject}
-                  onChange={(value) => setSelectedProject(value)}
-                  placeholder="Choose a project..."
-                />
-              </div>
-              <Button
-                onClick={handleAddEntry}
-                disabled={!selectedProject}
-                icon={Plus}
-              >
-                Add Entry
-              </Button>
+        {/* Add Entry Section */}
+        <div className="border-t pt-6">
+          <div className="flex gap-4 items-end mb-4">
+            <div className="flex-1">
+              <Select
+                label="Select Project"
+                options={activeProjects}
+                value={selectedProject}
+                onChange={(value) => setSelectedProject(value)}
+                placeholder="Choose a project..."
+              />
             </div>
+            <Button
+              onClick={handleAddEntry}
+              disabled={!selectedProject}
+              icon={Plus}
+            >
+              Add Entry
+            </Button>
           </div>
-        )}
+        </div>
 
         {/* Entries List */}
         {entries.length === 0 ? (
@@ -660,7 +579,6 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
                 tasks={taskOptions}
                 weekOptions={weekOptions}
                 onCopyEntry={handleCopyEntry}
-                isViewMode={isViewMode}
               />
             ))}
           </div>
@@ -669,27 +587,25 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
 
       <CardFooter className="flex justify-between border-t pt-6">
         <Button variant="outline" onClick={onCancel}>
-          {isViewMode ? 'Close' : 'Cancel'}
+          Cancel
         </Button>
-        {!isViewMode && (
-          <div className="flex gap-3">
-            <Button
-              variant="secondary"
-              icon={Save}
-              onClick={() => handleSubmit('draft')}
-              disabled={isSubmitting || entries.length === 0}
-            >
-              Save Draft
-            </Button>
-            <Button
-              icon={Send}
-              onClick={() => handleSubmit('submitted')}
-              disabled={isSubmitting || !canSubmit}
-            >
-              Submit for Approval
-            </Button>
-          </div>
-        )}
+        <div className="flex gap-3">
+          <Button
+            variant="secondary"
+            icon={Save}
+            onClick={() => handleSubmit('draft')}
+            disabled={isSubmitting || entries.length === 0}
+          >
+            Save Draft
+          </Button>
+          <Button
+            icon={Send}
+            onClick={() => handleSubmit('submitted')}
+            disabled={isSubmitting || !canSubmit}
+          >
+            Submit for Approval
+          </Button>
+        </div>
       </CardFooter>
     </Card>
   );
@@ -762,7 +678,6 @@ interface TimesheetEntryRowProps {
     custom_task_description?: { message?: string };
   };
   projectApprovalsMap?: Record<string, ProjectApproval>;
-  isViewMode?: boolean;
 }
 
 const TimesheetEntryRow: React.FC<TimesheetEntryRowProps> = ({
@@ -778,8 +693,7 @@ const TimesheetEntryRow: React.FC<TimesheetEntryRowProps> = ({
   weekOptions,
   onCopyEntry,
   errors,
-  projectApprovalsMap,
-  isViewMode = false
+  projectApprovalsMap
 }) => {
   const projectName = projects.find(p => p.value === entry.project_id)?.label || 'Unknown';
   const projectApproval = (projectApprovalsMap || {})[entry.project_id];
@@ -787,9 +701,6 @@ const TimesheetEntryRow: React.FC<TimesheetEntryRowProps> = ({
   const projectTasks = tasks.filter(task => task.projectId === entry.project_id);
   const entryType = entry.entry_type || 'project_task';
   const copyOptions = weekOptions.filter(option => option.value !== entry.date);
-
-  // Entry is locked if project is approved OR in view mode
-  const entryLocked = isProjectApproved || isViewMode;
 
   const [isCopyOpen, setIsCopyOpen] = useState(false);
   const [copySelection, setCopySelection] = useState<string[]>([]);
@@ -828,7 +739,7 @@ const TimesheetEntryRow: React.FC<TimesheetEntryRowProps> = ({
             </p>
           )}
         </div>
-        {!entryLocked ? (
+        {!isProjectApproved ? (
           <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
             <div className="relative">
               <Button
@@ -900,15 +811,15 @@ const TimesheetEntryRow: React.FC<TimesheetEntryRowProps> = ({
         ) : (
           <div className="flex items-center text-sm text-gray-500">
             <Lock className="w-4 h-4 mr-1" />
-            <span>{isViewMode ? 'View Only' : 'Locked'}</span>
+            <span>Locked</span>
           </div>
         )}
       </div>
 
       {isExpanded && (
         <div className="mt-4 pt-4 border-t space-y-4">
-          {/* If entry is locked (approved project or view mode), show read-only values */}
-          {entryLocked ? (
+          {/* If project is approved, show read-only values */}
+          {isProjectApproved ? (
             <div className="space-y-2">
               <div>
                 <p className="text-xs text-gray-500 uppercase font-medium mb-1">Task</p>
@@ -992,40 +903,22 @@ const TimesheetEntryRow: React.FC<TimesheetEntryRowProps> = ({
               <Controller
                 name={`entries.${index}.date`}
                 control={control}
-                render={({ field }) => {
-                  // Restrict date selection to current week only (Monday to Sunday)
-                  // weekOptions is an array of {value: 'YYYY-MM-DD', label: 'Day, Month DD'}
-                  const minDate = weekOptions[0]?.value || '';
-                  const maxDate = weekOptions[weekOptions.length - 1]?.value || '';
-
-                  return (
-                    <Input
-                      {...field}
-                      type="date"
-                      label="Date"
-                      min={minDate}
-                      max={maxDate}
-                      error={errors?.date?.message}
-                      helperText={`Select a date within this week (${formatDate(minDate)} - ${formatDate(maxDate)})`}
-                      onChange={(e: any) => {
-                        const val = e?.target?.value ?? e;
-
-                        // Validate date is within week range
-                        if (val && (val < minDate || val > maxDate)) {
-                          // Show error but still allow the change (browser validation will prevent submission)
-                          console.warn(`Date ${val} is outside the current week range`);
-                        }
-
-                        field.onChange(val);
-
-                        // If user set a weekend date, default entry to non-billable
-                        if (isWeekend(String(val))) {
-                          setValue(`entries.${index}.is_billable`, false, { shouldDirty: true });
-                        }
-                      }}
-                    />
-                  );
-                }}
+                render={({ field }) => (
+                  <Input
+                    {...field}
+                    type="date"
+                    label="Date"
+                    error={errors?.date?.message}
+                    onChange={(e: any) => {
+                      const val = e?.target?.value ?? e;
+                      field.onChange(val);
+                      // If user set a weekend date, default entry to non-billable
+                      if (isWeekend(String(val))) {
+                        setValue(`entries.${index}.is_billable`, false, { shouldDirty: true });
+                      }
+                    }}
+                  />
+                )}
               />
               <Controller
                 name={`entries.${index}.hours`}

@@ -28,6 +28,35 @@ import {
 import { AuditLogService } from '@/services/AuditLogService';
 import { ValidationUtils } from '@/utils/validation';
 
+const WEEKDAY_MIN_HOURS = 8;
+const WEEKDAY_MAX_HOURS = 10;
+const WEEKLY_MAX_HOURS = 56;
+
+function normalizeWeekStartDateInput(dateInput: string | Date): Date {
+  const date = new Date(dateInput);
+  if (Number.isNaN(date.getTime())) {
+    throw new ValidationError('Invalid week start date');
+  }
+  const normalized = new Date(date);
+  normalized.setHours(0, 0, 0, 0);
+  const day = normalized.getDay();
+  const diff = normalized.getDate() - day + (day === 0 ? -6 : 1);
+  normalized.setDate(diff);
+  normalized.setHours(0, 0, 0, 0);
+  return normalized;
+}
+
+function toISODateString(date: Date): string {
+  const normalized = new Date(date);
+  normalized.setHours(0, 0, 0, 0);
+  return normalized.toISOString().split('T')[0];
+}
+
+function isWeekendDay(date: Date): boolean {
+  const day = date.getDay();
+  return day === 0 || day === 6;
+}
+
 export interface TimesheetWithDetails extends ITimesheet {
   user_name: string;
   user_email?: string;
@@ -51,6 +80,15 @@ export interface TimeEntryForm {
   is_billable: boolean;
   custom_task_description?: string;
   entry_type: EntryType;
+}
+
+function sanitizeTimeEntryForm(entry: TimeEntryForm): TimeEntryForm {
+  const sanitized: TimeEntryForm = { ...entry };
+  const entryDate = new Date(entry.date);
+  if (!Number.isNaN(entryDate.getTime()) && isWeekendDay(entryDate)) {
+    sanitized.is_billable = false;
+  }
+  return sanitized;
 }
 
 export interface CalendarData {
@@ -317,26 +355,30 @@ export class TimesheetService {
         throw new ValidationError(dateError);
       }
 
+      const normalizedWeekStart = normalizeWeekStartDateInput(weekStartDate);
+      const normalizedWeekStartIso = toISODateString(normalizedWeekStart);
+
       // Validate access permissions
       validateTimesheetAccess(currentUser, userId, 'create');
 
       // Check if timesheet already exists for this user and week
       const existingTimesheet = await (Timesheet.findOne as any)({
         user_id: new mongoose.Types.ObjectId(userId),
-        week_start_date: new Date(weekStartDate),
+        week_start_date: normalizedWeekStart,
         deleted_at: null
       }).exec();
 
       if (existingTimesheet) {
         throw new ConflictError(
-          `A timesheet already exists for the week starting ${weekStartDate}. Status: ${existingTimesheet.status}`
+          `A timesheet already exists for the week starting ${normalizedWeekStartIso}. Status: ${existingTimesheet.status}`
         );
       }
 
       // Calculate week end date
-      const weekStart = new Date(weekStartDate);
-      const weekEnd = new Date(weekStart);
+      const weekStart = new Date(normalizedWeekStart);
+      const weekEnd = new Date(normalizedWeekStart);
       weekEnd.setDate(weekEnd.getDate() + 6);
+      weekEnd.setHours(0, 0, 0, 0);
 
       // Create new timesheet
       const timesheetData = {
@@ -358,7 +400,7 @@ export class TimesheetService {
         'INSERT',
         currentUser.id,
         currentUser.full_name,
-        { week_start_date: weekStartDate, user_id: userId },
+        { week_start_date: normalizedWeekStartIso, user_id: userId },
         { created_by: currentUser.id },
         null,
         timesheetData
@@ -858,6 +900,11 @@ export class TimesheetService {
 
       const existingEntries = await (TimeEntry.find as any)(query).exec();
 
+      const entryDateObject = new Date(entryData.date);
+      if (!Number.isNaN(entryDateObject.getTime()) && isWeekendDay(entryDateObject)) {
+        entryData.is_billable = false;
+      }
+
       // Check for duplicate project/task combinations
       if (entryData.entry_type === 'project_task' && entryData.project_id && entryData.task_id) {
         const duplicateProjectTask = existingEntries.find(e =>
@@ -1074,6 +1121,8 @@ export class TimesheetService {
         deleted_at: null
       }).lean().exec();
 
+      const sanitizedEntries = entries.map(sanitizeTimeEntryForm);
+
       // We will validate the incoming batch against itself (to detect duplicates in the payload)
       // and against any other existing entries that are NOT being replaced (none in this flow since we soft-delete all),
       // so build an in-memory list representing final state: start with entries that would remain (none) then
@@ -1089,7 +1138,7 @@ export class TimesheetService {
         hours: Number(e.hours) || 0
       });
 
-      const payloadNormalized = entries.map(normalize);
+      const payloadNormalized = sanitizedEntries.map(normalize);
 
       // Check duplicates within payload
       for (let i = 0; i < payloadNormalized.length; i++) {
@@ -1160,7 +1209,7 @@ export class TimesheetService {
       }
 
       // Create new entries
-      const entryInsertData = entries.map(entryData => ({
+      const entryInsertData = sanitizedEntries.map(entryData => ({
         timesheet_id: new mongoose.Types.ObjectId(timesheetId),
         project_id: entryData.project_id ? new mongoose.Types.ObjectId(entryData.project_id) : undefined,
         task_id: entryData.task_id ? new mongoose.Types.ObjectId(entryData.task_id) : undefined,
@@ -1267,8 +1316,10 @@ export class TimesheetService {
         throw new TimesheetError('Cannot add entries to timesheet in current status');
       }
 
+      const sanitizedEntries = entries.map(sanitizeTimeEntryForm);
+
       // Validate each time entry
-      for (const entryData of entries) {
+      for (const entryData of sanitizedEntries) {
         const validation = await this.validateTimeEntry(timesheetId, entryData);
         if (!validation.valid) {
           throw new ValidationError(`Entry validation failed: ${validation.error}`);
@@ -1276,7 +1327,7 @@ export class TimesheetService {
       }
 
       // Create new entries (append to existing ones)
-      const entryInsertData = entries.map(entryData => ({
+      const entryInsertData = sanitizedEntries.map(entryData => ({
         timesheet_id: new mongoose.Types.ObjectId(timesheetId),
         project_id: entryData.project_id ? new mongoose.Types.ObjectId(entryData.project_id) : undefined,
         task_id: entryData.task_id ? new mongoose.Types.ObjectId(entryData.task_id) : undefined,

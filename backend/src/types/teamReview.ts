@@ -14,16 +14,24 @@ export interface ProjectWeekGroup {
   manager_name: string;
   lead_id?: string;
   lead_name?: string;
-  approval_status: 'pending' | 'approved' | 'rejected';
+  approval_status: 'pending' | 'approved' | 'rejected' | 'partially_processed';
+  sub_status?: string; // Additional context (e.g., "3 of 5 approved", "Reopened")
   users: ProjectWeekUser[];
   total_users: number;
   total_hours: number;
   total_entries: number;
+  pending_count?: number; // Count of pending approvals
+  approved_count?: number; // Count of approved
+  rejected_count?: number; // Count of rejected
   rejected_reason?: string; // If status is rejected
   rejected_by?: string;
   rejected_at?: string;
   approved_by?: string;
   approved_at?: string;
+  is_reopened?: boolean; // True if new timesheets added after bulk approval
+  reopened_at?: string; // When the reopening occurred
+  reopened_by_submission?: string; // User who submitted late
+  original_approval_count?: number; // How many were approved before reopening
 }
 
 export interface ProjectWeekUser {
@@ -53,7 +61,7 @@ export interface ProjectWeekFilters {
   project_id?: string | string[]; // Can filter by multiple projects
   week_start?: string;
   week_end?: string;
-  status?: 'pending' | 'approved' | 'rejected' | 'all';
+  status?: 'pending' | 'approved' | 'rejected' | 'partially_processed' | 'all';
   sort_by?: 'week_date' | 'project_name' | 'pending_count';
   sort_order?: 'asc' | 'desc';
   page?: number;

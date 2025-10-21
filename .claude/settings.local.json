@@ -38,7 +38,9 @@
       "Bash(git checkout -- src/components/TeamReview.tsx)",
       "Bash(git checkout -- src/components/EmployeeTimesheet.tsx)",
       "Bash(xargs -I {} basename {})",
-      "Bash(do [ -f \"$file\" ])"
+      "Bash(do [ -f \"$file\" ])",
+      "Bash(git checkout:*)",
+      "Bash(md5sum:*)"
     ],
     "deny": [],
     "ask": []
