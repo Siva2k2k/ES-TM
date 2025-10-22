@@ -15,6 +15,11 @@ interface UserTimesheetDetailsProps {
   onToggle: () => void;
   onApproveUser?: () => void;
   onRejectUser?: () => void;
+  onBillableUpdate?: (data: {
+    worked_hours: number;
+    billable_hours: number;
+    billable_adjustment: number;
+  }) => void;
   canApprove?: boolean;
   approvalRole?: 'lead' | 'manager' | 'management';
 }
@@ -26,6 +31,7 @@ export const UserTimesheetDetails: React.FC<UserTimesheetDetailsProps> = ({
   onToggle,
   onApproveUser,
   onRejectUser,
+  onBillableUpdate,
   canApprove = false,
   approvalRole = 'manager'
 }) => {
@@ -107,12 +113,17 @@ export const UserTimesheetDetails: React.FC<UserTimesheetDetailsProps> = ({
 
       if (result.success) {
         // Update local state with new values
-        setLocalBillableData({
+        const updatedData = {
           worked_hours: result.approval.worked_hours,
           billable_hours: result.approval.billable_hours,
           billable_adjustment: result.approval.billable_adjustment
-        });
+        };
+        setLocalBillableData(updatedData);
         setAdjustmentInput(result.approval.billable_adjustment.toString());
+        
+        // Notify parent component to update aggregated hours
+        onBillableUpdate?.(updatedData);
+        
         console.log('Successfully updated billable hours');
       } else {
         console.error('Failed to update:', result.error);

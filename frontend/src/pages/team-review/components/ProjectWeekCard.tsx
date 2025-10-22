@@ -19,6 +19,63 @@ interface ProjectWeekCardProps {
   isLoading?: boolean;
 }
 
+// Helper functions extracted to reduce cognitive complexity
+const getStatusColor = (status: string): string => {
+  switch (status) {
+    case 'approved':
+      return 'bg-green-50 border-green-200';
+    case 'rejected':
+      return 'bg-red-50 border-red-200';
+    case 'partially_processed':
+      return 'bg-blue-50 border-blue-200';
+    default:
+      return 'bg-white border-gray-200';
+  }
+};
+
+const getStatusBadge = (status: string, subStatus?: string): JSX.Element => {
+  const baseClasses = 'px-3 py-1 rounded-full text-sm font-medium';
+  switch (status) {
+    case 'approved':
+      return <span className={`${baseClasses} bg-green-100 text-green-800`}>Approved</span>;
+    case 'rejected':
+      return <span className={`${baseClasses} bg-red-100 text-red-800`}>Rejected</span>;
+    case 'partially_processed':
+      return (
+        <span
+          className={`${baseClasses} bg-blue-100 text-blue-800`}
+          title={subStatus || 'Some timesheets approved, some pending'}
+        >
+          Partially Processed
+        </span>
+      );
+    default:
+      return <span className={`${baseClasses} bg-yellow-100 text-yellow-800`}>Pending Approval</span>;
+  }
+};
+
+const calculateAggregatedHours = (
+  users: ProjectWeekGroup['users'],
+  userBillableData: Record<string, { worked_hours: number; billable_hours: number; billable_adjustment: number }>
+) => {
+  const totalWorkedHours = users.reduce((sum, u) => {
+    const localData = userBillableData[u.user_id];
+    return sum + (localData?.worked_hours ?? u.worked_hours ?? 0);
+  }, 0);
+  
+  const totalBillableHours = users.reduce((sum, u) => {
+    const localData = userBillableData[u.user_id];
+    return sum + (localData?.billable_hours ?? u.billable_hours ?? 0);
+  }, 0);
+  
+  const totalAdjustment = users.reduce((sum, u) => {
+    const localData = userBillableData[u.user_id];
+    return sum + (localData?.billable_adjustment ?? u.billable_adjustment ?? 0);
+  }, 0);
+
+  return { totalWorkedHours, totalBillableHours, totalAdjustment };
+};
+
 export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
   projectWeek,
   onApprove,
@@ -31,6 +88,22 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
+  const [userBillableData, setUserBillableData] = useState<Record<string, {
+    worked_hours: number;
+    billable_hours: number;
+    billable_adjustment: number;
+  }>>({});
+
+  const handleBillableUpdate = (userId: string, data: {
+    worked_hours: number;
+    billable_hours: number;
+    billable_adjustment: number;
+  }) => {
+    setUserBillableData(prev => ({
+      ...prev,
+      [userId]: data
+    }));
+  };
 
   const toggleUserExpansion = (userId: string) => {
     setExpandedUsers(prev => {
@@ -44,61 +117,37 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
     });
   };
 
-  const getStatusColor = () => {
-    switch (projectWeek.approval_status) {
-      case 'approved':
-        return 'bg-green-50 border-green-200';
-      case 'rejected':
-        return 'bg-red-50 border-red-200';
-      case 'partially_processed':
-        return 'bg-blue-50 border-blue-200';
-      default:
-        return 'bg-white border-gray-200';
-    }
-  };
-
-  const getStatusBadge = () => {
-    const baseClasses = 'px-3 py-1 rounded-full text-sm font-medium';
-    switch (projectWeek.approval_status) {
-      case 'approved':
-        return <span className={`${baseClasses} bg-green-100 text-green-800`}>Approved</span>;
-      case 'rejected':
-        return <span className={`${baseClasses} bg-red-100 text-red-800`}>Rejected</span>;
-      case 'partially_processed':
-        return (
-          <span
-            className={`${baseClasses} bg-blue-100 text-blue-800`}
-            title={projectWeek.sub_status || 'Some timesheets approved, some pending'}
-          >
-            Partially Processed
-          </span>
-        );
-      default:
-        return <span className={`${baseClasses} bg-yellow-100 text-yellow-800`}>Pending Approval</span>;
-    }
-  };
-
   const pendingUsers = projectWeek.users.filter(u => u.approval_status === 'pending');
   const hasPendingApprovals = pendingUsers.length > 0;
 
   const actionRole = approvalRole || 'manager';
   const isManagementMode = actionRole === 'management';
-  const managerApprovedUsers = projectWeek.users.filter(u => u.timesheet_status === 'manager_approved');
-  const allManagerApproved = managerApprovedUsers.length === projectWeek.users.length && projectWeek.users.length > 0;
+  
+  // For management mode, exclude managers from the approval check
+  // Managers have status 'management_pending', not 'manager_approved'
+  const teamMembers = isManagementMode 
+    ? projectWeek.users.filter(u => u.user_role !== 'manager')
+    : projectWeek.users;
+  
+  const managerApprovedUsers = teamMembers.filter(u => u.timesheet_status === 'manager_approved');
+  const allManagerApproved = managerApprovedUsers.length === teamMembers.length && teamMembers.length > 0;
   const hasManagerApproved = managerApprovedUsers.length > 0;
 
-  const shouldShowActions =
-    canApprove &&
-    (projectWeek.approval_status === 'pending' || projectWeek.approval_status === 'partially_processed') &&
-    (isManagementMode ? hasManagerApproved : hasPendingApprovals);
+  const canShowActions = canApprove && (projectWeek.approval_status === 'pending' || projectWeek.approval_status === 'partially_processed');
+  const shouldShowActions = canShowActions && (isManagementMode ? hasManagerApproved : hasPendingApprovals);
 
   const actionButtonDisabled = isLoading || (isManagementMode && !allManagerApproved);
   const actionButtonLabel = isManagementMode ? 'Verify All' : 'Approve All';
-  const actionButtonTitle = isManagementMode
-    ? allManagerApproved
-      ? 'Verify and freeze all manager-approved timesheets'
-      : 'All timesheets must be manager approved before verification.'
-    : 'Approve all pending timesheets for this project-week.';
+  
+  const getActionButtonTitle = () => {
+    if (isManagementMode) {
+      return allManagerApproved
+        ? 'Verify and freeze all manager-approved timesheets'
+        : 'All timesheets must be manager approved before verification.';
+    }
+    return 'Approve all pending timesheets for this project-week.';
+  };
+  
   const rejectButtonTitle = isManagementMode
     ? 'Reject timesheets back to managers'
     : 'Reject all pending timesheets for this project-week.';
@@ -108,13 +157,14 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
     ? projectWeek.total_hours
     : projectWeek.users.reduce((sum, u) => sum + (u.total_hours_for_project || 0), 0);
 
-  // Calculate aggregated worked hours and billable hours (Management view)
-  const totalWorkedHours = projectWeek.users.reduce((sum, u) => sum + (u.worked_hours || 0), 0);
-  const totalBillableHours = projectWeek.users.reduce((sum, u) => sum + (u.billable_hours || 0), 0);
-  const totalAdjustment = projectWeek.users.reduce((sum, u) => sum + (u.billable_adjustment || 0), 0);
+  // Calculate aggregated worked hours and billable hours with local updates
+  const { totalWorkedHours, totalBillableHours, totalAdjustment } = calculateAggregatedHours(
+    projectWeek.users,
+    userBillableData
+  );
 
   return (
-    <div className={`rounded-lg border-2 overflow-hidden transition-all ${getStatusColor()}`}>
+    <div className={`rounded-lg border-2 overflow-hidden transition-all ${getStatusColor(projectWeek.approval_status)}`}>
       {/* Card Header */}
       <div className="p-6">
         <div className="flex items-start justify-between gap-4 mb-4">
@@ -124,7 +174,7 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
               <h3 className="text-xl font-semibold text-gray-900">
                 {projectWeek.project_name}
               </h3>
-              {getStatusBadge()}
+              {getStatusBadge(projectWeek.approval_status, projectWeek.sub_status)}
               {projectWeek.is_reopened && (
                 <span
                   className="px-3 py-1 rounded-full text-sm font-medium bg-orange-100 text-orange-800"
@@ -159,7 +209,7 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
                 <button
                   onClick={() => onApprove(projectWeek)}
                   disabled={actionButtonDisabled}
-                  title={actionButtonTitle}
+                  title={getActionButtonTitle()}
                   className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[42px]"
                 >
                   <CheckCircle className="w-4 h-4" />
@@ -219,7 +269,7 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
               <Clock className="w-4 h-4 text-green-600" />
               <span className="text-sm text-gray-600">Hours</span>
             </div>
-            {isManagementMode ? (
+            {(isManagementMode || approvalRole === 'manager') ? (
               <>
                 <div className="text-2xl font-bold text-gray-900">
                   {totalBillableHours.toFixed(1)}
@@ -256,7 +306,7 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
             </div>
             <div className="text-lg font-semibold text-gray-900 capitalize">
               {isManagementMode
-                ? `${managerApprovedUsers.length}/${projectWeek.total_users} manager approved`
+                ? `${managerApprovedUsers.length}/${teamMembers.length} manager approved`
                 : projectWeek.approval_status}
             </div>
             {isManagementMode && (
@@ -342,8 +392,9 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
                     projectId={projectWeek.project_id}
                     isExpanded={expandedUsers.has(user.user_id)}
                     onToggle={() => toggleUserExpansion(user.user_id)}
-                    onApproveUser={() => onApproveUser && onApproveUser(user.user_id, projectWeek.project_id)}
-                    onRejectUser={() => onRejectUser && onRejectUser(user.user_id, projectWeek.project_id)}
+                    onApproveUser={() => onApproveUser?.(user.user_id, projectWeek.project_id)}
+                    onRejectUser={() => onRejectUser?.(user.user_id, projectWeek.project_id)}
+                    onBillableUpdate={(data) => handleBillableUpdate(user.user_id, data)}
                     canApprove={!!canApprove}
                     approvalRole={approvalRole}
                   />

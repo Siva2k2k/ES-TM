@@ -140,23 +140,10 @@ export class TeamReviewServiceV2 {
           // Role-based visibility filtering
           const isVisible = this.isTimesheetVisibleToRole(ts, approval, approverRole, approverId, leadInfo);
 
-          // Debug logging for management role
-          if (approverRole === 'management' && (ts.status === 'manager_approved' || ts.status === 'management_pending')) {
-            logger.info(`Checking timesheet visibility for Management:`, {
-              timesheet_id: ts._id.toString(),
-              timesheet_status: ts.status,
-              user: ts.user_id?.full_name,
-              user_role: ts.user_id?.role,
-              project: project.name,
-              approval_lead: approval.lead_status,
-              approval_manager: approval.manager_status,
-              approval_management: approval.management_status,
-              isVisible
-            });
-          }
-
           return isVisible;
         });
+
+        console.log("Approver Role:", approverRole, "Project ID:", project._id.toString(), "Timesheets:", projectTimesheets);
 
         // Group by week
         const weekGroups = new Map<string, any[]>();
@@ -193,26 +180,12 @@ export class TeamReviewServiceV2 {
             approverRole
           );
           
-          // Debug logging for management role
-          if (approverRole === 'management') {
-            logger.info(`Project-week status result:`, {
-              project: project.name,
-              week: weekStart.toISOString().split('T')[0],
-              weekTimesheetsCount: weekTimesheets.length,
-              users: weekTimesheets.map(ts => ({
-                name: ts.user_id?.full_name,
-                role: ts.user_id?.role,
-                status: ts.status
-              })),
-              statusResult: statusResult,
-              statusFilter: status
-            });
-          }
-          
           if (statusResult.status === null) continue; // Skip if doesn't match filter
 
-          // FOR MANAGER VIEW: Hide groups where Lead hasn't completed all employee reviews
-          // BUT show the group if Lead has submitted their own timesheet (even if employees are pending)
+          // FOR MANAGER VIEW: Hide groups where Lead hasn't completed all requirements
+          // Manager should ONLY see the group when BOTH conditions are met:
+          // 1. Lead has reviewed all employee timesheets (no pending reviews)
+          // 2. Lead has submitted their own timesheet for this week
           if (approverRole === 'manager' || approverRole === 'super_admin') {
             // Check if this project has a Lead
             const hasLead = leadInfo?.id ? true : false;
@@ -236,11 +209,11 @@ export class TeamReviewServiceV2 {
                 );
               });
 
-              // Skip this project-week group ONLY if:
-              // 1. Lead has incomplete employee reviews AND
-              // 2. Lead has NOT submitted their own timesheet
-              // (If lead submitted their timesheet, manager should see it even if some employees are pending)
-              if (hasIncompleteLeadReviews && !leadTimesheet) {
+              // CRITICAL FIX: Skip project-week if EITHER condition is not met:
+              // 1. Lead has incomplete employee reviews (hasIncompleteLeadReviews = true), OR
+              // 2. Lead has NOT submitted their own timesheet (!leadTimesheet = true)
+              // Manager needs BOTH: all reviews done AND lead's timesheet submitted
+              if (hasIncompleteLeadReviews || !leadTimesheet) {
                 continue; // Move to next iteration, don't add to projectWeekMap
               }
             }
@@ -285,6 +258,49 @@ export class TeamReviewServiceV2 {
             }
           }
 
+          // FOR MANAGEMENT VIEW: Hide groups where Manager hasn't completed all requirements
+          // Management should ONLY see the group when BOTH conditions are met:
+          // 1. Manager has approved all employee and lead timesheets (no pending manager reviews)
+          // 2. Manager has submitted their own timesheet for this week
+          if (approverRole === 'management') {
+            // Get the project's primary manager
+            const managerId = project.primary_manager_id?._id?.toString();
+            
+            if (managerId) {
+              // Check if manager has submitted their own timesheet for this week
+              // CRITICAL: Check in ALL timesheets (not just weekTimesheets which are filtered by visibility)
+              const managerTimesheet = timesheets.find(
+                ts => ts.user_id?._id?.toString() === managerId &&
+                      ts.week_start_date?.getTime() === weekStart.getTime() &&
+                      ts.status !== 'draft' // Must be submitted (any non-draft status)
+              );
+              
+              // Check if any employees/leads have pending manager approvals
+              // Use projectWeekApprovals which includes ALL approvals for this project-week
+              const hasIncompleteManagerReviews = projectWeekApprovals.some(approval => {
+                // Find the timesheet in ALL timesheets (not just visible ones)
+                const ts = timesheets.find(t => t._id.toString() === approval.timesheet_id.toString());
+                if (!ts) return false;
+                
+                const userRole = ts.user_id?.role;
+
+                // Employee or Lead timesheet with pending manager approval
+                return (
+                  (userRole === 'employee' || userRole === 'lead') &&
+                  approval.manager_status === 'pending'
+                );
+              });
+
+              // CRITICAL: Skip project-week if EITHER condition is not met:
+              // 1. Manager has incomplete reviews (hasIncompleteManagerReviews = true), OR
+              // 2. Manager has NOT submitted their own timesheet (!managerTimesheet = true)
+              // Management needs BOTH: all reviews done AND manager's timesheet submitted
+              if (hasIncompleteManagerReviews || !managerTimesheet) {
+                continue; // Move to next iteration, don't add to projectWeekMap
+              }
+            }
+          }
+
           // Build users for this project-week
           const users: ProjectWeekUser[] = [];
           let totalHours = 0;
@@ -305,7 +321,16 @@ export class TeamReviewServiceV2 {
             const memberInfo = projectMembersForProject.find(
               pm => pm.user_id.toString() === ts.user_id._id.toString()
             );
-            if (!memberInfo) continue;
+            
+            // Check if user is the project manager (primary_manager_id)
+            const isProjectManager = project.primary_manager_id?._id?.toString() === ts.user_id._id.toString();
+            
+            // For Management role view, include both project members AND the project manager
+            // For other roles, only include project members
+            if (!memberInfo && !isProjectManager) continue;
+            
+            // If user is not a project member but is the manager, treat them as manager role
+            const effectiveProjectRole = memberInfo ? memberInfo.project_role : 'manager';
 
             // Get entries for this user-project-week
             const userEntries = entries.filter(
@@ -340,7 +365,7 @@ export class TeamReviewServiceV2 {
               user_name: ts.user_id.full_name || 'Unknown',
               user_email: ts.user_id.email || undefined,
               user_role: ts.user_id.role || undefined,
-              project_role: memberInfo.project_role,
+              project_role: effectiveProjectRole,
               timesheet_id: ts._id.toString(),
               timesheet_status: ts.status,
               total_hours_for_project: userHours,
@@ -540,8 +565,12 @@ export class TeamReviewServiceV2 {
 
     // TIER 1: LEAD
     if (approverRole === 'lead') {
-      // Lead can see Employee timesheets with status 'submitted' OR 'lead_approved'
-      return userRole === 'employee' && (timesheetStatus === 'submitted' || timesheetStatus === 'lead_approved');
+      // Lead can see Employee timesheets with status 'submitted', 'lead_approved', OR 'lead_rejected'
+      return userRole === 'employee' && (
+        timesheetStatus === 'submitted' || 
+        timesheetStatus === 'lead_approved' || 
+        timesheetStatus === 'lead_rejected'
+      );
     }
 
     // TIER 2: MANAGER
@@ -552,9 +581,11 @@ export class TeamReviewServiceV2 {
       // 3. submitted leads/managers (their own timesheets)
       // 4. management_rejected (resubmitted after management rejection)
       // 5. manager_approved (timesheets they have already approved - for viewing in "Approved" tab)
+      // 6. manager_rejected (timesheets they rejected - for viewing in "Rejected" tab)
       return (
         timesheetStatus === 'lead_approved' ||
-        timesheetStatus === 'manager_approved' || // ADDED: Manager can see their approved timesheets
+        timesheetStatus === 'manager_approved' ||
+        timesheetStatus === 'manager_rejected' || // ADDED: Manager can see their rejected timesheets
         (timesheetStatus === 'submitted' && ['employee', 'lead', 'manager'].includes(userRole)) ||
         timesheetStatus === 'management_rejected'
       );
@@ -566,15 +597,29 @@ export class TeamReviewServiceV2 {
       // 1. manager_approved (for verification/freezing) - shown in "Pending" tab
       // 2. management_pending (manager's own timesheets) - shown in "Pending" tab
       // 3. frozen (verified timesheets) - shown in "Approved" tab
-      const visible = (
+      // 4. CRITICAL FIX: Also check if THIS SPECIFIC PROJECT has manager_approved status
+      //    even if the overall timesheet status is still lead_approved (due to other projects)
+      
+      // Check overall timesheet status first
+      let visible = (
         timesheetStatus === 'manager_approved' ||
         timesheetStatus === 'management_pending' ||
         timesheetStatus === 'frozen'
       );
+      
+      // If not visible by overall status, check if THIS specific project is manager-approved
+      // This handles multi-project timesheets where some projects are approved and others aren't
+      if (!visible && approval) {
+        visible = (
+          approval.manager_status === 'approved' ||
+          approval.management_status === 'pending' ||
+          approval.management_status === 'approved'
+        );
+      }
 
       // Debug logging
       if (visible) {
-        logger.info(`Management can see timesheet ${timesheet._id}: status=${timesheetStatus}, user=${timesheet.user_id?.full_name}`);
+        logger.info(`Management can see timesheet ${timesheet._id}: status=${timesheetStatus}, approval.manager_status=${approval?.manager_status}, user=${timesheet.user_id?.full_name}`);
       }
 
       return visible;
@@ -713,7 +758,7 @@ export class TeamReviewServiceV2 {
       })
         .populate({
           path: 'timesheet_id',
-          select: 'week_start_date created_at user_id',
+          select: 'week_start_date created_at submitted_at user_id',
           match: {
             week_start_date: { $gte: weekStart, $lte: weekEnd }
           }
@@ -757,25 +802,47 @@ export class TeamReviewServiceV2 {
       }
 
       // Check if any timesheets were submitted AFTER the last bulk approval
+      // Check both created_at (new submissions) and submitted_at (resubmissions)
+      // IMPORTANT: Only flag as late if the APPROVAL was also reset to pending
+      // (A timesheet might have multiple projects - only flag projects that were actually changed)
       const lateSubmissions = validApprovals.filter(a => {
-        const timesheetCreatedAt = (a.timesheet_id as any)?.created_at;
-        return timesheetCreatedAt && new Date(timesheetCreatedAt) > lastBulkApprovalTime!;
+        const timesheet = a.timesheet_id as any;
+        if (!timesheet) return false;
+        
+        const timesheetCreatedAt = timesheet.created_at ? new Date(timesheet.created_at) : null;
+        const timesheetSubmittedAt = timesheet.submitted_at ? new Date(timesheet.submitted_at) : null;
+        
+        // Check if timesheet was submitted after last bulk approval
+        const submittedAfterBulkApproval = (
+          (timesheetCreatedAt && timesheetCreatedAt > lastBulkApprovalTime!) ||
+          (timesheetSubmittedAt && timesheetSubmittedAt > lastBulkApprovalTime!)
+        );
+        
+        // Only count as "late" if BOTH:
+        // 1. Timesheet submitted after bulk approval
+        // 2. This specific approval is now pending (was reset from approved)
+        // This prevents flagging approved projects when a different project on the same timesheet was resubmitted
+        return submittedAfterBulkApproval && a[statusField] === 'pending';
       });
 
       if (lateSubmissions.length > 0) {
         // This project-week has been reopened by employee late submission
         const firstLateSubmission = lateSubmissions[0];
-        const timesheetId = firstLateSubmission.timesheet_id as any;
+        const timesheet = firstLateSubmission.timesheet_id as any;
+        
+        // Use submitted_at if available (resubmission), otherwise created_at (new submission)
+        const reopenedAt = timesheet.submitted_at || timesheet.created_at;
 
         return {
           is_reopened: true,
-          reopened_at: new Date(timesheetId.created_at).toISOString(),
-          reopened_by_submission: timesheetId.user_id?.toString(),
+          reopened_at: new Date(reopenedAt).toISOString(),
+          reopened_by_submission: timesheet.user_id?.toString(),
           original_approval_count: countAtLastBulkApproval
         };
       }
 
       // ADDITIONAL CHECK: Lead submitted late (after employees were already approved)
+      // Same logic: only flag if lead's approval is pending (not already approved)
       if (approverRole === 'manager' || approverRole === 'super_admin') {
         const leadTimesheet = validApprovals.find(a => {
           const ts = a.timesheet_id as any;
@@ -783,13 +850,23 @@ export class TeamReviewServiceV2 {
         });
 
         if (leadTimesheet && lastBulkApprovalTime) {
-          const leadCreatedAt = (leadTimesheet.timesheet_id as any)?.created_at;
+          const timesheet = leadTimesheet.timesheet_id as any;
+          const leadCreatedAt = timesheet?.created_at ? new Date(timesheet.created_at) : null;
+          const leadSubmittedAt = timesheet?.submitted_at ? new Date(timesheet.submitted_at) : null;
 
-          if (leadCreatedAt && new Date(leadCreatedAt) > lastBulkApprovalTime) {
+          // Check if lead submitted after bulk approval AND their approval is pending
+          const submittedAfterBulkApproval = (
+            (leadCreatedAt && leadCreatedAt > lastBulkApprovalTime) ||
+            (leadSubmittedAt && leadSubmittedAt > lastBulkApprovalTime)
+          );
+          
+          if (submittedAfterBulkApproval && leadTimesheet[statusField] === 'pending') {
+            const reopenedAt = leadSubmittedAt || leadCreatedAt;
+            
             return {
               is_reopened: true,
-              reopened_at: new Date(leadCreatedAt).toISOString(),
-              reopened_by_submission: (leadTimesheet.timesheet_id as any).user_id?.toString(),
+              reopened_at: new Date(reopenedAt!).toISOString(),
+              reopened_by_submission: timesheet.user_id?.toString(),
               original_approval_count: countAtLastBulkApproval
             };
           }

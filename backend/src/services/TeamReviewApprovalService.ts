@@ -662,12 +662,60 @@ export class TeamReviewApprovalService {
 
     for (const timesheetId of timesheetIds) {
       try {
+        // Get timesheet to capture status before update
+        const timesheet = await Timesheet.findById(timesheetId);
+        if (!timesheet) {
+          logger.warn(`Timesheet ${timesheetId} not found, skipping`);
+          failedCount++;
+          continue;
+        }
+
+        const statusBefore = timesheet.status;
+
+        // Update timesheet status to frozen
         await Timesheet.findByIdAndUpdate(timesheetId, {
           status: 'frozen',
           is_frozen: true,
           verified_by_id: new mongoose.Types.ObjectId(verifierId),
-          verified_at: new Date()
+          verified_at: new Date(),
+          approved_by_management_id: new mongoose.Types.ObjectId(verifierId),
+          approved_by_management_at: new Date()
         });
+
+        // Get all project approvals for this timesheet to record history for each project
+        const projectApprovals = await TimesheetProjectApproval.find({
+          timesheet_id: new mongoose.Types.ObjectId(timesheetId)
+        });
+
+        // CRITICAL: Update ALL project approvals for this timesheet to mark management_status as approved
+        await TimesheetProjectApproval.updateMany(
+          { timesheet_id: new mongoose.Types.ObjectId(timesheetId) },
+          {
+            $set: {
+              management_status: 'approved',
+              management_approved_at: new Date()
+            },
+            $unset: {
+              management_rejection_reason: ''
+            }
+          }
+        );
+
+        // Record approval history for each project
+        for (const approval of projectApprovals) {
+          await ApprovalHistory.create({
+            timesheet_id: timesheet._id,
+            project_id: approval.project_id,
+            user_id: timesheet.user_id,
+            approver_id: new mongoose.Types.ObjectId(verifierId),
+            approver_role: 'management',
+            action: 'approved',
+            status_before: normalizeTimesheetStatus(statusBefore),
+            status_after: normalizeTimesheetStatus('frozen'),
+            notes: 'Bulk verification'
+          });
+        }
+
         processedCount++;
       } catch (error) {
         logger.error(`Failed to verify timesheet ${timesheetId}:`, error);
@@ -1014,11 +1062,22 @@ export class TeamReviewApprovalService {
   // Reset ALL approvals for this timesheet except the current project approval
   await this.resetAllApprovals(approval.timesheet_id.toString(), session || undefined, projectId);
 
-        // Update timesheet status
+        // Update timesheet status based on approver role
         if (timesheet) {
-          timesheet.status = 'manager_rejected';
-          timesheet.manager_rejection_reason = reason;
-          timesheet.manager_rejected_at = new Date();
+          let newStatus: TimesheetStatus;
+          
+          if (approverRole === 'lead') {
+            newStatus = 'lead_rejected';
+            timesheet.status = newStatus;
+            timesheet.lead_rejection_reason = reason;
+            timesheet.lead_rejected_at = new Date();
+          } else {
+            newStatus = 'manager_rejected';
+            timesheet.status = newStatus;
+            timesheet.manager_rejection_reason = reason;
+            timesheet.manager_rejected_at = new Date();
+          }
+          
           await timesheet.save(queryOpts);
 
           affectedTimesheetIds.add(timesheet._id.toString());
@@ -1033,7 +1092,7 @@ export class TeamReviewApprovalService {
             approver_role: approverRole,
             action: 'rejected',
             status_before: normalizeTimesheetStatus(statusBefore),
-            status_after: normalizeTimesheetStatus('manager_rejected'),
+            status_after: normalizeTimesheetStatus(newStatus),
             reason,
             notes: 'Bulk project-week rejection'
           }], queryOpts);

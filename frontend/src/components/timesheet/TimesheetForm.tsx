@@ -133,7 +133,7 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
       week_start_date: initialWeekStartDate || getCurrentWeekMonday(),
       entries: []
     },
-    mode,
+    mode: mode === 'view' ? 'edit' : mode,
     timesheetId,
     onSuccess
   });
@@ -196,18 +196,31 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
   }, [timesheetStatus]);
   
   // Determine if this is a partial rejection scenario
-  // Partial rejection = status is 'lead_rejected' BUT not all projects are rejected
+  // Partial rejection = status is 'lead_rejected' or 'manager_rejected' BUT not all projects are rejected
   // (i.e., some projects are approved/pending while others are rejected)
   const isPartialRejection = useMemo(() => {
-    if (timesheetStatus !== 'lead_rejected') return false;
+    // Check for both lead and manager rejections
+    if (timesheetStatus !== 'lead_rejected' && timesheetStatus !== 'manager_rejected') return false;
     
     // If we have project approvals, check if there's a mix of rejected and non-rejected
     if (projectApprovals && projectApprovals.length > 0) {
-      const rejectedCount = projectApprovals.filter(pa => pa?.lead_status === 'rejected').length;
-      const totalCount = projectApprovals.length;
+      // For lead rejections, check lead_status
+      if (timesheetStatus === 'lead_rejected') {
+        const rejectedCount = projectApprovals.filter(pa => pa?.lead_status === 'rejected').length;
+        const totalCount = projectApprovals.length;
+        
+        // Partial rejection if some (but not all) are rejected
+        return rejectedCount > 0 && rejectedCount < totalCount;
+      }
       
-      // Partial rejection if some (but not all) are rejected
-      return rejectedCount > 0 && rejectedCount < totalCount;
+      // For manager rejections, check manager_status
+      if (timesheetStatus === 'manager_rejected') {
+        const rejectedCount = projectApprovals.filter(pa => pa?.manager_status === 'rejected').length;
+        const totalCount = projectApprovals.length;
+        
+        // Partial rejection if some (but not all) are rejected
+        return rejectedCount > 0 && rejectedCount < totalCount;
+      }
     }
     
     return false;
@@ -500,7 +513,11 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
             <div className="flex gap-3">
               <div className="flex-1">
                 <AlertTitle className="font-semibold text-orange-800 mb-2">
-                  {timesheetStatus === 'lead_rejected' ? 'Timesheet Rejected' : 'Some Entries Have Been Rejected'}
+                  {timesheetStatus === 'lead_rejected' 
+                    ? 'Timesheet Rejected by Lead' 
+                    : timesheetStatus === 'manager_rejected'
+                    ? 'Timesheet Rejected by Manager'
+                    : 'Some Entries Have Been Rejected'}
                 </AlertTitle>
 
                 <p className="text-sm text-orange-700">
@@ -922,22 +939,27 @@ const TimesheetEntryRow: React.FC<TimesheetEntryRowProps> = ({
   isPartialRejection = false
 }) => {
   const projectName = projects.find(p => p.value === entry.project_id)?.label || 'Unknown';
-  const projectApproval = entry.project_id ? (projectApprovalsMap || {})[entry.project_id] : undefined;
+  const projectApproval = entry.project_id ? projectApprovalsMap?.[entry.project_id] : undefined;
   const isProjectApproved = projectApproval && projectApproval.manager_status === 'approved';
-  const isProjectRejected = projectApproval && projectApproval.lead_status === 'rejected';
+  
+  // Check BOTH lead and manager rejection status
+  const isProjectRejectedByLead = projectApproval && projectApproval.lead_status === 'rejected';
+  const isProjectRejectedByManager = projectApproval && projectApproval.manager_status === 'rejected';
+  const isProjectRejected = isProjectRejectedByLead || isProjectRejectedByManager;
+  
   const isEntryRejected = entry.is_rejected || false;
   const projectTasks = tasks.filter(task => task.projectId === entry.project_id);
   const entryType = entry.entry_type || 'project_task';
   const copyOptions = weekOptions.filter(option => option.value !== entry.date);
 
   // Entry locking logic for partial rejections:
-  // 1. If timesheet is fully rejected by lead -> all entries are editable
-  // 2. If project is specifically rejected -> this entry is editable  
+  // 1. If timesheet is fully rejected (by lead OR manager) -> all entries are editable
+  // 2. If project is specifically rejected (by lead OR manager) -> this entry is editable  
   // 3. If in create/edit mode -> all entries are editable
   // 4. If in view mode BUT project is rejected -> this entry is editable
   // 5. If in view mode AND project is not rejected -> this entry is locked
   // 6. PARTIAL REJECTION: If partial rejection, ONLY rejected project entries are editable
-  const isTimesheetRejected = timesheetStatus === 'lead_rejected';
+  const isTimesheetRejected = timesheetStatus === 'lead_rejected' || timesheetStatus === 'manager_rejected';
   
   // Entry is editable if:
   // - In create/edit mode (not view mode) AND NOT a partial rejection, OR
@@ -948,7 +970,7 @@ const TimesheetEntryRow: React.FC<TimesheetEntryRowProps> = ({
   
   if (isPartialRejection) {
     // For partial rejections, only rejected project entries can be edited
-    entryEditable = isProjectRejected;
+    entryEditable = isProjectRejected || false;
   } else if (!isViewMode) {
     // For regular edit/create mode (no partial rejection), all entries editable
     entryEditable = true;
@@ -960,8 +982,8 @@ const TimesheetEntryRow: React.FC<TimesheetEntryRowProps> = ({
   const entryLocked = !entryEditable;
 
   // For partial rejections, disable copy and remove for non-rejected projects
-  const canCopy = !isPartialRejection || isProjectRejected;
-  const canRemove = !isPartialRejection || isProjectRejected;
+  const canCopy = !isPartialRejection || !isProjectRejected;
+  const canRemove = !isPartialRejection || !isProjectRejected;
 
   const [isCopyOpen, setIsCopyOpen] = useState(false);
   const [copySelection, setCopySelection] = useState<string[]>([]);
@@ -1105,7 +1127,7 @@ const TimesheetEntryRow: React.FC<TimesheetEntryRowProps> = ({
             <span>
               {isViewMode ? 'View Only' : 
                isProjectRejected ? 'Rejected - Can Edit' :
-               isTimesheetRejected ? 'Timesheet Rejected - Can Edit' : 'Locked'}
+               isTimesheetRejected ? 'Locked' : 'Timesheet Rejected - Can Edit'}
             </span>
           </div>
         )}

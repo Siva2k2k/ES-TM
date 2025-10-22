@@ -324,24 +324,49 @@ export class TimesheetService {
         const baseEditable = ['draft', 'manager_rejected', 'management_rejected'].includes(ts.status);
         
         // Collect rejected project IDs from project approvals
+        // Check BOTH lead_status and manager_status for rejections
         const leadRejectedProjectIds = new Set(
           projectApprovals
             .filter(pa => pa.lead_status === 'rejected' && pa.project_id)
             .map(pa => pa.project_id as string)
         );
+        
+        const managerRejectedProjectIds = new Set(
+          projectApprovals
+            .filter(pa => pa.manager_status === 'rejected' && pa.project_id)
+            .map(pa => pa.project_id as string)
+        );
+        
+        // Combined set of all rejected projects (from Lead OR Manager)
+        const allRejectedProjectIds = new Set([
+          ...leadRejectedProjectIds,
+          ...managerRejectedProjectIds
+        ]);
 
-        // Handle partial rejections: if timesheet is 'submitted' but has rejected projects
-        const hasPartialRejection = ts.status === 'submitted' && leadRejectedProjectIds.size > 0;
+        // Handle partial rejections: if timesheet is 'submitted'/'lead_approved' but has rejected projects
+        const hasPartialLeadRejection = ts.status === 'submitted' && leadRejectedProjectIds.size > 0;
+        const hasPartialManagerRejection = ts.status === 'lead_approved' && managerRejectedProjectIds.size > 0;
+        const hasPartialRejection = hasPartialLeadRejection || hasPartialManagerRejection;
         
         // Allow editing if:
         // 1. Timesheet is in baseEditable states (draft, manager_rejected, management_rejected)
         // 2. Entire timesheet rejected by lead (status = 'lead_rejected')
-        // 3. Partial rejection (status = 'submitted' but some projects rejected)
-        const allowLeadEdit = (ts.status === 'lead_rejected' || hasPartialRejection) && leadRejectedProjectIds.size > 0;
+        // 3. Entire timesheet rejected by manager (status = 'manager_rejected')
+        // 4. Partial rejection (some projects rejected while others approved/pending)
+        const allowRejectionEdit = (
+          ts.status === 'lead_rejected' || 
+          ts.status === 'manager_rejected' || 
+          hasPartialRejection
+        ) && allRejectedProjectIds.size > 0;
 
         // Determine effective display status for frontend
-        // If submitted but has partial rejections, treat as 'lead_rejected' for UI purposes
-        const effectiveStatus = hasPartialRejection ? 'lead_rejected' : ts.status;
+        // If has partial rejections, use appropriate rejected status for UI
+        let effectiveStatus = ts.status;
+        if (hasPartialLeadRejection) {
+          effectiveStatus = 'lead_rejected';
+        } else if (hasPartialManagerRejection) {
+          effectiveStatus = 'manager_rejected';
+        }
 
         const enhancedEntries = entries.map((entry: any) => {
           const projectId =
@@ -352,11 +377,11 @@ export class TimesheetService {
                 : undefined;
 
           // Entry is editable if:
-          // - Timesheet is in base editable state, OR
-          // - Lead edit allowed AND this entry belongs to a rejected project
+          // - Timesheet is in base editable state (draft, fully rejected), OR
+          // - Rejection edit allowed AND this entry belongs to a rejected project
           const entryEditable = baseEditable
             ? true
-            : allowLeadEdit && projectId ? leadRejectedProjectIds.has(projectId) : false;
+            : allowRejectionEdit && projectId ? allRejectedProjectIds.has(projectId) : false;
 
           return {
             ...entry,
@@ -364,8 +389,8 @@ export class TimesheetService {
           };
         });
 
-        const timesheetCanEdit = baseEditable || (allowLeadEdit && enhancedEntries.some((entry: any) => entry.is_editable));
-        const editableProjectIds = allowLeadEdit ? Array.from(leadRejectedProjectIds) : undefined;
+        const timesheetCanEdit = baseEditable || (allowRejectionEdit && enhancedEntries.some((entry: any) => entry.is_editable));
+        const editableProjectIds = allowRejectionEdit ? Array.from(allRejectedProjectIds) : undefined;
 
         return {
           ...ts,
@@ -604,24 +629,49 @@ export class TimesheetService {
       const baseEditable = ['draft', 'manager_rejected', 'management_rejected'].includes(timesheet.status);
       
       // Collect rejected project IDs from project approvals
+      // Check BOTH lead_status and manager_status for rejections
       const leadRejectedProjectIds = new Set(
         projectApprovals
           .filter(pa => pa.lead_status === 'rejected' && pa.project_id)
           .map(pa => pa.project_id as string)
       );
+      
+      const managerRejectedProjectIds = new Set(
+        projectApprovals
+          .filter(pa => pa.manager_status === 'rejected' && pa.project_id)
+          .map(pa => pa.project_id as string)
+      );
+      
+      // Combined set of all rejected projects (from Lead OR Manager)
+      const allRejectedProjectIds = new Set([
+        ...leadRejectedProjectIds,
+        ...managerRejectedProjectIds
+      ]);
 
-      // Handle partial rejections: if timesheet is 'submitted' but has rejected projects
-      const hasPartialRejection = timesheet.status === 'submitted' && leadRejectedProjectIds.size > 0;
+      // Handle partial rejections: if timesheet is 'submitted'/'lead_approved' but has rejected projects
+      const hasPartialLeadRejection = timesheet.status === 'submitted' && leadRejectedProjectIds.size > 0;
+      const hasPartialManagerRejection = timesheet.status === 'lead_approved' && managerRejectedProjectIds.size > 0;
+      const hasPartialRejection = hasPartialLeadRejection || hasPartialManagerRejection;
       
       // Allow editing if:
       // 1. Timesheet is in baseEditable states (draft, manager_rejected, management_rejected)
       // 2. Entire timesheet rejected by lead (status = 'lead_rejected')
-      // 3. Partial rejection (status = 'submitted' but some projects rejected)
-      const allowLeadEdit = (timesheet.status === 'lead_rejected' || hasPartialRejection) && leadRejectedProjectIds.size > 0;
+      // 3. Entire timesheet rejected by manager (status = 'manager_rejected')
+      // 4. Partial rejection (some projects rejected while others approved/pending)
+      const allowRejectionEdit = (
+        timesheet.status === 'lead_rejected' || 
+        timesheet.status === 'manager_rejected' || 
+        hasPartialRejection
+      ) && allRejectedProjectIds.size > 0;
 
       // Determine effective display status for frontend
-      // If submitted but has partial rejections, treat as 'lead_rejected' for UI purposes
-      const effectiveStatus = hasPartialRejection ? 'lead_rejected' : timesheet.status;
+      // If has partial rejections, use appropriate rejected status for UI
+      let effectiveStatus = timesheet.status;
+      if (hasPartialLeadRejection) {
+        effectiveStatus = 'lead_rejected';
+      } else if (hasPartialManagerRejection) {
+        effectiveStatus = 'manager_rejected';
+      }
 
       const enhancedEntries = entries.map((entry: any) => {
         const projectId =
@@ -632,11 +682,11 @@ export class TimesheetService {
               : undefined;
 
         // Entry is editable if:
-        // - Timesheet is in base editable state, OR
-        // - Lead edit allowed AND this entry belongs to a rejected project
+        // - Timesheet is in base editable state (draft, fully rejected), OR
+        // - Rejection edit allowed AND this entry belongs to a rejected project
         const entryEditable = baseEditable
           ? true
-          : allowLeadEdit && projectId ? leadRejectedProjectIds.has(projectId) : false;
+          : allowRejectionEdit && projectId ? allRejectedProjectIds.has(projectId) : false;
 
         return {
           ...entry,
@@ -644,8 +694,8 @@ export class TimesheetService {
         };
       });
 
-      const timesheetCanEdit = baseEditable || (allowLeadEdit && enhancedEntries.some((entry: any) => entry.is_editable));
-      const editableProjectIds = allowLeadEdit ? Array.from(leadRejectedProjectIds) : undefined;
+      const timesheetCanEdit = baseEditable || (allowRejectionEdit && enhancedEntries.some((entry: any) => entry.is_editable));
+      const editableProjectIds = allowRejectionEdit ? Array.from(allRejectedProjectIds) : undefined;
 
       const user = timesheet.user[0];
       const enhancedTimesheet: TimesheetWithDetails = {
@@ -846,8 +896,8 @@ export class TimesheetService {
       // Validate access permissions
       validateTimesheetAccess(currentUser, timesheet.user_id.toString(), 'edit');
 
-      // Check status
-      if (!['draft', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
+      // Check status - allow submission from draft and rejected states
+      if (!['draft', 'lead_rejected', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
         throw new TimesheetError(`Timesheet cannot be submitted from current status: ${timesheet.status}`);
       }
 
@@ -901,6 +951,24 @@ export class TimesheetService {
             project_id: new mongoose.Types.ObjectId(projectId)
           }).exec();
 
+          // If resubmitting after rejection, reset the approval status
+          if (existingApproval && (timesheet.status === 'lead_rejected' || timesheet.status === 'manager_rejected')) {
+            // Reset rejection fields based on who rejected
+            if (timesheet.status === 'lead_rejected' && existingApproval.lead_status === 'rejected') {
+              existingApproval.lead_status = 'pending';
+              existingApproval.lead_rejection_reason = undefined;
+              existingApproval.lead_approved_at = undefined;
+              await existingApproval.save();
+            } else if (timesheet.status === 'manager_rejected' && existingApproval.manager_status === 'rejected') {
+              existingApproval.manager_status = 'pending';
+              existingApproval.manager_rejection_reason = undefined;
+              existingApproval.manager_approved_at = undefined;
+              await existingApproval.save();
+            }
+            continue;
+          }
+
+          // If approval record exists and not a resubmission, skip creation
           if (existingApproval) {
             continue;
           }
@@ -1214,8 +1282,8 @@ export class TimesheetService {
       // Validate access permissions
       validateTimesheetAccess(currentUser, timesheet.user_id.toString(), 'edit');
 
-      // Validate timesheet status
-      if (!['draft', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
+      // Validate timesheet status - allow editing in draft and rejected states
+      if (!['draft', 'lead_rejected', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
         throw new TimesheetError('Cannot add entries to timesheet in current status');
       }
 
@@ -1380,7 +1448,7 @@ export class TimesheetService {
    * Check if timesheet can be modified
    */
   static canModifyTimesheet(timesheet: ITimesheet): boolean {
-    return ['draft', 'manager_rejected', 'management_rejected'].includes(timesheet.status) &&
+    return ['draft', 'lead_rejected', 'manager_rejected', 'management_rejected'].includes(timesheet.status) &&
       !timesheet.is_frozen;
   }
 
@@ -1500,8 +1568,8 @@ export class TimesheetService {
       // Validate access permissions
       validateTimesheetAccess(currentUser, timesheet.user_id.toString(), 'edit');
 
-      // Validate timesheet status
-      if (!['draft', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
+      // Validate timesheet status - allow editing in draft and rejected states
+      if (!['draft', 'lead_rejected', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
         throw new TimesheetError('Cannot update entries for timesheet in current status');
       }
 
@@ -1701,8 +1769,8 @@ export class TimesheetService {
       // Validate access permissions
       validateTimesheetAccess(currentUser, timesheet.user_id.toString(), 'edit');
 
-      // Validate timesheet status
-      if (!['draft', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
+      // Validate timesheet status - allow editing in draft and rejected states
+      if (!['draft', 'lead_rejected', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
         throw new TimesheetError('Cannot add entries to timesheet in current status');
       }
 

@@ -26,32 +26,47 @@ import { formatDate, formatDuration, formatISODate } from '../../utils/formattin
 import { ApprovalHistoryModal } from './ApprovalHistoryModal';
 
 interface Timesheet {
-  _id: string;
-  user: {
-    _id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-    employeeId: string;
+  id: string;
+  user?: {
+    _id?: string;
+    id?: string;
+    firstName?: string;
+    lastName?: string;
+    full_name?: string;
+    email?: string;
+    employeeId?: string;
     role?: string;
   };
-  weekStartDate: string;
-  weekEndDate: string;
+  user_id?: string;
+  weekStartDate?: string;
+  week_start_date?: string;
+  weekEndDate?: string;
+  week_end_date?: string;
   status: 'draft' | 'submitted' | 'approved' | 'rejected' | 'lead_rejected' | 'manager_rejected' | 'management_pending';
-  totalHours: number;
-  regularHours: number;
-  overtimeHours: number;
+  totalHours?: number;
+  total_hours?: number;
+  regularHours?: number;
+  overtimeHours?: number;
   projects?: {
     projectId: string;
     projectName: string;
     hours: number;
   }[];
+  project_approvals?: any[];
+  entries?: any[];
   isCurrentWeek?: boolean;
   createdAt?: string;
+  created_at?: string;
   updatedAt?: string;
   submittedAt?: string;
+  submitted_at?: string;
   approvedAt?: string;
-}export interface TimesheetListProps {
+  approved_at?: string;
+  rejection_reason?: string;
+  can_edit?: boolean;
+}
+
+export interface TimesheetListProps {
   /** Timesheets to display */
   timesheets: Timesheet[];
   /** Current view mode */
@@ -143,7 +158,7 @@ export const TimesheetList: React.FC<TimesheetListProps> = ({
 
     if (startTimestamp !== null || endTimestamp !== null) {
       filtered = filtered.filter(ts => {
-        const tsTimestamp = normalizeDateValue(ts.week_start_date);
+        const tsTimestamp = normalizeDateValue(ts.weekStartDate);
         if (tsTimestamp === null) {
           return false;
         }
@@ -159,14 +174,26 @@ export const TimesheetList: React.FC<TimesheetListProps> = ({
 
     filtered.sort((a, b) => {
       switch (sortBy) {
-        case 'date-desc':
-          return new Date(b.week_start_date).getTime() - new Date(a.week_start_date).getTime();
-        case 'date-asc':
-          return new Date(a.week_start_date).getTime() - new Date(b.week_start_date).getTime();
-        case 'hours-desc':
-          return b.total_hours - a.total_hours;
-        case 'hours-asc':
-          return a.total_hours - b.total_hours;
+        case 'date-desc': {
+          const dateA = a.week_start_date || a.weekStartDate || '';
+          const dateB = b.week_start_date || b.weekStartDate || '';
+          return new Date(dateB).getTime() - new Date(dateA).getTime();
+        }
+        case 'date-asc': {
+          const dateA = a.week_start_date || a.weekStartDate || '';
+          const dateB = b.week_start_date || b.weekStartDate || '';
+          return new Date(dateA).getTime() - new Date(dateB).getTime();
+        }
+        case 'hours-desc': {
+          const hoursA = a.total_hours ?? a.totalHours ?? 0;
+          const hoursB = b.total_hours ?? b.totalHours ?? 0;
+          return hoursB - hoursA;
+        }
+        case 'hours-asc': {
+          const hoursA = a.total_hours ?? a.totalHours ?? 0;
+          const hoursB = b.total_hours ?? b.totalHours ?? 0;
+          return hoursA - hoursB;
+        }
         case 'status':
           return a.status.localeCompare(b.status);
         default:
@@ -184,6 +211,8 @@ export const TimesheetList: React.FC<TimesheetListProps> = ({
     const start = (currentPage - 1) * itemsPerPage;
     return filteredTimesheets.slice(start, start + itemsPerPage);
   }, [filteredTimesheets, currentPage, itemsPerPage, enablePagination]);
+
+
 
   const handlePageChange = (page: number) => {
     setCurrentPage(Math.max(1, Math.min(page, totalPages)));
@@ -215,17 +244,17 @@ export const TimesheetList: React.FC<TimesheetListProps> = ({
               <Button
                 variant={viewMode === 'list' ? 'default' : 'outline'}
                 size="sm"
-                icon={List}
                 onClick={() => setViewMode('list')}
               >
+                <List className="h-4 w-4 mr-2" />
                 List
               </Button>
               <Button
                 variant={viewMode === 'table' ? 'default' : 'outline'}
                 size="sm"
-                icon={Grid}
                 onClick={() => setViewMode('table')}
               >
+                <Grid className="h-4 w-4 mr-2" />
                 Table
               </Button>
             </div>
@@ -463,9 +492,9 @@ const TimesheetListItem: React.FC<TimesheetListItemProps> = ({
                 <div key={pa.project_id} className="text-xs text-gray-600 flex items-center justify-between">
                   <div className="truncate">
                     <strong className="text-sm">{pa.project_name || 'Project'}</strong>
-                    <span className="ml-2">{pa.manager_name ? `Project Manager — ` : ''}</span>
+                    <span className="ml-2"></span>
                     {/* Show lead status if available and different from manager status */}
-                    {pa.lead_status && pa.lead_status !== 'not_required' && (
+                    {pa.lead_status && pa.lead_status !== 'not_required' && timesheet.user?.role !== 'lead' && timesheet.user?.role !== 'manager' && (
                       <>
                         <span className="text-xs text-gray-500">Lead: </span>
                         {pa.lead_status === 'approved' && <span className="text-green-600">Approved</span>}

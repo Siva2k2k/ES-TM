@@ -124,11 +124,13 @@ export const TeamReviewPageV2: React.FC = () => {
   // Handle approval actions
   const handleApproveClick = (projectWeek: ProjectWeekGroup) => {
     if (isManagementRole) {
+      // Filter out managers from the approval check (they have management_pending status)
+      const teamMembers = projectWeek.users.filter(user => user.user_role !== 'manager');
       const allManagerApproved =
-        projectWeek.users.length > 0 && projectWeek.users.every(user => user.timesheet_status === 'manager_approved');
+        teamMembers.length > 0 && teamMembers.every(user => user.timesheet_status === 'manager_approved');
 
       if (!allManagerApproved) {
-        setError('All timesheets in this project must be manager approved before final verification.');
+        setError('All team member timesheets in this project must be manager approved before final verification.');
         setTimeout(() => setError(null), 5000);
         return;
       }
@@ -240,7 +242,7 @@ export const TeamReviewPageV2: React.FC = () => {
     try {
       if (modalState.action === 'approve') {
         if (modalState.approvalRole === 'management') {
-          const managerApprovedUsers = projectWeek.users.filter(user => user.timesheet_status === 'manager_approved');
+          const managerApprovedUsers = projectWeek.users.filter(user => user.timesheet_status === 'manager_approved' || user.timesheet_status === 'management_pending');
 
           if (managerApprovedUsers.length !== projectWeek.users.length) {
             throw new Error('All timesheets must be manager approved before verification.');

@@ -512,30 +512,37 @@ function mapTimesheetForList(detail: TimesheetWithDetails): Timesheet {
     project_approvals: (detail as any).project_approvals || [],
     created_at: detail.created_at || (detail as any).createdAt,
     entries,
-    user_id: detail.user_id
+    user_id: detail.user_id,
+    user: detail.user
   };
 }
 
 function mapTimesheetStatus(status: string): Timesheet['status'] {
-  switch (status) {
+  const normalizedStatus = status?.toLowerCase() || '';
+  
+  switch (normalizedStatus) {
     case 'draft':
       return 'draft';
     case 'submitted':
-    case 'manager_pending':
     case 'pending':
       return 'submitted';
+    case 'lead_approved':
+      return 'lead_approved';
+    case 'manager_pending':
     case 'management_pending':
       return 'management_pending';
+    case 'lead_rejected':
     case 'manager_rejected':
     case 'management_rejected':
     case 'rejected':
       return 'rejected';
     case 'manager_approved':
+      return 'manager_approved';
     case 'management_approved':
     case 'approved':
     case 'verified':
     case 'frozen':
-      return 'approved';
+      return 'frozen';
     default:
       return 'submitted';
   }

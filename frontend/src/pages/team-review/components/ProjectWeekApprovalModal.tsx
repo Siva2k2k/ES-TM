@@ -34,7 +34,7 @@ export const ProjectWeekApprovalModal: React.FC<ProjectWeekApprovalModalProps> =
   // Calculate these values before using them
   const isManagementMode = approvalRole === 'management';
   const affectedUsers = isManagementMode
-    ? projectWeek.users.filter(u => u.timesheet_status === 'manager_approved')
+    ? projectWeek.users.filter(u => u.timesheet_status === 'manager_approved' || u.timesheet_status === 'management_pending')
     : projectWeek.users.filter(u => u.approval_status === 'pending');
   const totalAffectedHours = affectedUsers.reduce((sum, user) => sum + (user.total_hours_for_project || 0), 0);
 
