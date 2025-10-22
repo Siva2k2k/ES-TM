@@ -311,6 +311,9 @@ export interface ProjectWeekUser {
   total_hours_for_project: number;
   entries: TimeEntryDetail[];
   approval_status: 'pending' | 'approved' | 'rejected';
+  worked_hours: number;
+  billable_hours: number;
+  billable_adjustment: number;
 }
 
 /**

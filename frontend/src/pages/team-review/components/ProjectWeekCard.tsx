@@ -102,10 +102,16 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
   const rejectButtonTitle = isManagementMode
     ? 'Reject timesheets back to managers'
     : 'Reject all pending timesheets for this project-week.';
+  
   // Show total_hours if provided, otherwise sum per-user totals as a fallback
   const displayHours = (typeof projectWeek.total_hours === 'number' && projectWeek.total_hours > 0)
     ? projectWeek.total_hours
     : projectWeek.users.reduce((sum, u) => sum + (u.total_hours_for_project || 0), 0);
+
+  // Calculate aggregated worked hours and billable hours (Management view)
+  const totalWorkedHours = projectWeek.users.reduce((sum, u) => sum + (u.worked_hours || 0), 0);
+  const totalBillableHours = projectWeek.users.reduce((sum, u) => sum + (u.billable_hours || 0), 0);
+  const totalAdjustment = projectWeek.users.reduce((sum, u) => sum + (u.billable_adjustment || 0), 0);
 
   return (
     <div className={`rounded-lg border-2 overflow-hidden transition-all ${getStatusColor()}`}>
@@ -213,9 +219,27 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
               <Clock className="w-4 h-4 text-green-600" />
               <span className="text-sm text-gray-600">Hours</span>
             </div>
-            <div className="text-2xl font-bold text-gray-900">
-              {displayHours.toFixed(1)}
-            </div>
+            {isManagementMode ? (
+              <>
+                <div className="text-2xl font-bold text-gray-900">
+                  {totalBillableHours.toFixed(1)}
+                </div>
+                <div className="text-xs mt-1 space-y-0.5">
+                  <div className="text-blue-600">
+                    {totalWorkedHours.toFixed(1)}h worked
+                  </div>
+                  {totalAdjustment !== 0 && (
+                    <div className={totalAdjustment >= 0 ? 'text-green-600' : 'text-red-600'}>
+                      {totalAdjustment >= 0 ? '+' : ''}{totalAdjustment.toFixed(1)}h adjust
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="text-2xl font-bold text-gray-900">
+                {displayHours.toFixed(1)}
+              </div>
+            )}
           </div>
 
           <div className="bg-white rounded-lg border border-gray-200 p-3">
@@ -315,6 +339,7 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
                   <UserTimesheetDetails
                     key={user.user_id}
                     user={user}
+                    projectId={projectWeek.project_id}
                     isExpanded={expandedUsers.has(user.user_id)}
                     onToggle={() => toggleUserExpansion(user.user_id)}
                     onApproveUser={() => onApproveUser && onApproveUser(user.user_id, projectWeek.project_id)}

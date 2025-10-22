@@ -7,7 +7,20 @@
 /**
  * Timesheet status types
  */
-export type TimesheetStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'pending';
+export type TimesheetStatus = 
+  | 'draft' 
+  | 'submitted' 
+  | 'lead_approved'
+  | 'lead_rejected'
+  | 'manager_approved'
+  | 'manager_rejected'
+  | 'management_pending'
+  | 'management_rejected'
+  | 'approved' 
+  | 'rejected' 
+  | 'pending'
+  | 'frozen'
+  | 'billed';
 
 /**
  * Project status types
@@ -34,6 +47,14 @@ export function getTimesheetStatusColor(status: TimesheetStatus | string): strin
     draft: 'bg-gray-100 text-gray-800 border-gray-300',
     submitted: 'bg-blue-100 text-blue-800 border-blue-300',
     pending: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+    lead_approved: 'bg-cyan-100 text-cyan-800 border-cyan-300',
+    lead_rejected: 'bg-orange-100 text-orange-800 border-orange-300',
+    manager_approved: 'bg-indigo-100 text-indigo-800 border-indigo-300',
+    manager_rejected: 'bg-red-100 text-red-800 border-red-300',
+    management_pending: 'bg-purple-100 text-purple-800 border-purple-300',
+    management_rejected: 'bg-red-100 text-red-800 border-red-300',
+    frozen: 'bg-blue-100 text-blue-800 border-blue-300',
+    billed: 'bg-green-100 text-green-800 border-green-300',
     approved: 'bg-green-100 text-green-800 border-green-300',
     rejected: 'bg-red-100 text-red-800 border-red-300'
   };
@@ -102,6 +123,14 @@ export function getTimesheetStatusLabel(status: TimesheetStatus | string): strin
     draft: 'Draft',
     submitted: 'Submitted',
     pending: 'Pending',
+    lead_approved: 'Lead Approved',
+    lead_rejected: 'Lead Rejected',
+    manager_approved: 'Manager Approved',
+    manager_rejected: 'Manager Rejected',
+    management_pending: 'Management Pending',
+    management_rejected: 'Management Rejected',
+    frozen: 'Frozen',
+    billed: 'Billed',
     approved: 'Approved',
     rejected: 'Rejected'
   };
@@ -170,6 +199,14 @@ export function getTimesheetStatusIcon(status: TimesheetStatus | string): string
     draft: 'FileEdit',
     submitted: 'Send',
     pending: 'Clock',
+    lead_approved: 'CheckCircle',
+    lead_rejected: 'XCircle',
+    manager_approved: 'CheckCircle',
+    manager_rejected: 'XCircle',
+    management_pending: 'Clock',
+    management_rejected: 'XCircle',
+    frozen: 'Lock',
+    billed: 'DollarSign',
     approved: 'CheckCircle',
     rejected: 'XCircle'
   };

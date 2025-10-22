@@ -25,35 +25,33 @@ import { StatusBadge } from '../shared/StatusBadge';
 import { formatDate, formatDuration, formatISODate } from '../../utils/formatting';
 import { ApprovalHistoryModal } from './ApprovalHistoryModal';
 
-export interface Timesheet {
-  id: string;
-  week_start_date: string;
-  week_end_date: string;
-  total_hours: number;
-  status: 'draft' | 'submitted' | 'approved' | 'rejected' | 'lead_rejected' | 'manager_rejected';
-  submitted_at?: string;
-  approved_at?: string;
-  approved_by?: string;
-  rejection_reason?: string;
-  created_at: string;
-  // Optional per-project approval summaries
-  project_approvals?: Array<{
-    project_id: string;
-    project_name?: string;
-    manager_name?: string;
-    manager_status?: 'approved' | 'rejected' | 'pending' | 'not_required';
-    lead_status?: 'approved' | 'rejected' | 'pending' | 'not_required';
-    manager_rejection_reason?: string;
-    lead_rejection_reason?: string;
-  }>;
-  // Additional fields used by pages
-  entries?: any[];
-  user_id?: string;
-  can_edit?: boolean;
-  editable_project_ids?: string[];
-}
-
-export interface TimesheetListProps {
+interface Timesheet {
+  _id: string;
+  user: {
+    _id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    employeeId: string;
+    role?: string;
+  };
+  weekStartDate: string;
+  weekEndDate: string;
+  status: 'draft' | 'submitted' | 'approved' | 'rejected' | 'lead_rejected' | 'manager_rejected' | 'management_pending';
+  totalHours: number;
+  regularHours: number;
+  overtimeHours: number;
+  projects?: {
+    projectId: string;
+    projectName: string;
+    hours: number;
+  }[];
+  isCurrentWeek?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  submittedAt?: string;
+  approvedAt?: string;
+}export interface TimesheetListProps {
   /** Timesheets to display */
   timesheets: Timesheet[];
   /** Current view mode */
@@ -86,6 +84,7 @@ const STATUS_OPTIONS: SelectOption[] = [
   { value: 'rejected', label: 'Rejected' },
   { value: 'lead_rejected', label: 'Lead Rejected' },
   { value: 'manager_rejected', label: 'Manager Rejected' },
+  { value: 'management_pending', label: 'Management Pending' },
 ];
 
 const SORT_OPTIONS: SelectOption[] = [
@@ -464,7 +463,7 @@ const TimesheetListItem: React.FC<TimesheetListItemProps> = ({
                 <div key={pa.project_id} className="text-xs text-gray-600 flex items-center justify-between">
                   <div className="truncate">
                     <strong className="text-sm">{pa.project_name || 'Project'}</strong>
-                    <span className="ml-2">{pa.manager_name ? `${pa.manager_name} — ` : ''}</span>
+                    <span className="ml-2">{pa.manager_name ? `Project Manager — ` : ''}</span>
                     {/* Show lead status if available and different from manager status */}
                     {pa.lead_status && pa.lead_status !== 'not_required' && (
                       <>
@@ -472,16 +471,26 @@ const TimesheetListItem: React.FC<TimesheetListItemProps> = ({
                         {pa.lead_status === 'approved' && <span className="text-green-600">Approved</span>}
                         {pa.lead_status === 'pending' && <span className="text-yellow-600">Pending</span>}
                         {pa.lead_status === 'rejected' && <span className="text-red-600">Rejected</span>}
-                        {pa.manager_status && pa.manager_status !== 'not_required' && <span className="mx-1">|</span>}
+                        {(pa.manager_status && pa.manager_status !== 'not_required') || (pa.management_status && pa.management_status !== 'not_required') ? <span className="mx-1">|</span> : ''}
                       </>
                     )}
                     {/* Show manager status */}
                     {pa.manager_status && pa.manager_status !== 'not_required' && (
                       <>
-                        {pa.lead_status && pa.lead_status !== 'not_required' && <span className="text-xs text-gray-500">Manager: </span>}
+                        <span className="text-xs text-gray-500">Manager: </span>
                         {pa.manager_status === 'approved' && <span className="text-green-600">Approved</span>}
                         {pa.manager_status === 'pending' && <span className="text-yellow-600">Pending</span>}
                         {pa.manager_status === 'rejected' && <span className="text-red-600">Rejected</span>}
+                        {pa.management_status && pa.management_status !== 'not_required' && <span className="mx-1">|</span>}
+                      </>
+                    )}
+                    {/* Show management status */}
+                    {pa.management_status && pa.management_status !== 'not_required' && (
+                      <>
+                        <span className="text-xs text-gray-500">Management: </span>
+                        {pa.management_status === 'approved' && <span className="text-green-600">Approved</span>}
+                        {pa.management_status === 'pending' && <span className="text-purple-600">Pending</span>}
+                        {pa.management_status === 'rejected' && <span className="text-red-600">Rejected</span>}
                       </>
                     )}
                   </div>
@@ -494,6 +503,11 @@ const TimesheetListItem: React.FC<TimesheetListItemProps> = ({
                   {(pa.manager_status === 'rejected' && pa.manager_rejection_reason) && (
                     <div className="text-xs text-red-600 ml-4 truncate" title={pa.manager_rejection_reason}>
                       {pa.manager_rejection_reason}
+                    </div>
+                  )}
+                  {(pa.management_status === 'rejected' && pa.management_rejection_reason) && (
+                    <div className="text-xs text-red-600 ml-4 truncate" title={pa.management_rejection_reason}>
+                      {pa.management_rejection_reason}
                     </div>
                   )}
                 </div>

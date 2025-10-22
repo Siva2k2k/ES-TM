@@ -402,6 +402,49 @@ export class TeamReviewService {
       return handleApiError(error, 'Failed to freeze project-week');
     }
   }
+
+  /**
+   * Update billable adjustment for a project approval (Manager only)
+   * Manager can adjust billable hours (+/-) for a user's timesheet on a specific project
+   */
+  static async updateBillableAdjustment(
+    timesheetId: string,
+    projectId: string,
+    adjustment: number
+  ): Promise<{
+    success: boolean;
+    approval: {
+      worked_hours: number;
+      billable_hours: number;
+      billable_adjustment: number;
+    };
+    error?: string;
+  }> {
+    try {
+      const response = await axios.put<{
+        success: boolean;
+        approval: {
+          worked_hours: number;
+          billable_hours: number;
+          billable_adjustment: number;
+        };
+      }>(
+        `${API_BASE_URL}/timesheets/billable-adjustment`,
+        {
+          timesheet_id: timesheetId,
+          project_id: projectId,
+          adjustment
+        },
+        {
+          headers: getAuthHeaders()
+        }
+      );
+
+      return response.data;
+    } catch (error) {
+      return handleApiError(error, 'Failed to update billable adjustment');
+    }
+  }
 }
 
 export default TeamReviewService;

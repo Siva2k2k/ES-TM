@@ -522,9 +522,10 @@ function mapTimesheetStatus(status: string): Timesheet['status'] {
       return 'draft';
     case 'submitted':
     case 'manager_pending':
-    case 'management_pending':
     case 'pending':
       return 'submitted';
+    case 'management_pending':
+      return 'management_pending';
     case 'manager_rejected':
     case 'management_rejected':
     case 'rejected':
