@@ -143,7 +143,7 @@ export class TimesheetController {
   /**
    * Submit timesheet
    */
-  static submitTimesheet = handleAsyncError(async (req: AuthenticatedRequest, res: Response) => {
+  public static submitTimesheet = handleAsyncError(async (req: AuthenticatedRequest, res: Response) => {
     const currentUser = req.user!;
     const { timesheetId } = req.params;
 

@@ -368,14 +368,16 @@ export class TeamReviewApprovalService {
         projectApproval.lead_rejection_reason = reason;
         await projectApproval.save(queryOpts);
 
-        // Reset ALL approvals for this timesheet
-        await this.resetAllApprovals(timesheetId, session || undefined, projectId);
-
-        // Set timesheet to lead_rejected
+        // CRITICAL: In multi-project timesheets, rejecting ANY project should set overall status to 'rejected'
+        // This allows the user to resubmit. However, other approved projects maintain their approval state.
+        // The key is: overall status = 'rejected' BUT individual project approvals stay independent.
+        
+        // Set overall timesheet status to 'lead_rejected' when ANY project is rejected
         newStatus = 'lead_rejected';
         timesheet.status = newStatus;
         timesheet.lead_rejection_reason = reason;
         timesheet.lead_rejected_at = new Date();
+        
         await timesheet.save(queryOpts);
 
         // Flag all time entries for this project as rejected
@@ -402,14 +404,15 @@ export class TeamReviewApprovalService {
         projectApproval.manager_rejection_reason = reason;
         await projectApproval.save(queryOpts);
 
-        // Reset ALL approvals for this timesheet
-        await this.resetAllApprovals(timesheetId, session || undefined, projectId);
-
-        // Set timesheet to manager_rejected
+        // CRITICAL: In multi-project timesheets, rejecting ANY project should set overall status to 'rejected'
+        // This allows the user to resubmit. However, other approved projects maintain their approval state.
+        
+        // Set overall timesheet status to 'manager_rejected' when ANY project is rejected
         newStatus = 'manager_rejected';
         timesheet.status = newStatus;
         timesheet.manager_rejection_reason = reason;
         timesheet.manager_rejected_at = new Date();
+        
         await timesheet.save(queryOpts);
 
         // Flag all time entries for this project as rejected
@@ -436,10 +439,14 @@ export class TeamReviewApprovalService {
         projectApproval.management_rejection_reason = reason;
         await projectApproval.save(queryOpts);
 
-        // Reset ALL approvals for this timesheet
-        await this.resetAllApprovals(timesheetId, session || undefined, projectId);
-
-        // Set timesheet to management_rejected
+        // CRITICAL FIX: Do NOT reset other project approvals!
+        // Management rejection should only affect this specific project.
+        // Note: For management, we typically don't check "all rejected" because
+        // management_rejected status should be set if ANY project is rejected at this tier.
+        // This maintains the pattern where rejection at any tier blocks progress.
+        
+        // Set timesheet to management_rejected (always, even if only one project rejected)
+        // This is intentional - management rejection of any project blocks the entire timesheet
         newStatus = 'management_rejected';
         timesheet.status = newStatus;
         timesheet.management_rejection_reason = reason;
@@ -559,6 +566,56 @@ export class TeamReviewApprovalService {
     }
 
     return false;
+  }
+
+  /**
+   * Check if all leads have rejected (for employee timesheets with multiple projects)
+   */
+  private static async checkAllLeadsRejected(
+    timesheetId: string,
+    session: any
+  ): Promise<boolean> {
+    const approvals = await TimesheetProjectApproval.find({
+      timesheet_id: new mongoose.Types.ObjectId(timesheetId)
+    }).session(session);
+
+    if (approvals.length === 0) {
+      return false; // No approvals means nothing rejected
+    }
+
+    for (const approval of approvals) {
+      // If any project is NOT rejected, return false
+      if (approval.lead_id && approval.lead_status !== 'rejected') {
+        return false;
+      }
+    }
+
+    return true; // All projects rejected
+  }
+
+  /**
+   * Check if all managers have rejected (for timesheets with multiple projects)
+   */
+  private static async checkAllManagersRejected(
+    timesheetId: string,
+    session: any
+  ): Promise<boolean> {
+    const approvals = await TimesheetProjectApproval.find({
+      timesheet_id: new mongoose.Types.ObjectId(timesheetId)
+    }).session(session);
+
+    if (approvals.length === 0) {
+      return false; // No approvals means nothing rejected
+    }
+
+    for (const approval of approvals) {
+      // If any project is NOT rejected, return false
+      if (approval.manager_status !== 'rejected') {
+        return false;
+      }
+    }
+
+    return true; // All projects rejected
   }
 
   /**
@@ -1047,7 +1104,20 @@ export class TeamReviewApprovalService {
       for (const approval of projectApprovals) {
         // Find the timesheet this approval belongs to and capture its previous status
         const timesheet = timesheets.find(t => t._id.toString() === approval.timesheet_id.toString());
-        const statusBefore = timesheet ? timesheet.status : 'draft';
+        
+        if (!timesheet) {
+          continue; // Skip if timesheet not found
+        }
+
+        // CRITICAL: Don't reject the approver's own timesheet!
+        // Lead/Manager should not reject their own entries
+        const timesheetOwnerId = timesheet.user_id?.toString?.() ?? String(timesheet.user_id);
+        if (timesheetOwnerId === approverId) {
+          logger.info(`Skipping rejection for approver's own timesheet: ${timesheet._id}`);
+          continue; // Skip approver's own timesheet
+        }
+
+        const statusBefore = timesheet.status;
 
         if (approverRole === 'lead') {
           approval.lead_status = 'rejected';
@@ -1059,44 +1129,46 @@ export class TeamReviewApprovalService {
 
         await approval.save(queryOpts);
 
-  // Reset ALL approvals for this timesheet except the current project approval
-  await this.resetAllApprovals(approval.timesheet_id.toString(), session || undefined, projectId);
-
-        // Update timesheet status based on approver role
-        if (timesheet) {
-          let newStatus: TimesheetStatus;
-          
-          if (approverRole === 'lead') {
-            newStatus = 'lead_rejected';
-            timesheet.status = newStatus;
-            timesheet.lead_rejection_reason = reason;
-            timesheet.lead_rejected_at = new Date();
-          } else {
-            newStatus = 'manager_rejected';
-            timesheet.status = newStatus;
-            timesheet.manager_rejection_reason = reason;
-            timesheet.manager_rejected_at = new Date();
-          }
-          
-          await timesheet.save(queryOpts);
-
-          affectedTimesheetIds.add(timesheet._id.toString());
-          affectedUsers++;
-
-          // Record history - use the timesheet's status values so they match ApprovalHistory enum
-          await ApprovalHistory.create([{
-            timesheet_id: timesheet._id,
-            project_id: new mongoose.Types.ObjectId(projectId),
-            user_id: timesheet.user_id,
-            approver_id: new mongoose.Types.ObjectId(approverId),
-            approver_role: approverRole,
-            action: 'rejected',
-            status_before: normalizeTimesheetStatus(statusBefore),
-            status_after: normalizeTimesheetStatus(newStatus),
-            reason,
-            notes: 'Bulk project-week rejection'
-          }], queryOpts);
+        // CRITICAL FIX: Do NOT reset other project approvals!
+        // In multi-project timesheets, each project maintains independent approval state.
+        // When rejecting one project, other approved projects should remain approved.
+        
+        // IMPORTANT: Rejecting ANY project sets overall status to 'rejected' to allow resubmission,
+        // but individual project approval states remain independent.
+        let newStatus: TimesheetStatus;
+        
+        if (approverRole === 'lead') {
+          // Set overall status to 'lead_rejected' when ANY project is rejected
+          newStatus = 'lead_rejected';
+          timesheet.status = newStatus;
+          timesheet.lead_rejection_reason = reason;
+          timesheet.lead_rejected_at = new Date();
+        } else {
+          // Set overall status to 'manager_rejected' when ANY project is rejected
+          newStatus = 'manager_rejected';
+          timesheet.status = newStatus;
+          timesheet.manager_rejection_reason = reason;
+          timesheet.manager_rejected_at = new Date();
         }
+        
+        await timesheet.save(queryOpts);
+
+        affectedTimesheetIds.add(timesheet._id.toString());
+        affectedUsers++;
+
+        // Record history - use the timesheet's status values so they match ApprovalHistory enum
+        await ApprovalHistory.create([{
+          timesheet_id: timesheet._id,
+          project_id: new mongoose.Types.ObjectId(projectId),
+          user_id: timesheet.user_id,
+          approver_id: new mongoose.Types.ObjectId(approverId),
+          approver_role: approverRole,
+          action: 'rejected',
+          status_before: normalizeTimesheetStatus(statusBefore),
+          status_after: normalizeTimesheetStatus(newStatus),
+          reason,
+          notes: 'Project-week rejection - timesheet status set to rejected (other approved projects maintain approval)'
+        }], queryOpts);
       }
 
       if(session) await session.commitTransaction();

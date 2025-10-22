@@ -762,7 +762,7 @@ export class TimesheetService {
 
       // 3. Check if user is a Lead on any of these projects
       const { ProjectMember } = require('@/models/Project');
-      const leadRoles = await (ProjectMember.find as any)({
+      const leadRoles = await ProjectMember.find({
         project_id: { $in: projectIds.map(id => new mongoose.Types.ObjectId(id)) },
         user_id: new mongoose.Types.ObjectId(userId),
         project_role: 'lead',
@@ -785,7 +785,7 @@ export class TimesheetService {
         const project = await (Project.findById as any)(projectId).lean().exec();
 
         // Get all employees for this project
-        const employeeMembers = await (ProjectMember.find as any)({
+        const employeeMembers = await ProjectMember.find({
           project_id: leadRole.project_id,
           user_id: { $ne: new mongoose.Types.ObjectId(userId) }, // Exclude lead
           project_role: 'employee',
@@ -836,20 +836,21 @@ export class TimesheetService {
             continue;
           }
 
-          // Case 3: Employee has entries for this project but Lead hasn't approved yet
-          if (empTimesheet.status === 'submitted' || empTimesheet.status === 'lead_rejected') {
-            const approval = await (TimesheetProjectApproval.findOne as any)({
-              timesheet_id: empTimesheet._id,
-              project_id: new mongoose.Types.ObjectId(projectId)
-            }).lean().exec();
+          // Case 3: Employee has entries for this project - check project-specific approval status
+          // CRITICAL: Check approval status regardless of overall timesheet status
+          // Employee might have 'lead_approved' status overall but still have pending projects
+          const approval = await (TimesheetProjectApproval.findOne as any)({
+            timesheet_id: empTimesheet._id,
+            project_id: new mongoose.Types.ObjectId(projectId)
+          }).lean().exec();
 
-            if (approval && approval.lead_status === 'pending') {
-              pendingReviews.push({
-                projectName: project?.name || 'Unknown Project',
-                employeeName: empMember.user_id.full_name || 'Unknown Employee',
-                employeeId: empUserId.toString()
-              });
-            }
+          // If no approval record exists OR lead_status is pending/rejected, block Lead submission
+          if (!approval || approval.lead_status === 'pending' || approval.lead_status === 'rejected') {
+            pendingReviews.push({
+              projectName: project?.name || 'Unknown Project',
+              employeeName: empMember.user_id.full_name || 'Unknown Employee',
+              employeeId: empUserId.toString()
+            });
           }
         }
       }
@@ -1029,9 +1030,13 @@ export class TimesheetService {
             .reduce((sum: number, e: any) => sum + (e.hours || 0), 0);
 
           // Determine approval statuses based on submitter role
-          let leadStatus = leadMember ? 'pending' : 'not_required';
+          let leadStatus = 'pending';
           let managerStatus = 'pending';
-          let managementStatus = 'not_required';
+          let managementStatus = 'pending';
+
+          if (currentUser.role === 'lead') {
+            leadStatus = 'not_required';
+          }
 
           // If submitter is a manager, skip lead and manager approval, go straight to management
           if (currentUser.role === 'manager') {

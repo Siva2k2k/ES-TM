@@ -566,11 +566,27 @@ export class TeamReviewServiceV2 {
     // TIER 1: LEAD
     if (approverRole === 'lead') {
       // Lead can see Employee timesheets with status 'submitted', 'lead_approved', OR 'lead_rejected'
-      return userRole === 'employee' && (
+      // CRITICAL FIX: Also check if THIS SPECIFIC PROJECT has been submitted for lead approval
+      //    even if the overall timesheet status differs (due to other projects)
+      
+      // Check overall timesheet status first
+      let visible = userRole === 'employee' && (
         timesheetStatus === 'submitted' || 
         timesheetStatus === 'lead_approved' || 
         timesheetStatus === 'lead_rejected'
       );
+      
+      // If not visible by overall status, check if THIS specific project needs lead approval
+      // This handles multi-project timesheets where employee submitted entries for this project
+      if (!visible && userRole === 'employee' && approval) {
+        visible = (
+          approval.lead_status === 'pending' ||
+          approval.lead_status === 'approved' ||
+          approval.lead_status === 'rejected'
+        );
+      }
+      
+      return visible;
     }
 
     // TIER 2: MANAGER
@@ -582,13 +598,31 @@ export class TeamReviewServiceV2 {
       // 4. management_rejected (resubmitted after management rejection)
       // 5. manager_approved (timesheets they have already approved - for viewing in "Approved" tab)
       // 6. manager_rejected (timesheets they rejected - for viewing in "Rejected" tab)
-      return (
+      // 7. CRITICAL FIX: Also check if THIS SPECIFIC PROJECT has lead_approved status
+      //    even if the overall timesheet status is still submitted (due to other projects)
+      
+      // Check overall timesheet status first
+      let visible = (
         timesheetStatus === 'lead_approved' ||
         timesheetStatus === 'manager_approved' ||
-        timesheetStatus === 'manager_rejected' || // ADDED: Manager can see their rejected timesheets
+        timesheetStatus === 'manager_rejected' ||
+        timesheetStatus === 'lead_rejected' || // Manager can see timesheets with rejected projects
         (timesheetStatus === 'submitted' && ['employee', 'lead', 'manager'].includes(userRole)) ||
         timesheetStatus === 'management_rejected'
       );
+      
+      // If not visible by overall status, check if THIS specific project is lead-approved/rejected
+      // This handles multi-project timesheets where some projects are approved and others aren't
+      if (!visible && approval) {
+        visible = (
+          approval.lead_status === 'approved' ||
+          approval.lead_status === 'rejected' || // Manager can see projects that Lead rejected
+          approval.manager_status === 'approved' ||
+          approval.manager_status === 'rejected'
+        );
+      }
+      
+      return visible;
     }
 
     // TIER 3: MANAGEMENT
