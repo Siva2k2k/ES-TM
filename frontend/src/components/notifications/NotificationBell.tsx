@@ -12,7 +12,7 @@ interface Notification {
   read: boolean;
   created_at: string;
   action_url?: string;
-  data?: Record<string, any>;
+  data?: Record<string, unknown>;
   sender_id?: {
     full_name: string;
     email: string;
@@ -31,18 +31,6 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ className = 
   const navigate = useNavigate();
 
   const apiClient = new BackendApiClient();
-
-  useEffect(() => {
-    fetchNotifications();
-    fetchUnreadCount();
-    
-    // Poll for new notifications every 30 seconds
-    const interval = setInterval(() => {
-      fetchUnreadCount();
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, []);
 
   const fetchNotifications = async () => {
     setLoading(true);
@@ -64,6 +52,19 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ className = 
       console.error('Error fetching unread count:', error);
     }
   };
+
+  useEffect(() => {
+    fetchNotifications();
+    fetchUnreadCount();
+    
+    // Poll for new notifications every 30 seconds
+    const interval = setInterval(() => {
+      fetchUnreadCount();
+    }, 30000);
+
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const markAsRead = async (notificationId: string) => {
     try {
@@ -97,32 +98,92 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ className = 
   const resolveNotificationRoute = (notification: Notification): string => {
     const data = notification.data || {};
     const projectId = data.project_id as string | undefined;
+    const timesheetId = data.timesheet_id as string | undefined;
+    const userId = data.user_id as string | undefined;
+    const clientId = data.client_id as string | undefined;
 
     switch (notification.type) {
+      // Timesheet notifications
       case 'timesheet_submission':
+      case 'project_group_ready_lead':
+      case 'project_group_ready_manager':
+      case 'project_group_ready_management':
         return '/dashboard/team-review';
+      
       case 'timesheet_approval':
-        return '/dashboard/timesheets/status';
+      case 'timesheet_lead_approved':
+      case 'timesheet_manager_approved':
+      case 'timesheet_management_approved':
+      case 'timesheet_frozen':
+      case 'timesheet_billed':
+        return timesheetId ? `/dashboard/timesheets/${timesheetId}` : '/dashboard/timesheets/status';
+      
       case 'timesheet_rejection':
-        return '/dashboard/timesheets';
+      case 'timesheet_lead_rejected':
+      case 'timesheet_manager_rejected':
+      case 'timesheet_management_rejected':
+        return timesheetId ? `/dashboard/timesheets/${timesheetId}` : '/dashboard/timesheets';
+      
+      // Project notifications
       case 'project_created':
       case 'project_updated':
       case 'project_completed':
       case 'project_allocated':
+      case 'project_manager_assigned':
+      case 'project_manager_removed':
+      case 'project_member_added':
+      case 'project_member_removed':
+      case 'project_member_updated':
+        return projectId ? `/dashboard/projects/${projectId}` : '/dashboard/projects';
+      
+      case 'project_deleted':
+      case 'project_restored':
         return '/dashboard/projects';
+      
+      // Task notifications
       case 'task_allocated':
       case 'task_received':
       case 'task_completed':
       case 'task_pending':
       case 'task_overdue':
+      case 'task_created':
+      case 'task_updated':
+      case 'task_deleted':
+      case 'task_deadline_changed':
+      case 'task_assigned':
+      case 'task_unassigned':
         return projectId ? `/dashboard/projects/${projectId}` : '/dashboard/projects';
+      
+      // User notifications
       case 'user_approval':
       case 'user_rejection':
-        return '/dashboard/users';
+      case 'user_registration_pending':
+      case 'user_created':
+      case 'user_updated':
+      case 'user_deleted':
+      case 'user_restored':
+      case 'user_role_changed':
+        return userId ? `/dashboard/users/${userId}` : '/dashboard/users';
+      
+      // Client notifications
+      case 'client_created':
+      case 'client_updated':
+      case 'client_deleted':
+      case 'client_restored':
+        return clientId ? `/dashboard/clients/${clientId}` : '/dashboard/clients';
+      
+      // Billing notifications
       case 'billing_update':
+      case 'billing_generated':
+      case 'billing_adjustment_created':
+      case 'billing_adjustment_updated':
         return '/dashboard/billing';
+      
+      // System notifications
       case 'system_announcement':
+      case 'profile_update':
         return '/dashboard/notifications';
+      
       default:
         break;
     }
@@ -185,6 +246,9 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ className = 
     return `${Math.floor(diffInMinutes / 1440)}d ago`;
   };
 
+  // Show a maximum of 3 notifications in the bell dropdown
+  const visibleNotifications = notifications.slice(0, 3);
+
   return (
     <div className={`relative ${className}`}>
       {/* Bell Icon */}
@@ -210,7 +274,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ className = 
         <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-gray-200">
-            <h3 className="font-semibold text-gray-900">Notifications</h3>
+            <h3 className="font-semibold text-gray-900">Notifications {unreadCount > 0 && `(${unreadCount})`}</h3>
             <div className="flex items-center space-x-2">
               {unreadCount > 0 && (
                 <button
@@ -239,7 +303,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ className = 
                 <p>No notifications</p>
               </div>
             ) : (
-              notifications.map((notification) => (
+              visibleNotifications.map((notification) => (
                 <div
                   key={notification._id}
                   onClick={() => handleNotificationClick(notification)}
