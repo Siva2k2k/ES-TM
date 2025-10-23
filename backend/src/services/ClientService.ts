@@ -4,6 +4,8 @@ import { Project, ProjectMember } from '@/models/Project';
 import { UserRole } from '@/models/User';
 import { ValidationError, AuthorizationError, ConflictError } from '@/utils/errors';
 import { AuditLogService } from '@/services/AuditLogService';
+import { NotificationService } from '@/services/NotificationService';
+import { NotificationRecipientResolver } from '@/services/NotificationRecipientResolver';
 
 interface AuthUser {
   id: string;
@@ -125,6 +127,23 @@ export class ClientService {
         undefined,
         client.toJSON()
       );
+
+      // Notify management about new client
+      try {
+        const managementUsers = await NotificationRecipientResolver.getManagementUsers();
+        const recipientIds = managementUsers.filter(id => id !== currentUser.id);
+        if (recipientIds.length > 0) {
+          await NotificationService.notifyClientCreated({
+            recipientIds,
+            clientId: client._id.toString(),
+            clientName: client.name,
+            createdById: currentUser.id,
+            createdByName: currentUser.full_name
+          });
+        }
+      } catch (notifError) {
+        console.error('Error sending client created notification:', notifError);
+      }
 
       return { client: client as IClient };
     } catch (error: any) {
@@ -345,6 +364,24 @@ export class ClientService {
         updatedClient?.toJSON()
       );
 
+      // Notify management about client update
+      try {
+        const managementUsers = await NotificationRecipientResolver.getManagementUsers();
+        const recipientIds = managementUsers.filter(id => id !== currentUser.id);
+        if (recipientIds.length > 0) {
+          await NotificationService.notifyClientUpdated({
+            recipientIds,
+            clientId,
+            clientName: updatedClient?.name || 'Client',
+            updatedById: currentUser.id,
+            updatedByName: currentUser.full_name,
+            updatedFields: Object.keys(updates)
+          });
+        }
+      } catch (notifError) {
+        console.error('Error sending client updated notification:', notifError);
+      }
+
       return { success: true, client: updatedClient as IClient };
     } catch (error: any) {
       console.error('Error updating client:', error);
@@ -506,6 +543,24 @@ export class ClientService {
           reason: reason
         }
       );
+
+      // Notify management about client deletion
+      try {
+        const managementUsers = await NotificationRecipientResolver.getManagementUsers();
+        const recipientIds = managementUsers.filter(id => id !== currentUser.id);
+        if (recipientIds.length > 0) {
+          await NotificationService.notifyClientDeleted({
+            recipientIds,
+            clientId,
+            clientName: client.name,
+            deletedById: currentUser.id,
+            deletedByName: currentUser.full_name,
+            reason
+          });
+        }
+      } catch (notifError) {
+        console.error('Error sending client deleted notification:', notifError);
+      }
 
       return { success: true };
     } catch (error: any) {

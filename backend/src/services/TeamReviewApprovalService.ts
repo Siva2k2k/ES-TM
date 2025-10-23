@@ -13,6 +13,9 @@ import { TimeEntry } from '../models/TimeEntry';
 import { logger } from '../config/logger';
 import type { BulkProjectWeekApprovalResponse } from '../types/teamReview';
 import { parseLocalDate } from '../utils/dateUtils';
+import { NotificationService } from './NotificationService';
+import { NotificationRecipientResolver } from './NotificationRecipientResolver';
+import { User } from '../models/User';
 
 // Allowed timesheet statuses (must match Timesheet model)
 const ALLOWED_STATUSES = new Set([
@@ -133,6 +136,21 @@ export class TeamReviewApprovalService {
           queryOpts
         );
 
+        // Send notification to timesheet owner about lead approval
+        try {
+          const approver = await (User as any).findById(approverId).select('full_name').lean().exec();
+          await NotificationService.notifyTimesheetLeadApproved({
+            timesheetId,
+            projectId,
+            recipientId: timesheetOwnerId,
+            approvedById: approverId,
+            approvedByName: approver?.full_name,
+            weekStartDate: timesheet.week_start_date
+          });
+        } catch (notifError) {
+          logger.error('Error sending lead approval notification:', notifError);
+        }
+
         // Check if ANY project lead has rejected
         const anyLeadRejected = await this.checkAnyLeadRejected(timesheetId, session || undefined);
 
@@ -163,6 +181,23 @@ export class TeamReviewApprovalService {
             }
             timesheet.status = newStatus;
             await timesheet.save(queryOpts);
+
+            // Notify managers that project group is ready for review
+            if (newStatus === 'lead_approved') {
+              try {
+                const managers = await NotificationRecipientResolver.getManagersForProject(projectId);
+                if (managers.length > 0) {
+                  await NotificationService.notifyProjectGroupReadyForManager({
+                    recipientIds: managers,
+                    projectId,
+                    projectName: project?.name || 'Project',
+                    weekStartDate: timesheet.week_start_date
+                  });
+                }
+              } catch (notifError) {
+                logger.error('Error sending project group ready notification:', notifError);
+              }
+            }
           }
         }
       }
@@ -242,6 +277,37 @@ export class TeamReviewApprovalService {
             timesheet.approved_by_manager_id = new mongoose.Types.ObjectId(approverId);
             timesheet.approved_by_manager_at = new Date();
             await timesheet.save(queryOpts);
+
+            // Notify based on new status
+            try {
+              if (newStatus === 'manager_approved') {
+                // Notify management that timesheet is ready for verification
+                const managementUsers = await NotificationRecipientResolver.getManagementUsers();
+                for (const managementUserId of managementUsers) {
+                  await NotificationService.notifyTimesheetManagerApproved({
+                    recipientId: managementUserId,
+                    timesheetId: timesheet._id.toString(),
+                    approvedById: approverId,
+                    approvedByName: (timesheetUser?.full_name || 'User'),
+                    weekStartDate: timesheet.week_start_date
+                  });
+                }
+              } else if (newStatus === 'management_pending') {
+                // Manager's own timesheet needs management verification
+                const managementUsers = await NotificationRecipientResolver.getManagementUsers();
+                for (const managementUserId of managementUsers) {
+                  await NotificationService.notifyTimesheetManagerApproved({
+                    recipientId: managementUserId,
+                    timesheetId: timesheet._id.toString(),
+                    approvedById: approverId,
+                    approvedByName: (timesheetUser?.full_name || 'User'),
+                    weekStartDate: timesheet.week_start_date
+                  });
+                }
+              }
+            } catch (notifError) {
+              logger.error('Error sending manager approval notification:', notifError);
+            }
           }
         }
       }
@@ -292,6 +358,25 @@ export class TeamReviewApprovalService {
         timesheet.approved_by_management_id = new mongoose.Types.ObjectId(approverId);
         timesheet.approved_by_management_at = new Date();
         await timesheet.save(queryOpts);
+
+        // Notify timesheet owner that their timesheet is frozen
+        try {
+          await NotificationService.notifyTimesheetManagementApproved({
+            recipientId: timesheet.user_id.toString(),
+            timesheetId: timesheet._id.toString(),
+            approvedById: approverId,
+            weekStartDate: timesheet.week_start_date
+          });
+          
+          await NotificationService.notifyTimesheetFrozen({
+            recipientId: timesheet.user_id.toString(),
+            timesheetId: timesheet._id.toString(),
+            frozenById: approverId,
+            weekStartDate: timesheet.week_start_date
+          });
+        } catch (notifError) {
+          logger.error('Error sending management approval/freeze notification:', notifError);
+        }
       }
 
       // Record approval history
@@ -380,6 +465,20 @@ export class TeamReviewApprovalService {
         
         await timesheet.save(queryOpts);
 
+        // Notify timesheet owner about rejection
+        try {
+          await NotificationService.notifyTimesheetLeadRejected({
+            recipientId: timesheet.user_id.toString(),
+            timesheetId: timesheet._id.toString(),
+            projectId,
+            rejectedById: approverId,
+            reason,
+            weekStartDate: timesheet.week_start_date
+          });
+        } catch (notifError) {
+          logger.error('Error sending lead rejection notification:', notifError);
+        }
+
         // Flag all time entries for this project as rejected
         await (TimeEntry.updateMany as any)(
           {
@@ -414,6 +513,20 @@ export class TeamReviewApprovalService {
         timesheet.manager_rejected_at = new Date();
         
         await timesheet.save(queryOpts);
+
+        // Notify timesheet owner about rejection
+        try {
+          await NotificationService.notifyTimesheetManagerRejected({
+            recipientId: timesheet.user_id.toString(),
+            timesheetId: timesheet._id.toString(),
+            projectId,
+            rejectedById: approverId,
+            reason,
+            weekStartDate: timesheet.week_start_date
+          });
+        } catch (notifError) {
+          logger.error('Error sending manager rejection notification:', notifError);
+        }
 
         // Flag all time entries for this project as rejected
         await (TimeEntry.updateMany as any)(
@@ -452,6 +565,20 @@ export class TeamReviewApprovalService {
         timesheet.management_rejection_reason = reason;
         timesheet.management_rejected_at = new Date();
         await timesheet.save(queryOpts);
+
+        // Notify timesheet owner about rejection
+        try {
+          await NotificationService.notifyTimesheetManagementRejected({
+            recipientId: timesheet.user_id.toString(),
+            timesheetId: timesheet._id.toString(),
+            projectId,
+            rejectedById: approverId,
+            reason,
+            weekStartDate: timesheet.week_start_date
+          });
+        } catch (notifError) {
+          logger.error('Error sending management rejection notification:', notifError);
+        }
 
         // Flag all time entries for this project as rejected
         await (TimeEntry.updateMany as any)(

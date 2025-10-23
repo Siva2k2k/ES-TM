@@ -945,6 +945,17 @@ export class TimesheetService {
         const { Project, ProjectMember } = require('@/models/Project');
         const { TimesheetProjectApproval } = require('@/models/TimesheetProjectApproval');
 
+        // If the submitter is a manager, pre-fetch management users so we can notify them
+        let managementUserIds: string[] | undefined;
+        if (currentUser.role === 'manager') {
+          const { User } = require('@/models/User');
+          const managementUsers = await (User.find as any)({ role: 'management', deleted_at: null })
+            .select('_id')
+            .lean()
+            .exec();
+          managementUserIds = managementUsers.map((m: any) => (m._id && typeof m._id.toString === 'function' ? m._id.toString() : String(m._id)));
+        }
+
         for (const projectId of projectIds) {
           // Check if approval record already exists
           const existingApproval = await TimesheetProjectApproval.findOne({
@@ -995,18 +1006,32 @@ export class TimesheetService {
                 ? String(project.primary_manager_id)
                 : undefined;
 
-          if (managerId && managerId !== timesheetOwnerId) {
-            submissionRecipientIds.add(managerId);
-          }
-
           const leadId = leadMember?.user_id
             ? typeof leadMember.user_id.toString === 'function'
               ? leadMember.user_id.toString()
               : String(leadMember.user_id)
             : undefined;
 
-          if (leadId && leadId !== timesheetOwnerId) {
-            submissionRecipientIds.add(leadId);
+          // Add recipients based on who is submitting the timesheet:
+          // - If an employee submits, notify the Lead for the project
+          // - If a Lead submits, notify the Manager for the project
+          // - If a Manager submits, notify all Management users
+          if (currentUser.role === 'employee') {
+            if (leadId && leadId !== timesheetOwnerId) {
+              submissionRecipientIds.add(leadId);
+            }
+          } else if (currentUser.role === 'lead') {
+            if (managerId && managerId !== timesheetOwnerId) {
+              submissionRecipientIds.add(managerId);
+            }
+          } else if (currentUser.role === 'manager') {
+            if (managementUserIds && managementUserIds.length > 0) {
+              for (const mgmtId of managementUserIds) {
+                if (mgmtId !== timesheetOwnerId) {
+                  submissionRecipientIds.add(mgmtId);
+                }
+              }
+            }
           }
 
           // Check if user is a project member

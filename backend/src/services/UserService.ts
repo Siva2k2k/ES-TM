@@ -18,6 +18,8 @@ import { EmailService } from '@/services/EmailService';
 import { logger } from '@/config/logger';
 import { AuditLogService } from '@/services/AuditLogService';
 import { ValidationUtils } from '@/utils/validation';
+import { NotificationService } from '@/services/NotificationService';
+import { NotificationRecipientResolver } from '@/services/NotificationRecipientResolver';
 
 export interface UserWithProjectRoles extends IUser {
   userProjectRoles?: Map<string, string[]>;
@@ -116,18 +118,46 @@ export class UserService {
 
       logger.info(`Super Admin created user with secure credentials: ${user.id}`);
 
+      // Notify other super admins about user creation
+      try {
+        const superAdmins = await NotificationRecipientResolver.getSuperAdmins();
+        const otherAdmins = superAdmins.filter(adminId => adminId !== currentUser.id);
+        
+        if (otherAdmins.length > 0) {
+          await NotificationService.notifyUserCreated({
+            recipientIds: otherAdmins,
+            userId: user._id.toString(),
+            userName: user.full_name,
+            createdById: currentUser.id,
+            createdByName: currentUser.full_name
+          });
+        }
+      } catch (notifError) {
+        logger.error('Error sending user creation notification:', notifError);
+        // Don't fail user creation if notification fails
+      }
+
       // Audit log: User created
-      await AuditLogService.logEvent(
-        'users',
-        user._id.toString(),
-        'USER_CREATED',
-        currentUser.id,
-        currentUser.full_name,
-        { email: user.email, role: user.role, full_name: user.full_name },
-        { created_by_super_admin: true },
-        null,
-        { email: user.email, full_name: user.full_name, role: user.role }
-      );
+      try {
+        const auditResult = await AuditLogService.logEvent(
+          'users',
+          user._id.toString(),
+          'USER_CREATED',
+          currentUser.id,
+          currentUser.full_name,
+          { email: user.email, role: user.role, full_name: user.full_name },
+          { created_by_super_admin: true },
+          null,
+          { email: user.email, full_name: user.full_name, role: user.role }
+        );
+        
+        if (!auditResult.success) {
+          logger.warn('Failed to log user creation audit event:', auditResult.error);
+        }
+      } catch (auditError) {
+        logger.error('Error logging user creation audit event:', auditError);
+        // Don't fail user creation if audit logging fails
+      }
 
       // Return user without sensitive fields
       const userResponse = user.toJSON();
@@ -185,6 +215,59 @@ export class UserService {
       const user = new User(userDoc);
 
       await user.save();
+
+      // Audit log: User created for approval
+      try {
+        const auditResult = await AuditLogService.logEvent(
+          'users',
+          user._id.toString(),
+          'USER_CREATED',
+          currentUser.id,
+          currentUser.full_name,
+          { email: user.email, role: user.role, full_name: user.full_name },
+          { created_for_approval: true },
+          null,
+          { email: user.email, full_name: user.full_name, role: user.role, is_approved_by_super_admin: false }
+        );
+        
+        if (!auditResult.success) {
+          logger.warn('Failed to log user creation audit event:', auditResult.error);
+        }
+      } catch (auditError) {
+        logger.error('Error logging user creation audit event:', auditError);
+        // Don't fail user creation if audit logging fails
+      }
+
+      // Notify super admins about pending user approval
+      try {
+        const superAdmins = await NotificationRecipientResolver.getSuperAdmins();
+        if (superAdmins.length > 0) {
+          await NotificationService.notifyUserRegistrationPending({
+            recipientIds: superAdmins,
+            userId: user._id.toString(),
+            userName: user.full_name,
+            userEmail: user.email
+          });
+        }
+      } catch (notifError) {
+        logger.error('Error sending user registration pending notification:', notifError);
+      }
+
+      // Also notify other admins about user creation by management
+      try {
+        const superAdmins = await NotificationRecipientResolver.getSuperAdmins();
+        if (superAdmins.length > 0) {
+          await NotificationService.notifyUserCreated({
+            recipientIds: superAdmins,
+            userId: user._id.toString(),
+            userName: user.full_name,
+            createdById: currentUser.id,
+            createdByName: currentUser.full_name
+          });
+        }
+      } catch (notifError) {
+        logger.error('Error sending user creation notification:', notifError);
+      }
 
       return { user };
     } catch (error) {
@@ -263,17 +346,73 @@ export class UserService {
       // Audit log: User approved
       const approvedUser = await (User.findById as any)(userId).lean();
       if (approvedUser) {
-        await AuditLogService.logEvent(
-          'users',
-          userId,
-          'USER_APPROVED',
-          currentUser.id,
-          currentUser.full_name,
-          { email: approvedUser.email, role: approvedUser.role },
-          { approved_by_super_admin: currentUser.id },
-          { is_approved_by_super_admin: false },
-          { is_approved_by_super_admin: true }
-        );
+        try {
+          const auditResult = await AuditLogService.logEvent(
+            'users',
+            userId,
+            'USER_APPROVED',
+            currentUser.id,
+            currentUser.full_name,
+            { email: approvedUser.email, role: approvedUser.role },
+            { approved_by_super_admin: currentUser.id },
+            { is_approved_by_super_admin: false },
+            { is_approved_by_super_admin: true }
+          );
+          
+          if (!auditResult.success) {
+            logger.warn('Failed to log user approval audit event:', auditResult.error);
+          }
+        } catch (auditError) {
+          logger.error('Error logging user approval audit event:', auditError);
+          // Don't fail approval if audit logging fails
+        }
+
+        // Notify the approved user
+        try {
+          await NotificationService.create({
+            recipient_id: userId,
+            sender_id: currentUser.id,
+            type: 'USER_APPROVAL' as any,
+            title: 'Account Approved',
+            message: 'Your account has been approved and is now active.',
+            action_url: '/dashboard',
+            priority: 'HIGH' as any
+          });
+        } catch (notifError) {
+          logger.error('Error sending user approval notification:', notifError);
+        }
+
+        // Also notify the management user who created this user for approval
+        try {
+          // Find the audit log entry for user creation
+          const auditLogsResult = await AuditLogService.getAuditLogs({
+            tableName: 'users',
+            recordId: userId,
+            actions: ['USER_CREATED']
+          }, currentUser);
+
+          if (auditLogsResult.logs && auditLogsResult.logs.length > 0) {
+            // Get the most recent creation log
+            const creationLog = auditLogsResult.logs[0];
+            const creatorId = creationLog.actor_id?.toString();
+
+            // Only notify if the creator is different from the approver
+            if (creatorId && creatorId !== currentUser.id) {
+              await NotificationService.create({
+                recipient_id: creatorId,
+                sender_id: currentUser.id,
+                type: 'USER_APPROVAL' as any,
+                title: 'User Approval Completed',
+                message: `The user "${approvedUser.full_name}" you created has been approved by ${currentUser.full_name}.`,
+                data: { user_id: userId, approved_by: currentUser.id },
+                action_url: `/users/${userId}`,
+                priority: 'HIGH' as any
+              });
+            }
+          }
+        } catch (notifError) {
+          logger.error('Error sending creator notification:', notifError);
+        }
       }
 
       return { success: true };

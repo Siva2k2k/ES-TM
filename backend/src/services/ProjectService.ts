@@ -22,6 +22,8 @@ import {
 import { requireSuperAdmin } from '@/utils/authorization';
 import { AuditLogService } from '@/services/AuditLogService';
 import { ValidationUtils } from '@/utils/validation';
+import { NotificationService } from '@/services/NotificationService';
+import { NotificationRecipientResolver } from '@/services/NotificationRecipientResolver';
 
 export interface ProjectWithDetails extends IProject {
   client?: IClient;
@@ -83,6 +85,23 @@ export class ProjectService {
         { name: project.name, status: project.status, is_billable: project.is_billable }
       );
 
+      // Notify management about new project
+      try {
+        const managementUsers = await NotificationRecipientResolver.getManagementUsers();
+        const recipientIds = managementUsers.filter(id => id !== currentUser.id);
+        if (recipientIds.length > 0) {
+          await NotificationService.notifyProjectCreated({
+            recipientIds,
+            projectId: project._id.toString(),
+            projectName: project.name,
+            createdById: currentUser.id,
+            createdByName: currentUser.full_name
+          });
+        }
+      } catch (notifError) {
+        console.error('Error sending project created notification:', notifError);
+      }
+
       return { project };
     } catch (error) {
       console.error('Error in createProject:', error);
@@ -114,6 +133,11 @@ export class ProjectService {
 
       payload.updated_at = new Date();
 
+      // Check if manager is being changed
+      const oldProject = await (Project.findById as any)(projectId).lean();
+      const managerChanged = updates.primary_manager_id && 
+        oldProject?.primary_manager_id?.toString() !== updates.primary_manager_id?.toString();
+
       const result = await (Project.updateOne as any)({
         _id: projectId,
         deleted_at: { $exists: false }
@@ -137,6 +161,54 @@ export class ProjectService {
           null,
           payload
         );
+
+        // Notify if manager was changed
+        if (managerChanged && oldProject) {
+          try {
+            // Notify new manager
+            if (updates.primary_manager_id) {
+              await NotificationService.notifyProjectManagerAssigned({
+                recipientIds: [updates.primary_manager_id.toString()],
+                projectId,
+                projectName: updatedProject.name,
+                newManagerId: updates.primary_manager_id.toString(),
+                assignedById: currentUser.id,
+                assignedByName: currentUser.full_name
+              });
+            }
+
+            // Notify old manager they were removed
+            if (oldProject.primary_manager_id) {
+              await NotificationService.notifyProjectMemberRemoved({
+                recipientIds: [oldProject.primary_manager_id.toString()],
+                projectId,
+                projectName: updatedProject.name,
+                removedById: currentUser.id,
+                removedByName: currentUser.full_name
+              });
+            }
+          } catch (notifError) {
+            console.error('Error sending manager assignment notification:', notifError);
+          }
+        }
+
+        // Notify management about project updates
+        try {
+          const managementUsers = await NotificationRecipientResolver.getManagementUsers();
+          const recipientIds = managementUsers.filter(id => id !== currentUser.id);
+          if (recipientIds.length > 0) {
+            await NotificationService.notifyProjectUpdated({
+              recipientIds,
+              projectId,
+              projectName: updatedProject.name,
+              updatedById: currentUser.id,
+              updatedByName: currentUser.full_name,
+              updatedFields: Object.keys(updates)
+            });
+          }
+        } catch (notifError) {
+          console.error('Error sending project updated notification:', notifError);
+        }
       }
 
       return { success: true };
@@ -596,6 +668,38 @@ export class ProjectService {
         { deleted_by: currentUser.id, deleted_at: new Date(), deleted_reason: reason }
       );
 
+      // Notify project manager and management about deletion
+      try {
+        const recipientIds = [];
+        
+        // Notify project manager
+        if (project.primary_manager_id && project.primary_manager_id.toString() !== currentUser.id) {
+          recipientIds.push(project.primary_manager_id.toString());
+        }
+
+        // Notify management
+        const managementUsers = await NotificationRecipientResolver.getManagementUsers();
+        for (const managementUserId of managementUsers) {
+          if (managementUserId !== currentUser.id && !recipientIds.includes(managementUserId)) {
+            recipientIds.push(managementUserId);
+          }
+        }
+
+        // Send notifications
+        if (recipientIds.length > 0) {
+          await NotificationService.notifyProjectDeleted({
+            recipientIds,
+            projectId,
+            projectName: project.name,
+            deletedById: currentUser.id,
+            deletedByName: currentUser.full_name,
+            reason
+          });
+        }
+      } catch (notifError) {
+        console.error('Error sending project deleted notification:', notifError);
+      }
+
       return { success: true };
     } catch (error) {
       console.error('Error in deleteProject:', error);
@@ -1045,6 +1149,13 @@ export class ProjectService {
     try {
       requireManagerRole(currentUser);
 
+      // Get project and user details before removal
+      const project = await (Project.findById as any)(projectId).select('name primary_manager_id').lean();
+      const projectMember = await (ProjectMember.findOne as any)({
+        project_id: projectId,
+        user_id: userId
+      }).lean();
+
       const result = await (ProjectMember.updateOne as any)({
         project_id: projectId,
         user_id: userId
@@ -1055,6 +1166,29 @@ export class ProjectService {
 
       if (result.matchedCount === 0) {
         throw new NotFoundError('Project member not found');
+      }
+
+      // Notify the removed member and project manager
+      if (project && projectMember) {
+        try {
+          const recipientIds = [userId];
+          
+          // Add project manager to recipients
+          if (project.primary_manager_id && project.primary_manager_id.toString() !== currentUser.id) {
+            recipientIds.push(project.primary_manager_id.toString());
+          }
+
+          await NotificationService.notifyProjectMemberRemoved({
+            recipientIds,
+            projectId,
+            projectName: project.name,
+            userId,
+            removedById: currentUser.id,
+            removedByName: currentUser.full_name
+          });
+        } catch (notifError) {
+          console.error('Error sending project member removed notification:', notifError);
+        }
       }
 
       return { success: true };
@@ -1683,6 +1817,31 @@ export class ProjectService {
       });
 
       await projectMember.save();
+
+      // Notify the added member and project manager
+      try {
+        const project = await (Project.findById as any)(projectId).select('name primary_manager_id').lean();
+        if (project) {
+          const recipientIds = [userId];
+          
+          // Add project manager to recipients
+          if (project.primary_manager_id && project.primary_manager_id.toString() !== currentUser.id) {
+            recipientIds.push(project.primary_manager_id.toString());
+          }
+
+          await NotificationService.notifyProjectMemberAdded({
+            recipientIds,
+            projectId,
+            projectName: project.name,
+            userId,
+            role: projectRole,
+            addedById: currentUser.id,
+            addedByName: currentUser.full_name
+          });
+        }
+      } catch (notifError) {
+        console.error('Error sending project member added notification:', notifError);
+      }
 
       return { success: true };
 

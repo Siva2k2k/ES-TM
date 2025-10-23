@@ -18,6 +18,7 @@ interface AuditLogFilters {
   actions?: AuditAction[];
   actorId?: string;
   tableName?: string;
+  recordId?: string;
   limit?: number;
   offset?: number;
 }
@@ -106,6 +107,10 @@ export class AuditLogService {
 
       if (filters.tableName) {
         query.table_name = filters.tableName;
+      }
+
+      if (filters.recordId) {
+        query.record_id = filters.recordId;
       }
 
       const limit = filters.limit || 50;
