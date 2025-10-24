@@ -6,6 +6,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "nodemon -r tsconfig-paths/register src/index.ts",
+    "mock": "nodemon -r ts-node/register -r tsconfig-paths/register -r ./mock-date.js src/index.ts",
     "clean": "rm -rf dist",
     "seed": "ts-node -r tsconfig-paths/register src/scripts/seed.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -64,7 +65,7 @@
     "nodemon": "^3.1.10",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.3"
   },
   "_moduleAliases": {
     "@": "dist"

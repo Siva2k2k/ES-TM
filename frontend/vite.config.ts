@@ -38,6 +38,7 @@ export default defineConfig({
       },
     },
   },
+  
   // @ts-expect-error - Vitest config
   test: {
     globals: true,

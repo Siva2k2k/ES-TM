@@ -131,6 +131,13 @@ router.post('/:userId/soft-delete', requireSuperAdmin, userIdValidation, UserCon
 router.post('/:userId/hard-delete', requireSuperAdmin, userIdValidation, UserController.hardDeleteUser);
 
 /**
+ * @route DELETE /api/v1/users/:userId/hard-delete
+ * @desc Hard delete user (permanent)
+ * @access Private (Super Admin)
+ */
+router.delete('/:userId/hard-delete', requireSuperAdmin, userIdValidation, UserController.hardDeleteUser);
+
+/**
  * @route POST /api/v1/users/:userId/restore
  * @desc Restore soft deleted user
  * @access Private (Super Admin)
