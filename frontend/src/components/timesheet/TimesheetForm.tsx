@@ -687,6 +687,9 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
               }
             };
 
+            // Calculate current week to restrict future weeks
+            const currentWeekIso = mondayToIsoWeek(getCurrentWeekMonday());
+
             return (
               <div className="flex items-center gap-3">
                 <label htmlFor="week-start-input" className="text-sm font-medium text-gray-700">Week Starting</label>
@@ -705,6 +708,7 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
                     type="week"
                     className="border rounded px-2 py-1"
                     value={weekInputValue}
+                    max={currentWeekIso}
                     onChange={(e) => {
                       const monday = isoWeekToMonday(e.target.value);
                       if (monday) {

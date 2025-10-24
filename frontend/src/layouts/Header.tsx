@@ -98,6 +98,8 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick, onSidebarToggle, si
           </Link>
         </div>
 
+        
+
         {/* Center Section - Search */}
         <div className="hidden md:flex flex-1 max-w-md mx-4">
           <GlobalSearch className="w-full" />
