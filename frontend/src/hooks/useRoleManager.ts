@@ -3,9 +3,10 @@ import { useAuth } from '../store/contexts/AuthContext';
 import { UserService } from '../services/UserService';
 import PermissionService from '../services/PermissionService';
 import type { UserRole, Timesheet, User } from '../types';
+import type { ApprovalProjectRole } from '../types/timesheetApprovals';
 
-// Project role types (NO secondary_manager - removed in Phase 6)
-export type ProjectRole = 'lead' | 'employee';
+// Project role type alias for approval workflow context
+export type ProjectRole = ApprovalProjectRole;
 
 // Role hierarchy levels
 export const ROLE_HIERARCHY_LEVELS: Record<UserRole, number> = {

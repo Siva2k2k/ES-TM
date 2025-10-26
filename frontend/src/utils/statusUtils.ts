@@ -4,25 +4,8 @@
  * Reduces duplicate status mapping code across components
  */
 
-/**
- * Timesheet status types
- */
 import { BillingStatus, ProjectStatus } from './constants';
-
-export type TimesheetStatus = 
-  | 'draft' 
-  | 'submitted' 
-  | 'lead_approved'
-  | 'lead_rejected'
-  | 'manager_approved'
-  | 'manager_rejected'
-  | 'management_pending'
-  | 'management_rejected'
-  | 'approved' 
-  | 'rejected' 
-  | 'pending'
-  | 'frozen'
-  | 'billed';
+import type { TimesheetStatus } from '../types';
 
 /**
  * Project status types
@@ -306,4 +289,37 @@ export function getActionColor(action: string): string {
 
   // Default - gray
   return 'text-gray-600 bg-gray-50 border-gray-300';
+}
+
+/**
+ * Get Tailwind CSS classes for task status badge
+ * @param status - Task status
+ * @returns Tailwind CSS classes
+ */
+export function getTaskStatusColor(status: string): string {
+  const colors: Record<string, string> = {
+    open: 'bg-gray-100 text-gray-800 border-gray-300',
+    in_progress: 'bg-blue-100 text-blue-800 border-blue-300',
+    completed: 'bg-green-100 text-green-800 border-green-300',
+    blocked: 'bg-red-100 text-red-800 border-red-300',
+    cancelled: 'bg-gray-100 text-gray-600 border-gray-300'
+  };
+
+  return colors[status.toLowerCase()] || colors.open;
+}
+
+/**
+ * Get Tailwind CSS classes for task priority badge
+ * @param priority - Task priority (low, medium, high, urgent)
+ * @returns Tailwind CSS classes
+ */
+export function getTaskPriorityColor(priority: string): string {
+  const colors: Record<string, string> = {
+    low: 'bg-gray-100 text-gray-700 border-gray-300',
+    medium: 'bg-blue-100 text-blue-700 border-blue-300',
+    high: 'bg-orange-100 text-orange-700 border-orange-300',
+    urgent: 'bg-red-100 text-red-700 border-red-300'
+  };
+
+  return colors[priority.toLowerCase()] || colors.medium;
 }

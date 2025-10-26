@@ -1,7 +1,7 @@
 import type { Project } from '../types';
 import { formatDate } from './formatting';
 
-export type ViewMode = 'monthly' | 'weekly' | 'timeline' | 'custom';
+export type ViewModeBilling = 'monthly' | 'weekly' | 'timeline' | 'custom';
 
 const toIso = (date: Date) => date.toISOString().split('T')[0];
 
@@ -82,7 +82,7 @@ export function buildTimelineRange(
   };
 }
 
-export function formatRangeLabel(startDate: string, endDate: string, mode: ViewMode) {
+export function formatRangeLabel(startDate: string, endDate: string, mode: ViewModeBilling) {
   if (!startDate || !endDate) {
     return 'No range selected';
   }

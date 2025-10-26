@@ -13,7 +13,7 @@ import {
   buildTimelineRange,
   buildWeeklyRange,
   formatRangeLabel,
-  type ViewMode
+  type ViewModeBilling as ViewMode
 } from '../../utils/dateRanges';
 import { BillingService } from '../../services/BillingService';
 import { showError, showSuccess } from '../../utils/toast';

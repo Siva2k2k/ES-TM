@@ -29,7 +29,7 @@ export interface User {
 // PROJECT TYPES
 // ==========================================================================
 
-export type ProjectStatus = 'active' | 'completed' | 'archived';
+export type ProjectStatus = 'active' | 'completed' | 'archived' | 'on_hold' | 'cancelled';
 
 export interface Client {
   id: string;

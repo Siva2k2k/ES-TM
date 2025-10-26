@@ -3,32 +3,19 @@
  * Project-wise approval tracking with multi-manager support
  */
 
-import type { TimeEntry, UserRole, User } from './index';
+import type { TimeEntry, UserRole, User, TimesheetStatus } from './index';
 
 /**
- * Project role types (NO secondary_manager - removed in Phase 6)
+ * Project role types for approval workflow context
+ * Simplified to lead/employee for approval decisions
+ * Note: Different from project.schemas.ts ProjectRole which includes manager roles
  */
-export type ProjectRole = 'lead' | 'employee';
+export type ApprovalProjectRole = 'lead' | 'employee';
 
 /**
  * Timesheet approval statuses
  */
 export type ApprovalStatus = 'approved' | 'rejected' | 'pending' | 'not_required';
-
-/**
- * Timesheet workflow statuses (3-Tier Hierarchy)
- */
-export type TimesheetStatus =
-  | 'draft'                // Employee creating timesheet
-  | 'submitted'            // Submitted, awaiting Lead/Manager review
-  | 'lead_approved'        // Tier 1: Lead approved employee timesheet
-  | 'lead_rejected'        // Tier 1: Lead rejected employee timesheet
-  | 'manager_approved'     // Tier 2: Manager approved
-  | 'manager_rejected'     // Tier 2: Manager rejected
-  | 'management_pending'   // Manager's own timesheet waiting for Management
-  | 'management_rejected'  // Tier 3: Management rejected
-  | 'frozen'               // Tier 3: Management verified and frozen
-  | 'billed';              // Final: Marked as billed
 
 /**
  * Project-specific approval tracking (3-Tier Hierarchy)
@@ -104,7 +91,7 @@ export interface ProjectMemberTimesheet {
   user_name: string;
   user_email: string;
   user_role: UserRole;
-  project_role: ProjectRole;
+  project_role: ApprovalProjectRole;
 
   // Current week timesheet (if exists)
   current_week_timesheet?: {

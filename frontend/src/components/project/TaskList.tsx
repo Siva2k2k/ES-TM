@@ -21,7 +21,8 @@ import { Select, type SelectOption } from '../ui/Select';
 import { Badge } from '../ui/Badge';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import { StatusBadge } from '../shared/StatusBadge';
-import { TaskStatus, isTaskOverdue, getTaskPriorityColor } from '../../types/project.schemas';
+import { TaskStatus, isTaskOverdue } from '../../types/project.schemas';
+import { getTaskPriorityColor } from '../../utils/statusUtils';
 import { formatDate } from '../../utils/formatting';
 import { cn } from '../../utils/cn';
 
