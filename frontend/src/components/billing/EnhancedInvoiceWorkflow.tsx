@@ -16,6 +16,7 @@ import {
   Eye
 } from 'lucide-react';
 import { showSuccess, showError } from '../../utils/toast';
+import { BillingService } from '../../services/BillingService';
 
 interface Invoice {
   id: string;
@@ -78,19 +79,15 @@ export const EnhancedInvoiceWorkflow: React.FC = () => {
 
   const loadInvoices = async () => {
     try {
-      const response = await fetch('/api/v1/billing/invoices', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        setInvoices(data.invoices || []);
+      const result = await BillingService.getInvoices();
+      if (result.invoices) {
+        setInvoices(result.invoices);
+      } else if (result.error) {
+        showError(result.error);
       }
     } catch (err) {
       console.error('Error loading invoices:', err);
+      showError('Failed to load invoices');
     } finally {
       setLoading(false);
     }
@@ -98,42 +95,30 @@ export const EnhancedInvoiceWorkflow: React.FC = () => {
 
   const loadClients = async () => {
     try {
-      const response = await fetch('/api/v1/clients', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        setClients(data.clients?.map((c: any) => ({
+      const result = await BillingService.getClients();
+      if (result.clients) {
+        setClients(result.clients.map((c: any) => ({
           id: c._id,
           name: c.name,
           email: c.email
-        })) || []);
+        })));
+      } else if (result.error) {
+        showError(result.error);
       }
     } catch (err) {
       console.error('Error loading clients:', err);
+      showError('Failed to load clients');
     }
   };
 
   const handleApproveInvoice = async (invoiceId: string) => {
     try {
-      const response = await fetch(`/api/v1/billing/invoices/${invoiceId}/approve`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const data = await response.json();
-      if (data.success) {
+      const result = await BillingService.approveInvoice(invoiceId);
+      if (result.success) {
         await loadInvoices();
         showSuccess('Invoice approved successfully');
       } else {
-        showError(data.error || 'Failed to approve invoice');
+        showError(result.error || 'Failed to approve invoice');
       }
     } catch (err) {
       console.error('Error approving invoice:', err);
@@ -146,21 +131,12 @@ export const EnhancedInvoiceWorkflow: React.FC = () => {
     if (!reason) return;
 
     try {
-      const response = await fetch(`/api/v1/billing/invoices/${invoiceId}/reject`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ reason })
-      });
-
-      const data = await response.json();
-      if (data.success) {
+      const result = await BillingService.rejectInvoice(invoiceId, reason);
+      if (result.success) {
         await loadInvoices();
         showSuccess('Invoice rejected successfully');
       } else {
-        showError(data.error || 'Failed to reject invoice');
+        showError(result.error || 'Failed to reject invoice');
       }
     } catch (err) {
       console.error('Error rejecting invoice:', err);
@@ -170,25 +146,13 @@ export const EnhancedInvoiceWorkflow: React.FC = () => {
 
   const handleGenerateInvoice = async (clientId: string, weekStartDate: string) => {
     try {
-      const response = await fetch('/api/v1/billing/invoices/generate', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          client_id: clientId,
-          week_start_date: weekStartDate
-        })
-      });
-
-      const data = await response.json();
-      if (data.success) {
+      const result = await BillingService.generateInvoice(clientId, weekStartDate);
+      if (result.invoice) {
         await loadInvoices();
         setShowGenerateModal(false);
         showSuccess('Invoice generated successfully');
       } else {
-        showError(data.error || 'Failed to generate invoice');
+        showError(result.error || 'Failed to generate invoice');
       }
     } catch (err) {
       console.error('Error generating invoice:', err);

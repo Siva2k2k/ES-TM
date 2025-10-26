@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Mail, DollarSign, Shield, Save, Loader2, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../store/contexts/AuthContext';
-import { backendApi } from '../../services/BackendAPI';
+import { backendApi } from '../../lib/backendApi';
 import { useToast } from '../../hooks/useToast';
 
 interface ProfileSettingsProps {

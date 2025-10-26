@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, Mail, DollarSign, Calendar, Shield, X, AlertCircle, CheckCircle, Save } from 'lucide-react';
+import { UserService } from '../services/UserService';
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -78,26 +79,17 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         updateData.hourly_rate = Number(hourlyRate);
       }
 
-      const response = await fetch('/api/auth/profile', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-        },
-        body: JSON.stringify(updateData)
-      });
+      const result = await UserService.updateProfile(updateData);
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to update profile');
+      if (result.success) {
+        setSuccess(true);
+        setTimeout(() => {
+          onUpdate?.();
+          handleClose();
+        }, 2000);
+      } else {
+        throw new Error(result.error || 'Failed to update profile');
       }
-
-      setSuccess(true);
-      setTimeout(() => {
-        onUpdate?.();
-        handleClose();
-      }, 2000);
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update profile');

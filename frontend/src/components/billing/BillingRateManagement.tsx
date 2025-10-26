@@ -15,6 +15,9 @@ import {
 } from 'lucide-react';
 import { DeleteButton } from '../common/DeleteButton';
 import { showSuccess, showError } from '../../utils/toast';
+import { BillingService } from '../../services/BillingService';
+import { UserService } from '../../services/UserService';
+import { ProjectService } from '../../services/ProjectService';
 
 interface BillingRate {
   id: string;
@@ -98,19 +101,15 @@ export const BillingRateManagement: React.FC = () => {
 
   const loadRates = async () => {
     try {
-      const response = await fetch('/api/v1/billing/rates', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        setRates(data.rates || []);
+      const result = await BillingService.getBillingRates();
+      if (result.rates) {
+        setRates(result.rates);
+      } else if (result.error) {
+        showError(result.error);
       }
     } catch (err) {
       console.error('Error loading rates:', err);
+      showError('Failed to load billing rates');
     } finally {
       setLoading(false);
     }
@@ -118,40 +117,29 @@ export const BillingRateManagement: React.FC = () => {
 
   const loadEntities = async () => {
     try {
-      // Load users
-      const usersResponse = await fetch('/api/v1/users', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      // Load projects
-      const projectsResponse = await fetch('/api/v1/projects', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      // Load clients
-      const clientsResponse = await fetch('/api/v1/clients', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const [usersData, projectsData, clientsData] = await Promise.all([
-        usersResponse.json(),
-        projectsResponse.json(),
-        clientsResponse.json()
+      // Load users, projects, and clients in parallel using service methods
+      const [usersResult, projectsResult, clientsResult] = await Promise.all([
+        UserService.getAllUsers(),
+        ProjectService.getAllProjects(),
+        BillingService.getClients()
       ]);
 
       setEntities({
-        users: usersData.success ? usersData.users?.map((u: any) => ({ id: u._id, name: `${u.first_name} ${u.last_name}`, type: 'user' })) || [] : [],
-        projects: projectsData.success ? projectsData.projects?.map((p: any) => ({ id: p._id, name: p.name, type: 'project' })) || [] : [],
-        clients: clientsData.success ? clientsData.clients?.map((c: any) => ({ id: c._id, name: c.name, type: 'client' })) || [] : []
+        users: usersResult.users?.map((u: any) => ({
+          id: u._id,
+          name: `${u.first_name} ${u.last_name}`,
+          type: 'user'
+        })) || [],
+        projects: projectsResult.projects?.map((p: any) => ({
+          id: p._id,
+          name: p.name,
+          type: 'project'
+        })) || [],
+        clients: clientsResult.clients?.map((c: any) => ({
+          id: c._id,
+          name: c.name,
+          type: 'client'
+        })) || []
       });
     } catch (err) {
       console.error('Error loading entities:', err);
@@ -160,22 +148,14 @@ export const BillingRateManagement: React.FC = () => {
 
   const handleCreateRate = async () => {
     try {
-      const response = await fetch('/api/v1/billing/rates', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(newRate)
-      });
-
-      const data = await response.json();
-      if (data.success) {
+      const result = await BillingService.createBillingRate(newRate);
+      if (result.rate) {
+        showSuccess('Billing rate created successfully');
         await loadRates();
         setShowCreateForm(false);
         resetNewRate();
       } else {
-        showError(data.error || 'Failed to create rate');
+        showError(result.error || 'Failed to create rate');
       }
     } catch (err) {
       console.error('Error creating rate:', err);
@@ -185,16 +165,8 @@ export const BillingRateManagement: React.FC = () => {
 
   const handleDeleteRate = async (entityType: string, entityId: string, deleteType: 'soft' | 'hard') => {
     try {
-      const response = await fetch(`/api/v1/billing/rates/${entityId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const data = await response.json();
-      if (data.success) {
+      const result = await BillingService.deleteBillingRate(entityId);
+      if (result.success) {
         if (deleteType === 'soft') {
           showSuccess('Billing rate moved to trash successfully');
         } else {
@@ -202,7 +174,7 @@ export const BillingRateManagement: React.FC = () => {
         }
         await loadRates();
       } else {
-        showError(data.error || 'Failed to delete rate');
+        showError(result.error || 'Failed to delete rate');
       }
     } catch (err) {
       console.error('Error deleting rate:', err);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, Check, CheckCheck, ArrowLeft, Trash2, Filter, X, Calendar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { backendApi } from '../services/BackendAPI';
+import { backendApi } from '../lib/backendApi';
 import * as formatting from '../utils/formatting';
 
 interface Notification {

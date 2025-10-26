@@ -225,6 +225,27 @@ export class BackendAuthService {
   }
 
   /**
+   * Validate reset password token
+   */
+  static async validateResetToken(token: string): Promise<{ valid: boolean; error?: string }> {
+    try {
+      const response: AxiosResponse<{ valid: boolean }> = await axiosInstance.get(
+        `${this.API_PREFIX}/reset-password/validate`,
+        { params: { token } }
+      );
+
+      return { valid: response.data.valid };
+    } catch (error) {
+      console.error('Validate reset token error:', error);
+      const { error: errorMessage } = handleApiError(error);
+      return {
+        valid: false,
+        error: errorMessage,
+      };
+    }
+  }
+
+  /**
    * Reset password with token
    */
   static async resetPassword(
@@ -240,6 +261,34 @@ export class BackendAuthService {
       };
     } catch (error) {
       console.error('Reset password error:', error);
+      const { error: errorMessage } = handleApiError(error);
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
+  }
+
+  /**
+   * Force password change (first login after account creation)
+   */
+  static async forcePasswordChange(
+    userId: string,
+    newPassword: string
+  ): Promise<{ success: boolean; message?: string; error?: string }> {
+    try {
+      const response: AxiosResponse<{ success: boolean; message?: string }> =
+        await axiosInstance.post(`${this.API_PREFIX}/change-password`, {
+          userId,
+          newPassword,
+        });
+
+      return {
+        success: response.data.success,
+        message: response.data.message,
+      };
+    } catch (error) {
+      console.error('Force password change error:', error);
       const { error: errorMessage } = handleApiError(error);
       return {
         success: false,

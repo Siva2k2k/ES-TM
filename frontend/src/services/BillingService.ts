@@ -682,6 +682,27 @@ export class BillingService {
       };
     }
   }
+
+  /**
+   * Get invoice dashboard stats
+   * Used by EnhancedBillingDashboard component
+   */
+  static async getInvoiceDashboardStats(): Promise<{ stats?: unknown; error?: string }> {
+    try {
+      const response = await backendApi.get('/billing/invoices/dashboard-stats');
+
+      if (response.success) {
+        return { stats: response.data };
+      }
+
+      return { error: response.error || 'Failed to fetch invoice dashboard stats' };
+    } catch (error) {
+      console.error('Error fetching invoice dashboard stats:', error);
+      return {
+        error: error instanceof Error ? error.message : 'Failed to fetch invoice dashboard stats'
+      };
+    }
+  }
 }
 
 export default BillingService;

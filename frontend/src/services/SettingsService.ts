@@ -1,4 +1,4 @@
-import { backendApi } from './BackendAPI';
+import { backendApi } from '../lib/backendApi';
 import { BackendAuthService } from './BackendAuthService';
 import { UserSettings, ReportTemplate, SystemSetting } from '../types/settings';
 /**

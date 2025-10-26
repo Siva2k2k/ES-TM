@@ -16,6 +16,7 @@ import {
 import { useAuth } from '../../store/contexts/AuthContext';
 import { usePermissions } from '../../hooks/usePermissions';
 import { showSuccess, showError, showWarning } from '../../utils/toast';
+import { BillingService } from '../../services/BillingService';
 
 interface BillingDashboardStats {
   total_invoices: number;
@@ -67,22 +68,12 @@ export const EnhancedBillingDashboard: React.FC = () => {
     setError(null);
 
     try {
-      // Load dashboard statistics using proper token
-      const token = localStorage.getItem('accessToken');
-      const statsResponse = await fetch('/api/v1/billing/invoices/dashboard-stats', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!statsResponse.ok) {
-        throw new Error('Failed to load dashboard statistics');
-      }
-
-      const statsData = await statsResponse.json();
-      if (statsData.success) {
-        setStats(statsData.stats);
+      // Load dashboard statistics using BillingService
+      const result = await BillingService.getInvoiceDashboardStats();
+      if (result.stats) {
+        setStats(result.stats as BillingDashboardStats);
+      } else if (result.error) {
+        throw new Error(result.error);
       }
 
       // TODO: Load recent invoices (implement endpoint)
@@ -106,24 +97,16 @@ export const EnhancedBillingDashboard: React.FC = () => {
     try {
       const weekStart = new Date();
       weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // Start of current week
-      
-      const response = await fetch('/api/v1/billing/snapshots/generate', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          weekStartDate: weekStart.toISOString().split('T')[0]
-        })
-      });
 
-      const data = await response.json();
-      if (data.success) {
-        showSuccess(`Generated ${data.snapshots?.length || 0} billing snapshots`);
+      const result = await BillingService.generateBillingSnapshots(
+        weekStart.toISOString().split('T')[0]
+      );
+
+      if (result.snapshots) {
+        showSuccess(`Generated ${result.snapshots.length} billing snapshots`);
         loadDashboardData(); // Refresh dashboard
       } else {
-        showError(data.error || 'Failed to generate billing snapshots');
+        showError(result.error || 'Failed to generate billing snapshots');
       }
     } catch (err) {
       console.error('Error generating snapshots:', err);
