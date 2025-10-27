@@ -72,7 +72,17 @@ export const TimesheetEntryRow: React.FC<TimesheetEntryRowProps> = ({
   const [isCopyOpen, setIsCopyOpen] = useState(false);
   const [copySelection, setCopySelection] = useState<string[]>([]);
 
-  const projectName = projects.find(p => p.value === entry.project_id)?.label || 'Unknown';
+  // Get entry category (new field for categorizing entries)
+  const entryCategory = (entry as any).entry_category || 'project';
+  const isLeaveEntry = entryCategory === 'leave';
+  const isMiscEntry = entryCategory === 'miscellaneous';
+  const isTrainingEntry = entryCategory === 'training';
+  const isProjectEntry = entryCategory === 'project';
+
+  const projectName = isLeaveEntry ? '🏖️ Leave' :
+                      isMiscEntry ? '🎯 Miscellaneous' :
+                      isTrainingEntry ? '📚 Training' :
+                      projects.find(p => p.value === entry.project_id)?.label || 'Unknown';
   const projectApproval = entry.project_id ? projectApprovalsMap?.[entry.project_id] : undefined;
   const isProjectApproved = projectApproval?.manager_status === 'approved';
   const isProjectRejectedByLead = projectApproval?.lead_status === 'rejected';
@@ -84,10 +94,9 @@ export const TimesheetEntryRow: React.FC<TimesheetEntryRowProps> = ({
   const copyOptions = weekOptions.filter(option => option.value !== entry.date);
 
   const isTimesheetRejected = timesheetStatus === 'lead_rejected' || timesheetStatus === 'manager_rejected';
-  
   const entryEditable = isPartialRejection 
-    ? isProjectRejected || false
-    : !isViewMode ? true : isProjectRejected || isTimesheetRejected;
+  ? isProjectRejected || false
+  : !isViewMode ? true : isProjectRejected || isTimesheetRejected;
   
   const entryLocked = !entryEditable;
   const canCopy = !isPartialRejection || !isProjectRejected;
@@ -203,42 +212,150 @@ export const TimesheetEntryRow: React.FC<TimesheetEntryRowProps> = ({
         <div className="mt-4 pt-4 border-t space-y-4">
           {entryLocked ? (
             <div className="space-y-2">
-              <div><p className="text-xs text-gray-500 uppercase mb-1">Task</p><p className="text-sm">{entryType === 'custom_task' ? entry.custom_task_description : projectTasks.find(t => t.value === entry.task_id)?.label || '—'}</p></div>
-              <div><p className="text-xs text-gray-500 uppercase mb-1">Date</p><p className="text-sm">{entry.date}</p></div>
-              <div><p className="text-xs text-gray-500 uppercase mb-1">Hours</p><p className="text-sm">{entry.hours}h</p></div>
-              <div><p className="text-xs text-gray-500 uppercase mb-1">Description</p><p className="text-sm">{entry.description}</p></div>
+              {isLeaveEntry ? (
+                <>
+                  <div><p className="text-xs text-gray-500 uppercase mb-1">Session</p><p className="text-sm">{(entry as any).leave_session === 'morning' ? 'Morning' : (entry as any).leave_session === 'afternoon' ? 'Afternoon' : 'Full Day'}</p></div>
+                  <div><p className="text-xs text-gray-500 uppercase mb-1">Date</p><p className="text-sm">{entry.date}</p></div>
+                  <div><p className="text-xs text-gray-500 uppercase mb-1">Hours</p><p className="text-sm">{entry.hours}h</p></div>
+                  <div><p className="text-xs text-gray-500 uppercase mb-1">Description</p><p className="text-sm">{entry.description || '—'}</p></div>
+                </>
+              ) : isMiscEntry ? (
+                <>
+                  <div><p className="text-xs text-gray-500 uppercase mb-1">Activity</p><p className="text-sm">{(entry as any).miscellaneous_activity || '—'}</p></div>
+                  <div><p className="text-xs text-gray-500 uppercase mb-1">Date</p><p className="text-sm">{entry.date}</p></div>
+                  <div><p className="text-xs text-gray-500 uppercase mb-1">Hours</p><p className="text-sm">{entry.hours}h</p></div>
+                  <div><p className="text-xs text-gray-500 uppercase mb-1">Description</p><p className="text-sm">{entry.description || '—'}</p></div>
+                </>
+              ) : (
+                <>
+                  <div><p className="text-xs text-gray-500 uppercase mb-1">Task</p><p className="text-sm">{entryType === 'custom_task' ? entry.custom_task_description : projectTasks.find(t => t.value === entry.task_id)?.label || '—'}</p></div>
+                  <div><p className="text-xs text-gray-500 uppercase mb-1">Date</p><p className="text-sm">{entry.date}</p></div>
+                  <div><p className="text-xs text-gray-500 uppercase mb-1">Hours</p><p className="text-sm">{entry.hours}h</p></div>
+                  <div><p className="text-xs text-gray-500 uppercase mb-1">Description</p><p className="text-sm">{entry.description}</p></div>
+                </>
+              )}
             </div>
           ) : (
             <>
-              <Controller name={`entries.${index}.entry_type`} control={control} render={({ field }) => (
-                <Select {...field} label="Entry Type" options={[{ value: 'project_task', label: 'Project Task' }, { value: 'custom_task', label: 'Custom Task' }]} onChange={(value) => { field.onChange(value); setValue(`entries.${index}.${value === 'custom_task' ? 'task_id' : 'custom_task_description'}`, ''); }} />
-              )} />
-              
-              {entryType === 'project_task' ? (
-                <Controller name={`entries.${index}.task_id`} control={control} rules={{ required: 'Task is required' }} render={({ field }) => (
-                  <Select {...field} label="Task" required options={projectTasks} placeholder={projectTasks.length === 0 ? 'Select a project first' : 'Select a task'} disabled={projectTasks.length === 0} error={errors?.task_id?.message} />
-                )} />
+              {isLeaveEntry ? (
+                <>
+                  <Controller name={`entries.${index}.leave_session`} control={control} rules={{ required: 'Session is required' }} render={({ field }) => (
+                    <Select
+                      {...field}
+                      label="Leave Session"
+                      required
+                      options={[
+                        { value: 'morning', label: 'Morning (4 hours)' },
+                        { value: 'afternoon', label: 'Afternoon (4 hours)' },
+                        { value: 'full_day', label: 'Full Day (8 hours)' }
+                      ]}
+                      onChange={(value) => {
+                        field.onChange(value);
+                        // Auto-calculate hours based on session
+                        const hours = value === 'morning' || value === 'afternoon' ? 4 : 8;
+                        setValue(`entries.${index}.hours`, hours, { shouldDirty: true });
+                      }}
+                      error={errors?.task_id?.message}
+                    />
+                  )} />
+
+                  <Controller name={`entries.${index}.date`} control={control} render={({ field }) => (
+                    <Input {...field} type="date" label="Date" min={minDate} max={maxDate} error={errors?.date?.message} helperText={`Select date within ${formatDate(minDate)} - ${formatDate(maxDate)}`} />
+                  )} />
+
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-1">Hours</p>
+                    <p className="text-sm text-gray-600 bg-gray-50 p-2 rounded">{entry.hours}h (auto-calculated based on session)</p>
+                  </div>
+
+                  <Controller name={`entries.${index}.description`} control={control} render={({ field }) => (
+                    <Textarea {...field} label="Description (Optional)" placeholder="Additional notes about the leave" error={errors?.description?.message} />
+                  )} />
+                </>
+              ) : isMiscEntry ? (
+                <>
+                  <Controller name={`entries.${index}.miscellaneous_activity`} control={control} rules={{ required: 'Activity is required' }} render={({ field }) => (
+                    <Input {...field} label="Activity" placeholder="e.g., Annual Company Meet, Workshop, Team Building" required error={errors?.custom_task_description?.message} />
+                  )} />
+
+                  <Controller name={`entries.${index}.date`} control={control} render={({ field }) => (
+                    <Input {...field} type="date" label="Date" min={minDate} max={maxDate} error={errors?.date?.message} helperText={`Select date within ${formatDate(minDate)} - ${formatDate(maxDate)}`} />
+                  )} />
+
+                  <Controller name={`entries.${index}.hours`} control={control} rules={{ required: 'Hours required', min: { value: 0.5, message: 'Min 0.5h' }, max: { value: 10, message: 'Max 10h for miscellaneous' } }} render={({ field }) => (
+                    <Input type="number" step="0.5" min="0.5" max="10" label="Hours" required error={errors?.hours?.message} value={field.value as any} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setValue(`entries.${index}.hours`, e.target.valueAsNumber || Number(e.target.value), { shouldValidate: true, shouldDirty: true })} onBlur={field.onBlur} name={field.name} ref={field.ref} />
+                  )} />
+
+                  <Controller name={`entries.${index}.description`} control={control} render={({ field }) => (
+                    <Textarea {...field} label="Description (Optional)" placeholder="Additional details about the activity" error={errors?.description?.message} />
+                  )} />
+                </>
+              ) : isTrainingEntry ? (
+                <>
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-1">Project</p>
+                    <p className="text-sm text-gray-600 bg-blue-50 p-2 rounded border border-blue-200">📚 Training Program (Auto-assigned)</p>
+                  </div>
+
+                  <Controller name={`entries.${index}.entry_type`} control={control} render={({ field }) => (
+                    <Select {...field} label="Entry Type" options={[{ value: 'project_task', label: 'Project Task' }, { value: 'custom_task', label: 'Custom Task' }]} onChange={(value) => { field.onChange(value); setValue(`entries.${index}.${value === 'custom_task' ? 'task_id' : 'custom_task_description'}`, ''); }} />
+                  )} />
+
+                  {entryType === 'project_task' ? (
+                    <Controller name={`entries.${index}.task_id`} control={control} rules={{ required: 'Task is required' }} render={({ field }) => (
+                      <Select {...field} label="Task" required options={projectTasks} placeholder="Select a training task" error={errors?.task_id?.message} />
+                    )} />
+                  ) : (
+                    <Controller name={`entries.${index}.custom_task_description`} control={control} render={({ field }) => (
+                      <Input {...field} label="Custom Task Name" placeholder="Describe the training work" required error={errors?.custom_task_description?.message} />
+                    )} />
+                  )}
+
+                  <Controller name={`entries.${index}.date`} control={control} render={({ field }) => (
+                    <Input {...field} type="date" label="Date" min={minDate} max={maxDate} error={errors?.date?.message} helperText={`Select date within ${formatDate(minDate)} - ${formatDate(maxDate)}`} />
+                  )} />
+
+                  <Controller name={`entries.${index}.hours`} control={control} rules={{ required: 'Hours required', min: { value: 0.5, message: 'Min 0.5h' }, max: { value: 24, message: 'Max 24h' } }} render={({ field }) => (
+                    <Input type="number" step="0.5" min="0.5" max="24" label="Hours" required error={errors?.hours?.message} value={field.value as any} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setValue(`entries.${index}.hours`, e.target.valueAsNumber || Number(e.target.value), { shouldValidate: true, shouldDirty: true })} onBlur={field.onBlur} name={field.name} ref={field.ref} />
+                  )} />
+
+                  <Controller name={`entries.${index}.description`} control={control} render={({ field }) => (
+                    <Textarea {...field} label="Description" placeholder="What training did you work on?" error={errors?.description?.message} />
+                  )} />
+                </>
               ) : (
-                <Controller name={`entries.${index}.custom_task_description`} control={control} render={({ field }) => (
-                  <Input {...field} label="Custom Task Name" placeholder="Describe the work" required error={errors?.custom_task_description?.message} />
-                )} />
+                <>
+                  <Controller name={`entries.${index}.entry_type`} control={control} render={({ field }) => (
+                    <Select {...field} label="Entry Type" options={[{ value: 'project_task', label: 'Project Task' }, { value: 'custom_task', label: 'Custom Task' }]} onChange={(value) => { field.onChange(value); setValue(`entries.${index}.${value === 'custom_task' ? 'task_id' : 'custom_task_description'}`, ''); }} />
+                  )} />
+
+                  {entryType === 'project_task' ? (
+                    <Controller name={`entries.${index}.task_id`} control={control} rules={{ required: 'Task is required' }} render={({ field }) => (
+                      <Select {...field} label="Task" required options={projectTasks} placeholder={projectTasks.length === 0 ? 'Select a project first' : 'Select a task'} disabled={projectTasks.length === 0} error={errors?.task_id?.message} />
+                    )} />
+                  ) : (
+                    <Controller name={`entries.${index}.custom_task_description`} control={control} render={({ field }) => (
+                      <Input {...field} label="Custom Task Name" placeholder="Describe the work" required error={errors?.custom_task_description?.message} />
+                    )} />
+                  )}
+
+                  <Controller name={`entries.${index}.date`} control={control} render={({ field }) => (
+                    <Input {...field} type="date" label="Date" min={minDate} max={maxDate} error={errors?.date?.message} helperText={`Select date within ${formatDate(minDate)} - ${formatDate(maxDate)}`} onChange={(e: any) => { const val = e?.target?.value ?? e; field.onChange(val); if (isWeekend(String(val))) setValue(`entries.${index}.is_billable`, false, { shouldDirty: true }); }} />
+                  )} />
+
+                  <Controller name={`entries.${index}.hours`} control={control} rules={{ required: 'Hours required', min: { value: 0.5, message: 'Min 0.5h' }, max: { value: 24, message: 'Max 24h' } }} render={({ field }) => (
+                    <Input type="number" step="0.5" min="0.5" max="24" label="Hours" required error={errors?.hours?.message} value={field.value as any} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setValue(`entries.${index}.hours`, e.target.valueAsNumber || Number(e.target.value), { shouldValidate: true, shouldDirty: true })} onBlur={field.onBlur} name={field.name} ref={field.ref} />
+                  )} />
+
+                  <Controller name={`entries.${index}.description`} control={control} render={({ field }) => (
+                    <Textarea {...field} label="Description" placeholder="What did you work on?" error={errors?.description?.message} />
+                  )} />
+
+                  <Controller name={`entries.${index}.is_billable`} control={control} render={({ field }) => (
+                    <Checkbox checked={field.value} onCheckedChange={field.onChange} label="Billable" />
+                  )} />
+                </>
               )}
-
-              <Controller name={`entries.${index}.date`} control={control} render={({ field }) => (
-                <Input {...field} type="date" label="Date" min={minDate} max={maxDate} error={errors?.date?.message} helperText={`Select date within ${formatDate(minDate)} - ${formatDate(maxDate)}`} onChange={(e: any) => { const val = e?.target?.value ?? e; field.onChange(val); if (isWeekend(String(val))) setValue(`entries.${index}.is_billable`, false, { shouldDirty: true }); }} />
-              )} />
-
-              <Controller name={`entries.${index}.hours`} control={control} rules={{ required: 'Hours required', min: { value: 0.5, message: 'Min 0.5h' }, max: { value: 24, message: 'Max 24h' } }} render={({ field }) => (
-                <Input type="number" step="0.5" min="0.5" max="24" label="Hours" required error={errors?.hours?.message} value={field.value as any} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setValue(`entries.${index}.hours`, e.target.valueAsNumber || Number(e.target.value), { shouldValidate: true, shouldDirty: true })} onBlur={field.onBlur} name={field.name} ref={field.ref} />
-              )} />
-
-              <Controller name={`entries.${index}.description`} control={control} render={({ field }) => (
-                <Textarea {...field} label="Description" placeholder="What did you work on?" error={errors?.description?.message} />
-              )} />
-
-              <Controller name={`entries.${index}.is_billable`} control={control} render={({ field }) => (
-                <Checkbox checked={field.value} onCheckedChange={field.onChange} label="Billable" />
-              )} />
             </>
           )}
         </div>

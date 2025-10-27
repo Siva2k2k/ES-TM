@@ -3,6 +3,9 @@ import { UserRole } from './User';
 
 export type ProjectStatus = 'active' | 'completed' | 'archived';
 
+// NEW: Project type classification
+export type ProjectType = 'regular' | 'internal' | 'training';
+
 export interface IProjectApprovalSettings {
   lead_approval_auto_escalates: boolean;
 }
@@ -13,6 +16,7 @@ export interface IProject extends Document {
   client_id: mongoose.Types.ObjectId;
   primary_manager_id: mongoose.Types.ObjectId;
   status: ProjectStatus;
+  project_type: ProjectType; // NEW: regular, internal, or training
   start_date: Date;
   end_date?: Date;
   budget?: number;
@@ -63,6 +67,12 @@ const ProjectSchema: Schema = new Schema({
     type: String,
     enum: ['active', 'completed', 'archived'],
     default: 'active'
+  },
+  project_type: {
+    type: String,
+    enum: ['regular', 'internal', 'training'],
+    default: 'regular',
+    required: true
   },
   start_date: {
     type: Date,
@@ -174,7 +184,11 @@ const ProjectMemberSchema: Schema = new Schema({
 ProjectSchema.index({ client_id: 1 });
 ProjectSchema.index({ primary_manager_id: 1 });
 ProjectSchema.index({ status: 1 });
+ProjectSchema.index({ project_type: 1 }); // NEW: Index for project type
 ProjectSchema.index({ deleted_at: 1 });
+
+// Compound indexes
+ProjectSchema.index({ project_type: 1, status: 1 });
 
 ProjectMemberSchema.index({ project_id: 1 });
 ProjectMemberSchema.index({ user_id: 1 });

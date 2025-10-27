@@ -2538,6 +2538,444 @@ export class TimesheetService {
     }
   }
 
+  // ============================================================================
+  // NEW ENTRY CATEGORY METHODS (Phase 2 & 3)
+  // ============================================================================
+
+  /**
+   * Add a leave entry to a timesheet
+   * Hours are auto-calculated based on session (morning=4h, afternoon=4h, full_day=8h)
+   * Leave entries are always non-billable
+   *
+   * @param timesheetId Timesheet ID
+   * @param date Leave date
+   * @param leaveSession Session type (morning, afternoon, full_day)
+   * @param currentUser Current authenticated user
+   * @returns Created leave entry or error
+   */
+  static async addLeaveEntry(
+    timesheetId: string,
+    date: Date | string,
+    leaveSession: 'morning' | 'afternoon' | 'full_day',
+    currentUser: AuthUser,
+    description?: string
+  ): Promise<{ entry?: ITimeEntry; error?: string }> {
+    try {
+      // Import CompanyHolidayService
+      const { default: CompanyHolidayService } = await import('./CompanyHolidayService');
+
+      // Get timesheet to validate permissions
+      const timesheet = await (Timesheet.findOne as any)({
+        _id: new mongoose.Types.ObjectId(timesheetId),
+        deleted_at: null
+      }).exec();
+
+      if (!timesheet) {
+        throw new NotFoundError('Timesheet not found');
+      }
+
+      // Validate access permissions
+      validateTimesheetAccess(currentUser, timesheet.user_id.toString(), 'edit');
+
+      // Validate timesheet status
+      if (!['draft', 'lead_rejected', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
+        throw new TimesheetError('Cannot add entries to timesheet in current status');
+      }
+
+      // Check if date is a holiday
+      const leaveDate = new Date(date);
+      const isHoliday = await CompanyHolidayService.isHoliday(leaveDate);
+
+      if (isHoliday) {
+        const holiday = await CompanyHolidayService.getHolidayByDate(leaveDate);
+        throw new ValidationError(
+          `Cannot log leave on ${holiday?.name || 'holiday'} (${leaveDate.toISOString().split('T')[0]})`
+        );
+      }
+
+      // Auto-calculate hours based on session
+      let hours = 8; // default full day
+      if (leaveSession === 'morning' || leaveSession === 'afternoon') {
+        hours = 4;
+      }
+
+      // Create leave entry
+      const entryInsertData = {
+        timesheet_id: new mongoose.Types.ObjectId(timesheetId),
+        entry_category: 'leave',
+        leave_session: leaveSession,
+        date: leaveDate,
+        hours: hours,
+        description: description || `Leave - ${leaveSession.replace('_', ' ')}`,
+        is_billable: false
+      };
+
+      const entry = await (TimeEntry.create as any)(entryInsertData);
+
+      // Audit log
+      await AuditLogService.logEvent(
+        'time_entries',
+        entry._id.toString(),
+        'INSERT',
+        currentUser.id,
+        currentUser.full_name,
+        {
+          timesheet_id: timesheetId,
+          date: leaveDate.toISOString(),
+          hours: hours,
+          entry_category: 'leave',
+          leave_session: leaveSession
+        },
+        { created_leave_entry: true },
+        null,
+        entryInsertData
+      );
+
+      // Update timesheet total hours
+      await this.updateTimesheetTotalHours(timesheetId);
+
+      return { entry };
+    } catch (error) {
+      console.error('Error in addLeaveEntry:', error);
+      return { error: error instanceof Error ? error.message : 'Failed to add leave entry' };
+    }
+  }
+
+  /**
+   * Add a miscellaneous entry to a timesheet
+   * Miscellaneous entries are always non-billable
+   *
+   * @param timesheetId Timesheet ID
+   * @param date Entry date
+   * @param activity Activity description (e.g., "Annual Company Meet")
+   * @param hours Hours spent
+   * @param currentUser Current authenticated user
+   * @returns Created miscellaneous entry or error
+   */
+  static async addMiscellaneousEntry(
+    timesheetId: string,
+    date: Date | string,
+    activity: string,
+    hours: number,
+    currentUser: AuthUser
+  ): Promise<{ entry?: ITimeEntry; error?: string }> {
+    try {
+      // Get timesheet to validate permissions
+      const timesheet = await (Timesheet.findOne as any)({
+        _id: new mongoose.Types.ObjectId(timesheetId),
+        deleted_at: null
+      }).exec();
+
+      if (!timesheet) {
+        throw new NotFoundError('Timesheet not found');
+      }
+
+      // Validate access permissions
+      validateTimesheetAccess(currentUser, timesheet.user_id.toString(), 'edit');
+
+      // Validate timesheet status
+      if (!['draft', 'lead_rejected', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
+        throw new TimesheetError('Cannot add entries to timesheet in current status');
+      }
+
+      // Validate activity description
+      if (!activity || activity.trim().length === 0) {
+        throw new ValidationError('Activity description is required for miscellaneous entries');
+      }
+
+      // Validate hours
+      if (hours <= 0 || hours > 24) {
+        throw new ValidationError('Hours must be between 0 and 24');
+      }
+
+      // Create miscellaneous entry
+      const entryDate = new Date(date);
+      const entryInsertData = {
+        timesheet_id: new mongoose.Types.ObjectId(timesheetId),
+        entry_category: 'miscellaneous',
+        miscellaneous_activity: activity.trim(),
+        date: entryDate,
+        hours: hours,
+        description: activity.trim(),
+        is_billable: false
+      };
+
+      const entry = await (TimeEntry.create as any)(entryInsertData);
+
+      // Audit log
+      await AuditLogService.logEvent(
+        'time_entries',
+        entry._id.toString(),
+        'INSERT',
+        currentUser.id,
+        currentUser.full_name,
+        {
+          timesheet_id: timesheetId,
+          date: entryDate.toISOString(),
+          hours: hours,
+          entry_category: 'miscellaneous',
+          activity: activity
+        },
+        { created_miscellaneous_entry: true },
+        null,
+        entryInsertData
+      );
+
+      // Update timesheet total hours
+      await this.updateTimesheetTotalHours(timesheetId);
+
+      return { entry };
+    } catch (error) {
+      console.error('Error in addMiscellaneousEntry:', error);
+      return { error: error instanceof Error ? error.message : 'Failed to add miscellaneous entry' };
+    }
+  }
+
+  /**
+   * Add a project entry to a timesheet
+   * Unified method for both project_task and custom_task types
+   *
+   * @param timesheetId Timesheet ID
+   * @param projectId Project ID
+   * @param date Entry date
+   * @param hours Hours worked
+   * @param taskType Type of task (project_task or custom_task)
+   * @param taskId Task ID (required if task_type is project_task)
+   * @param customTaskDescription Custom task description (required if task_type is custom_task)
+   * @param isBillable Whether the entry is billable
+   * @param currentUser Current authenticated user
+   * @returns Created project entry or error
+   */
+  static async addProjectEntry(
+    timesheetId: string,
+    projectId: string,
+    date: Date | string,
+    hours: number,
+    taskType: 'project_task' | 'custom_task',
+    currentUser: AuthUser,
+    options?: {
+      taskId?: string;
+      customTaskDescription?: string;
+      isBillable?: boolean;
+      description?: string;
+    }
+  ): Promise<{ entry?: ITimeEntry; error?: string }> {
+    try {
+      // Get timesheet to validate permissions
+      const timesheet = await (Timesheet.findOne as any)({
+        _id: new mongoose.Types.ObjectId(timesheetId),
+        deleted_at: null
+      }).exec();
+
+      if (!timesheet) {
+        throw new NotFoundError('Timesheet not found');
+      }
+
+      // Validate access permissions
+      validateTimesheetAccess(currentUser, timesheet.user_id.toString(), 'edit');
+
+      // Validate timesheet status
+      if (!['draft', 'lead_rejected', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
+        throw new TimesheetError('Cannot add entries to timesheet in current status');
+      }
+
+      // Validate task type requirements
+      if (taskType === 'project_task' && !options?.taskId) {
+        throw new ValidationError('task_id is required for project_task entries');
+      }
+
+      if (taskType === 'custom_task' && !options?.customTaskDescription) {
+        throw new ValidationError('custom_task_description is required for custom_task entries');
+      }
+
+      // Validate hours
+      if (hours <= 0 || hours > 24) {
+        throw new ValidationError('Hours must be between 0 and 24');
+      }
+
+      // Create project entry
+      const entryDate = new Date(date);
+      const entryInsertData: any = {
+        timesheet_id: new mongoose.Types.ObjectId(timesheetId),
+        entry_category: 'project',
+        project_id: new mongoose.Types.ObjectId(projectId),
+        task_type: taskType,
+        date: entryDate,
+        hours: hours,
+        description: options?.description,
+        is_billable: options?.isBillable !== undefined ? options.isBillable : true
+      };
+
+      if (taskType === 'project_task' && options?.taskId) {
+        entryInsertData.task_id = new mongoose.Types.ObjectId(options.taskId);
+      }
+
+      if (taskType === 'custom_task' && options?.customTaskDescription) {
+        entryInsertData.custom_task_description = options.customTaskDescription.trim();
+      }
+
+      // Backward compatibility: also set entry_type
+      entryInsertData.entry_type = taskType;
+
+      const entry = await (TimeEntry.create as any)(entryInsertData);
+
+      // Audit log
+      await AuditLogService.logEvent(
+        'time_entries',
+        entry._id.toString(),
+        'INSERT',
+        currentUser.id,
+        currentUser.full_name,
+        {
+          timesheet_id: timesheetId,
+          project_id: projectId,
+          date: entryDate.toISOString(),
+          hours: hours,
+          entry_category: 'project',
+          task_type: taskType
+        },
+        { created_project_entry: true },
+        null,
+        entryInsertData
+      );
+
+      // Update timesheet total hours
+      await this.updateTimesheetTotalHours(timesheetId);
+
+      return { entry };
+    } catch (error) {
+      console.error('Error in addProjectEntry:', error);
+      return { error: error instanceof Error ? error.message : 'Failed to add project entry' };
+    }
+  }
+
+  /**
+   * Add a training entry to a timesheet
+   * Training entries go to the Training Program project and follow project approval flow
+   *
+   * @param timesheetId Timesheet ID
+   * @param date Entry date
+   * @param hours Hours worked
+   * @param taskType Type of task (project_task or custom_task)
+   * @param currentUser Current authenticated user
+   * @param options Optional parameters
+   * @returns Created training entry or error
+   */
+  static async addTrainingEntry(
+    timesheetId: string,
+    date: Date | string,
+    hours: number,
+    taskType: 'project_task' | 'custom_task',
+    currentUser: AuthUser,
+    options?: {
+      taskId?: string;
+      customTaskDescription?: string;
+      description?: string;
+    }
+  ): Promise<{ entry?: ITimeEntry; error?: string }> {
+    try {
+      // Import Project model
+      const { Project } = await import('@/models/Project');
+
+      // Get timesheet to validate permissions
+      const timesheet = await (Timesheet.findOne as any)({
+        _id: new mongoose.Types.ObjectId(timesheetId),
+        deleted_at: null
+      }).exec();
+
+      if (!timesheet) {
+        throw new NotFoundError('Timesheet not found');
+      }
+
+      // Validate access permissions
+      validateTimesheetAccess(currentUser, timesheet.user_id.toString(), 'edit');
+
+      // Validate timesheet status
+      if (!['draft', 'lead_rejected', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
+        throw new TimesheetError('Cannot add entries to timesheet in current status');
+      }
+
+      // Get Training Program project
+      const trainingProject = await Project.findOne({
+        project_type: 'training',
+        status: 'active',
+        deleted_at: null
+      });
+
+      if (!trainingProject) {
+        throw new NotFoundError('Training Program project not found. Please contact administrator.');
+      }
+
+      // Validate task type requirements
+      if (taskType === 'project_task' && !options?.taskId) {
+        throw new ValidationError('task_id is required for project_task entries');
+      }
+
+      if (taskType === 'custom_task' && !options?.customTaskDescription) {
+        throw new ValidationError('custom_task_description is required for custom_task entries');
+      }
+
+      // Validate hours
+      if (hours <= 0 || hours > 24) {
+        throw new ValidationError('Hours must be between 0 and 24');
+      }
+
+      // Create training entry
+      const entryDate = new Date(date);
+      const entryInsertData: any = {
+        timesheet_id: new mongoose.Types.ObjectId(timesheetId),
+        entry_category: 'training',
+        project_id: trainingProject._id,
+        task_type: taskType,
+        date: entryDate,
+        hours: hours,
+        description: options?.description,
+        is_billable: false // Training is always non-billable
+      };
+
+      if (taskType === 'project_task' && options?.taskId) {
+        entryInsertData.task_id = new mongoose.Types.ObjectId(options.taskId);
+      }
+
+      if (taskType === 'custom_task' && options?.customTaskDescription) {
+        entryInsertData.custom_task_description = options.customTaskDescription.trim();
+      }
+
+      // Backward compatibility: also set entry_type
+      entryInsertData.entry_type = taskType;
+
+      const entry = await (TimeEntry.create as any)(entryInsertData);
+
+      // Audit log
+      await AuditLogService.logEvent(
+        'time_entries',
+        entry._id.toString(),
+        'INSERT',
+        currentUser.id,
+        currentUser.full_name,
+        {
+          timesheet_id: timesheetId,
+          project_id: trainingProject._id.toString(),
+          date: entryDate.toISOString(),
+          hours: hours,
+          entry_category: 'training',
+          task_type: taskType
+        },
+        { created_training_entry: true },
+        null,
+        entryInsertData
+      );
+
+      // Update timesheet total hours
+      await this.updateTimesheetTotalHours(timesheetId);
+
+      return { entry };
+    } catch (error) {
+      console.error('Error in addTrainingEntry:', error);
+      return { error: error instanceof Error ? error.message : 'Failed to add training entry' };
+    }
+  }
+
 }
 
 export default TimesheetService;

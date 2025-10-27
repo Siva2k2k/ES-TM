@@ -1,19 +1,44 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
-export type EntryType = 'project_task' | 'custom_task';
+// Backward compatibility: EntryType still exists but is now called TaskType
+export type TaskType = 'project_task' | 'custom_task';
+export type EntryType = TaskType; // Deprecated, use TaskType
+
+// High-level entry categories
+export type EntryCategory = 'project' | 'leave' | 'training' | 'miscellaneous';
+
+// Leave session types
+export type LeaveSession = 'morning' | 'afternoon' | 'full_day';
 
 export interface ITimeEntry extends Document {
   _id: mongoose.Types.ObjectId;
   timesheet_id: mongoose.Types.ObjectId;
+
+  // High-level category (NEW)
+  entry_category: EntryCategory;
+
+  // For 'project' or 'training' categories
   project_id?: mongoose.Types.ObjectId;
-  task_id?: mongoose.Types.ObjectId;
+  task_type?: TaskType; // 'project_task' or 'custom_task'
+  task_id?: mongoose.Types.ObjectId; // Required if task_type = 'project_task'
+  custom_task_description?: string; // Required if task_type = 'custom_task'
+
+  // For 'leave' category
+  leave_session?: LeaveSession;
+
+  // For 'miscellaneous' category
+  miscellaneous_activity?: string;
+
+  // Common fields
   date: Date;
   hours: number;
   description?: string;
   is_billable: boolean;
   billable_hours?: number; // Management can override billable hours (defaults to hours if is_billable=true)
-  custom_task_description?: string;
-  entry_type: EntryType;
+
+  // Deprecated: entry_type (kept for backward compatibility, maps to task_type)
+  entry_type?: TaskType;
+
   hourly_rate?: number;
   created_at: Date;
   updated_at: Date;
@@ -31,9 +56,24 @@ const TimeEntrySchema: Schema = new Schema({
     ref: 'Timesheet',
     required: true
   },
+
+  // High-level category (NEW)
+  entry_category: {
+    type: String,
+    enum: ['project', 'leave', 'training', 'miscellaneous'],
+    required: true,
+    default: 'project' // Default to project for backward compatibility
+  },
+
+  // For 'project' or 'training' categories
   project_id: {
     type: Schema.Types.ObjectId,
     ref: 'Project',
+    required: false
+  },
+  task_type: {
+    type: String,
+    enum: ['project_task', 'custom_task'],
     required: false
   },
   task_id: {
@@ -41,6 +81,27 @@ const TimeEntrySchema: Schema = new Schema({
     ref: 'Task',
     required: false
   },
+  custom_task_description: {
+    type: String,
+    trim: true,
+    required: false
+  },
+
+  // For 'leave' category
+  leave_session: {
+    type: String,
+    enum: ['morning', 'afternoon', 'full_day'],
+    required: false
+  },
+
+  // For 'miscellaneous' category
+  miscellaneous_activity: {
+    type: String,
+    trim: true,
+    required: false
+  },
+
+  // Common fields
   date: {
     type: Date,
     required: true
@@ -66,16 +127,14 @@ const TimeEntrySchema: Schema = new Schema({
     max: 24,
     required: false // Will default to hours if not set
   },
-  custom_task_description: {
-    type: String,
-    trim: true,
-    required: false
-  },
+
+  // Deprecated: entry_type (kept for backward compatibility)
   entry_type: {
     type: String,
     enum: ['project_task', 'custom_task'],
-    default: 'project_task'
+    required: false
   },
+
   hourly_rate: {
     type: Number,
     min: 0,
@@ -116,21 +175,72 @@ TimeEntrySchema.index({ project_id: 1 });
 TimeEntrySchema.index({ task_id: 1 });
 TimeEntrySchema.index({ date: 1 });
 TimeEntrySchema.index({ deleted_at: 1 });
+TimeEntrySchema.index({ entry_category: 1 }); // NEW: Index for entry category
 
 // Compound indexes
 TimeEntrySchema.index({ timesheet_id: 1, date: 1 });
+TimeEntrySchema.index({ timesheet_id: 1, entry_category: 1 });
 TimeEntrySchema.index({ project_id: 1, date: 1 });
+TimeEntrySchema.index({ entry_category: 1, date: 1 });
 
 // Validation
 TimeEntrySchema.pre('save', function(next) {
-  // Ensure either project_id is set OR custom_task_description is provided
-  if (this.entry_type === 'project_task' && !this.project_id) {
-    next(new Error('project_id is required for project_task entries'));
-  } else if (this.entry_type === 'custom_task' && !this.custom_task_description) {
-    next(new Error('custom_task_description is required for custom_task entries'));
-  } else {
-    next();
+  // Backward compatibility: If entry_type is set but not task_type, copy it
+  if (this.entry_type && !this.task_type) {
+    this.task_type = this.entry_type;
   }
+
+  // Validate based on entry_category
+  switch (this.entry_category) {
+    case 'project':
+    case 'training':
+      // Require project_id for project and training entries
+      if (!this.project_id) {
+        return next(new Error(`project_id is required for ${this.entry_category} entries`));
+      }
+      // Require task_type
+      if (!this.task_type) {
+        return next(new Error(`task_type is required for ${this.entry_category} entries`));
+      }
+      // If task_type is project_task, require task_id
+      if (this.task_type === 'project_task' && !this.task_id) {
+        return next(new Error('task_id is required when task_type is project_task'));
+      }
+      // If task_type is custom_task, require custom_task_description
+      if (this.task_type === 'custom_task' && !this.custom_task_description) {
+        return next(new Error('custom_task_description is required when task_type is custom_task'));
+      }
+      break;
+
+    case 'leave':
+      // Require leave_session
+      if (!this.leave_session) {
+        return next(new Error('leave_session is required for leave entries'));
+      }
+      // Auto-calculate hours based on session
+      if (this.leave_session === 'full_day') {
+        this.hours = 8;
+      } else if (this.leave_session === 'morning' || this.leave_session === 'afternoon') {
+        this.hours = 4;
+      }
+      // Force is_billable to false for leave
+      this.is_billable = false;
+      break;
+
+    case 'miscellaneous':
+      // Require miscellaneous_activity
+      if (!this.miscellaneous_activity || (typeof this.miscellaneous_activity === 'string' && this.miscellaneous_activity.trim().length === 0)) {
+        return next(new Error('miscellaneous_activity is required for miscellaneous entries'));
+      }
+      // Force is_billable to false for miscellaneous
+      this.is_billable = false;
+      break;
+
+    default:
+      return next(new Error(`Invalid entry_category: ${this.entry_category}`));
+  }
+
+  next();
 });
 
 // Virtual for ID as string

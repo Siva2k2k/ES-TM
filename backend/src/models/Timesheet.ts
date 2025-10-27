@@ -20,7 +20,11 @@ export interface ITimesheet extends Document {
   total_hours: number;
   status: TimesheetStatus;
 
-  // Lead approval fields (NEW)
+  // Extended week fields (NEW) - for month-end handling
+  is_extended_week: boolean;    // true if month-end extends to Wed of next week
+  actual_days_count: number;    // 7 (normal), 10/11 (extended), 3/4 (partial)
+
+  // Lead approval fields
   approved_by_lead_id?: mongoose.Types.ObjectId;
   approved_by_lead_at?: Date;
   lead_rejection_reason?: string;
@@ -86,8 +90,8 @@ const TimesheetSchema: Schema = new Schema({
     enum: [
       'draft',
       'submitted',
-      'lead_approved',        // NEW: Lead approved employee timesheet
-      'lead_rejected',        // NEW: Lead rejected employee timesheet
+      'lead_approved',        // Lead approved employee timesheet
+      'lead_rejected',        // Lead rejected employee timesheet
       'manager_approved',
       'manager_rejected',
       'management_pending',
@@ -98,7 +102,21 @@ const TimesheetSchema: Schema = new Schema({
     default: 'draft'
   },
 
-  // Lead approval fields (NEW)
+  // Extended week fields (NEW) - for month-end handling
+  is_extended_week: {
+    type: Boolean,
+    default: false,
+    required: true
+  },
+  actual_days_count: {
+    type: Number,
+    default: 7,
+    min: 1,
+    max: 14, // Safety cap
+    required: true
+  },
+
+  // Lead approval fields
   approved_by_lead_id: {
     type: Schema.Types.ObjectId,
     ref: 'User',

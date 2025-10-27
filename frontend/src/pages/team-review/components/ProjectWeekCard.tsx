@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, CheckCircle, XCircle, Users, Clock, FileText, AlertTriangle } from 'lucide-react';
 import { UserTimesheetDetails } from './UserTimesheetDetails';
 import type { ProjectWeekGroup } from '../../../types/timesheetApprovals';
+import { DefaulterList } from '../../../components/team-review/DefaulterList';
 
 interface ProjectWeekCardProps {
   projectWeek: ProjectWeekGroup;
@@ -93,6 +94,8 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
     billable_hours: number;
     billable_adjustment: number;
   }>>({});
+  const [canProceedWithApproval, setCanProceedWithApproval] = useState(true);
+  const [defaulterCount, setDefaulterCount] = useState(0);
 
   const handleBillableUpdate = (userId: string, data: {
     worked_hours: number;
@@ -103,6 +106,11 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
       ...prev,
       [userId]: data
     }));
+  };
+
+  const handleDefaulterValidation = (canProceed: boolean, count: number) => {
+    setCanProceedWithApproval(canProceed);
+    setDefaulterCount(count);
   };
 
   const toggleUserExpansion = (userId: string) => {
@@ -136,10 +144,14 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
   const canShowActions = canApprove && (projectWeek.approval_status === 'pending' || projectWeek.approval_status === 'partially_processed');
   const shouldShowActions = canShowActions && (isManagementMode ? hasManagerApproved : hasPendingApprovals);
 
-  const actionButtonDisabled = isLoading || (isManagementMode && !allManagerApproved);
+  // Updated: Disable buttons if there are defaulters OR other conditions
+  const actionButtonDisabled = isLoading || (isManagementMode && !allManagerApproved) || !canProceedWithApproval;
   const actionButtonLabel = isManagementMode ? 'Verify All' : 'Approve All';
-  
+
   const getActionButtonTitle = () => {
+    if (!canProceedWithApproval) {
+      return `Cannot proceed. ${defaulterCount} team member${defaulterCount !== 1 ? 's' : ''} have not submitted timesheets.`;
+    }
     if (isManagementMode) {
       return allManagerApproved
         ? 'Verify and freeze all manager-approved timesheets'
@@ -234,6 +246,17 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
             </div>
           )}
         </div>
+
+        {/* Defaulter Tracking */}
+        {projectWeek.week_start && (
+          <div className="mb-4">
+            <DefaulterList
+              projectId={projectWeek.project_id}
+              weekStart={projectWeek.week_start}
+              onValidationChange={handleDefaulterValidation}
+            />
+          </div>
+        )}
 
         {/* Stats Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">

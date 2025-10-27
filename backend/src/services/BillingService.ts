@@ -108,8 +108,9 @@ export class BillingService {
       const snapshotsToCreate = [];
 
       for (const timesheet of timesheets) {
+        // Filter to only include project entries (exclude leave, miscellaneous, training)
         const billableHours = timesheet.time_entries
-          .filter((entry: any) => entry.is_billable)
+          .filter((entry: any) => entry.is_billable && entry.entry_category === 'project')
           .reduce((sum: number, entry: any) => sum + entry.hours, 0);
 
         // Use enhanced rate calculation for more accurate billing
@@ -117,9 +118,9 @@ export class BillingService {
         let calculatedAmount = billableHours * effectiveRate;
         
         try {
-          // Calculate smart rate if we have project context
-          const projectEntry = timesheet.time_entries.find((entry: any) => 
-            entry.project_id && entry.is_billable
+          // Calculate smart rate if we have project context (only for project entries)
+          const projectEntry = timesheet.time_entries.find((entry: any) =>
+            entry.project_id && entry.is_billable && entry.entry_category === 'project'
           );
           
           if (projectEntry) {
@@ -525,8 +526,9 @@ export class BillingService {
       // Update billing snapshot if exists
       const billingSnapshot = await BillingSnapshot.findOne({ timesheet_id: timesheetId });
       if (billingSnapshot) {
+        // Only count billable hours from project entries
         const billableHours = allEntries
-          .filter(entry => entry.is_billable)
+          .filter(entry => entry.is_billable && entry.entry_category === 'project')
           .reduce((sum, entry) => {
             const hours = entry._id.toString() === entryId ? newHours : entry.hours;
             return sum + hours;
@@ -650,7 +652,10 @@ export class BillingService {
           $unwind: '$time_entries'
         },
         {
-          $match: { 'time_entries.project_id': { $ne: null } }
+          $match: {
+            'time_entries.project_id': { $ne: null },
+            'time_entries.entry_category': 'project' // Only include project entries for billing
+          }
         },
         {
           $lookup: {
@@ -662,6 +667,12 @@ export class BillingService {
         },
         {
           $unwind: '$project'
+        },
+        {
+          $match: {
+            'project.project_type': 'regular', // Only include regular (billable) projects
+            'project.deleted_at': null
+          }
         },
         {
           $group: {

@@ -13,6 +13,7 @@ import reportRoutes from './reports';
 import settingsRoutes from './settings';
 import notificationRoutes from './notifications';
 import searchRoutes from './search';
+import defaulterRoutes from './defaulters';
 
 export const registerRoutes = (app: Express): void => {
   // Test routes (for development and health checks)
@@ -32,6 +33,7 @@ export const registerRoutes = (app: Express): void => {
   app.use('/api/v1/settings', settingsRoutes);
   app.use('/api/v1/notifications', notificationRoutes);
   app.use('/api/v1/search', searchRoutes);
+  app.use('/api/v1/defaulters', defaulterRoutes);
   
   // Health check at root
   app.get('/health', (req, res) => {

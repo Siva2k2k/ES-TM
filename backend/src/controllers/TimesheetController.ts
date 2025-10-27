@@ -265,6 +265,235 @@ export class TimesheetController {
   });
 
   /**
+   * Add leave entry
+   * POST /api/timesheets/:timesheetId/entries/leave
+   */
+  static addLeaveEntry = handleAsyncError(async (req: AuthenticatedRequest, res: Response) => {
+    const currentUser = req.user!;
+    const { timesheetId } = req.params;
+    const { date, leaveSession, description } = req.body;
+
+    if (!date || !leaveSession) {
+      return res.status(400).json({
+        success: false,
+        error: 'date and leaveSession are required'
+      });
+    }
+
+    if (!['morning', 'afternoon', 'full_day'].includes(leaveSession)) {
+      return res.status(400).json({
+        success: false,
+        error: 'leaveSession must be one of: morning, afternoon, full_day'
+      });
+    }
+
+    const result = await TimesheetService.addLeaveEntry(
+      timesheetId,
+      date,
+      leaveSession,
+      currentUser,
+      description
+    );
+
+    if (result.error) {
+      return res.status(400).json({
+        success: false,
+        error: result.error
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Leave entry added successfully',
+      data: result.entry
+    });
+  });
+
+  /**
+   * Add miscellaneous entry
+   * POST /api/timesheets/:timesheetId/entries/miscellaneous
+   */
+  static addMiscellaneousEntry = handleAsyncError(async (req: AuthenticatedRequest, res: Response) => {
+    const currentUser = req.user!;
+    const { timesheetId } = req.params;
+    const { date, activity, hours } = req.body;
+
+    if (!date || !activity || !hours) {
+      return res.status(400).json({
+        success: false,
+        error: 'date, activity, and hours are required'
+      });
+    }
+
+    const result = await TimesheetService.addMiscellaneousEntry(
+      timesheetId,
+      date,
+      activity,
+      hours,
+      currentUser
+    );
+
+    if (result.error) {
+      return res.status(400).json({
+        success: false,
+        error: result.error
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Miscellaneous entry added successfully',
+      data: result.entry
+    });
+  });
+
+  /**
+   * Add project entry
+   * POST /api/timesheets/:timesheetId/entries/project
+   */
+  static addProjectEntry = handleAsyncError(async (req: AuthenticatedRequest, res: Response) => {
+    const currentUser = req.user!;
+    const { timesheetId } = req.params;
+    const {
+      projectId,
+      date,
+      hours,
+      taskType,
+      taskId,
+      customTaskDescription,
+      description,
+      isBillable
+    } = req.body;
+
+    if (!projectId || !date || !hours || !taskType) {
+      return res.status(400).json({
+        success: false,
+        error: 'projectId, date, hours, and taskType are required'
+      });
+    }
+
+    if (!['project_task', 'custom_task'].includes(taskType)) {
+      return res.status(400).json({
+        success: false,
+        error: 'taskType must be one of: project_task, custom_task'
+      });
+    }
+
+    if (taskType === 'project_task' && !taskId) {
+      return res.status(400).json({
+        success: false,
+        error: 'taskId is required for project_task entries'
+      });
+    }
+
+    if (taskType === 'custom_task' && !customTaskDescription) {
+      return res.status(400).json({
+        success: false,
+        error: 'customTaskDescription is required for custom_task entries'
+      });
+    }
+
+    const result = await TimesheetService.addProjectEntry(
+      timesheetId,
+      projectId,
+      date,
+      hours,
+      taskType,
+      currentUser,
+      {
+        taskId,
+        customTaskDescription,
+        description,
+        isBillable
+      }
+    );
+
+    if (result.error) {
+      return res.status(400).json({
+        success: false,
+        error: result.error
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Project entry added successfully',
+      data: result.entry
+    });
+  });
+
+  /**
+   * Add training entry
+   * POST /api/timesheets/:timesheetId/entries/training
+   */
+  static addTrainingEntry = handleAsyncError(async (req: AuthenticatedRequest, res: Response) => {
+    const currentUser = req.user!;
+    const { timesheetId } = req.params;
+    const {
+      date,
+      hours,
+      taskType,
+      taskId,
+      customTaskDescription,
+      description
+    } = req.body;
+
+    if (!date || !hours || !taskType) {
+      return res.status(400).json({
+        success: false,
+        error: 'date, hours, and taskType are required'
+      });
+    }
+
+    if (!['project_task', 'custom_task'].includes(taskType)) {
+      return res.status(400).json({
+        success: false,
+        error: 'taskType must be one of: project_task, custom_task'
+      });
+    }
+
+    if (taskType === 'project_task' && !taskId) {
+      return res.status(400).json({
+        success: false,
+        error: 'taskId is required for project_task entries'
+      });
+    }
+
+    if (taskType === 'custom_task' && !customTaskDescription) {
+      return res.status(400).json({
+        success: false,
+        error: 'customTaskDescription is required for custom_task entries'
+      });
+    }
+
+    const result = await TimesheetService.addTrainingEntry(
+      timesheetId,
+      date,
+      hours,
+      taskType,
+      currentUser,
+      {
+        taskId,
+        customTaskDescription,
+        description
+      }
+    );
+
+    if (result.error) {
+      return res.status(400).json({
+        success: false,
+        error: result.error
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Training entry added successfully',
+      data: result.entry
+    });
+  });
+
+  /**
    * Add time entry
    */
   static addTimeEntry = handleAsyncError(async (req: AuthenticatedRequest, res: Response) => {

@@ -307,6 +307,7 @@ export function ProjectBillingPage() {
                   value={viewMode}
                   onChange={(event) => handleViewChange(event.target.value as ViewMode)}
                   className="h-9 rounded-lg border border-slate-300 bg-white px-3 pr-8 text-sm font-medium text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                  style={{ WebkitAppearance: "none" }}
                 >
                   {VIEW_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>

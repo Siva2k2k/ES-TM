@@ -64,6 +64,8 @@ type WeekOption = {
   label: string;
 };
 
+type EntryCategory = 'project' | 'leave' | 'training' | 'miscellaneous';
+
 export const TimesheetForm: React.FC<TimesheetFormProps> = ({
   initialWeekStartDate,
   initialData,
@@ -79,6 +81,7 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
   onCancel
 }) => {
   const [selectedProject, setSelectedProject] = useState<string>('');
+  const [selectedEntryCategory, setSelectedEntryCategory] = useState<EntryCategory>('project');
   const [expandedEntry, setExpandedEntry] = useState<number | null>(null);
   const [leadValidationError, setLeadValidationError] = useState<{
     message: string;
@@ -149,22 +152,21 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
   }, [timesheetStatus]);
 
   const isPartialRejection = useMemo(() => {
-    if (timesheetStatus !== 'lead_rejected' && timesheetStatus !== 'manager_rejected') return false;
 
     if (projectApprovals && projectApprovals.length > 0) {
-      if (timesheetStatus === 'lead_rejected') {
-        const rejectedCount = projectApprovals.filter(pa => pa?.lead_status === 'rejected').length;
-        return rejectedCount > 0 && rejectedCount < projectApprovals.length;
-      }
+      // Check if any project has been rejected
+      const hasRejectedProjects = projectApprovals.some(pa => 
+        pa?.lead_status === 'rejected' || pa?.manager_status === 'rejected',
+      );
+      // Check if any project is still approved or pending (not all are rejected)
 
-      if (timesheetStatus === 'manager_rejected') {
-        const rejectedCount = projectApprovals.filter(pa => pa?.manager_status === 'rejected').length;
-        return rejectedCount > 0 && rejectedCount < projectApprovals.length;
-      }
+      // It's a partial rejection if some projects are rejected but not all
+      return hasRejectedProjects;
     }
 
     return false;
   }, [timesheetStatus, projectApprovals]);
+
 
   const allowRejectionEdit = hasRejections;
   const { control, watch, setValue, formState: { errors } } = form;
@@ -206,17 +208,73 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
   }, [weekDates]);
 
   const handleAddEntry = () => {
-    const newEntry: TimeEntry = {
-      project_id: selectedProject,
-      task_id: '',
-      date: weekDates[0].toISOString().split('T')[0],
-      hours: 8,
-      description: '',
-      is_billable: true,
-      entry_type: 'project_task',
-      custom_task_description: '',
-      is_editable: true
-    };
+    let newEntry: TimeEntry;
+
+    switch (selectedEntryCategory) {
+      case 'leave':
+        newEntry = {
+          project_id: '',
+          task_id: '',
+          date: weekDates[0].toISOString().split('T')[0],
+          hours: 8, // Default to full day, will be changed based on session
+          description: '',
+          is_billable: false,
+          entry_type: 'project_task', // Will be overridden by entry_category
+          custom_task_description: '',
+          is_editable: true,
+          entry_category: 'leave',
+          leave_session: 'full_day'
+        } as any;
+        break;
+
+      case 'miscellaneous':
+        newEntry = {
+          project_id: '',
+          task_id: '',
+          date: weekDates[0].toISOString().split('T')[0],
+          hours: 8,
+          description: '',
+          is_billable: false,
+          entry_type: 'project_task',
+          custom_task_description: '',
+          is_editable: true,
+          entry_category: 'miscellaneous',
+          miscellaneous_activity: ''
+        } as any;
+        break;
+
+      case 'training':
+        newEntry = {
+          project_id: '', // Will be auto-assigned to Training Program
+          task_id: '',
+          date: weekDates[0].toISOString().split('T')[0],
+          hours: 8,
+          description: '',
+          is_billable: false,
+          entry_type: 'project_task',
+          custom_task_description: '',
+          is_editable: true,
+          entry_category: 'training'
+        } as any;
+        break;
+
+      case 'project':
+      default:
+        newEntry = {
+          project_id: selectedProject,
+          task_id: '',
+          date: weekDates[0].toISOString().split('T')[0],
+          hours: 8,
+          description: '',
+          is_billable: true,
+          entry_type: 'project_task',
+          custom_task_description: '',
+          is_editable: true,
+          entry_category: 'project'
+        } as any;
+        break;
+    }
+
     const entryWithUid = { ...newEntry, _uid: generateUid() } as any;
     addEntry(entryWithUid);
     setExpandedEntry(entries.length);
@@ -489,24 +547,139 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
 
         {(!isViewMode || allowRejectionEdit) && !isPartialRejection && (
           <div className="border-t pt-6">
-            <div className="flex gap-4 items-end mb-4">
-              <div className="flex-1">
-                <Select
-                  label="Select Project"
-                  options={activeProjects}
-                  value={selectedProject}
-                  onChange={(value) => setSelectedProject(value)}
-                  placeholder="Choose a project..."
-                />
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-3">Entry Type</label>
+              <div className="grid grid-cols-4 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSelectedEntryCategory('project')}
+                  className={`px-4 py-3 rounded-lg border-2 font-medium transition-all ${
+                    selectedEntryCategory === 'project'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  📋 Project Work
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedEntryCategory('leave')}
+                  className={`px-4 py-3 rounded-lg border-2 font-medium transition-all ${
+                    selectedEntryCategory === 'leave'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  🏖️ Leave
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedEntryCategory('training')}
+                  className={`px-4 py-3 rounded-lg border-2 font-medium transition-all ${
+                    selectedEntryCategory === 'training'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  📚 Training
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedEntryCategory('miscellaneous')}
+                  className={`px-4 py-3 rounded-lg border-2 font-medium transition-all ${
+                    selectedEntryCategory === 'miscellaneous'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  🎯 Miscellaneous
+                </button>
               </div>
-              <Button
-                onClick={handleAddEntry}
-                disabled={!selectedProject}
-                icon={Plus}
-              >
-                Add Entry
-              </Button>
             </div>
+
+            {selectedEntryCategory === 'project' && (
+              <div className="flex gap-4 items-end mb-4">
+                <div className="flex-1">
+                  <Select
+                    label="Select Project"
+                    options={activeProjects}
+                    value={selectedProject}
+                    onChange={(value) => setSelectedProject(value)}
+                    placeholder="Choose a project..."
+                  />
+                </div>
+                <Button
+                  onClick={handleAddEntry}
+                  disabled={!selectedProject}
+                  icon={Plus}
+                >
+                  Add Project Entry
+                </Button>
+              </div>
+            )}
+
+            {selectedEntryCategory === 'leave' && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <h4 className="font-medium text-green-900 mb-1">Leave Entry</h4>
+                    <p className="text-sm text-green-700">
+                      Add leave entry - select session (morning/afternoon/full day) in the entry details.
+                      Leave entries bypass project approval workflow.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={handleAddEntry}
+                    icon={Plus}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    Add Leave Entry
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {selectedEntryCategory === 'miscellaneous' && (
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <h4 className="font-medium text-purple-900 mb-1">Miscellaneous Entry</h4>
+                    <p className="text-sm text-purple-700">
+                      Add miscellaneous entry for company events or activities.
+                      Entries bypass project approval workflow.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={handleAddEntry}
+                    icon={Plus}
+                    className="bg-purple-600 hover:bg-purple-700"
+                  >
+                    Add Miscellaneous Entry
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {selectedEntryCategory === 'training' && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <h4 className="font-medium text-blue-900 mb-1">Training Entry</h4>
+                    <p className="text-sm text-blue-700">
+                      Training entries are automatically assigned to the Training Program project.
+                      They follow the standard approval workflow (Lead → Manager → Management).
+                    </p>
+                  </div>
+                  <Button
+                    onClick={handleAddEntry}
+                    icon={Plus}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    Add Training Entry
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

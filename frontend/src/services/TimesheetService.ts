@@ -340,6 +340,134 @@ export class TimesheetService {
   }
 
   /**
+   * Add leave entry
+   */
+  static async addLeaveEntry(
+    timesheetId: string,
+    date: string,
+    leaveSession: 'morning' | 'afternoon' | 'full_day',
+    description?: string
+  ): Promise<{ entry?: TimeEntry; error?: string }> {
+    try {
+      const response = await backendApi.post(`/timesheets/${timesheetId}/entries/leave`, {
+        date,
+        leaveSession,
+        description
+      });
+
+      if (response.success && response.data) {
+        return { entry: response.data as TimeEntry };
+      } else {
+        return { error: response.error || 'Failed to add leave entry' };
+      }
+    } catch (error: any) {
+      console.error('Error adding leave entry:', error);
+      return { error: error.message || 'Failed to add leave entry' };
+    }
+  }
+
+  /**
+   * Add miscellaneous entry (company events, etc.)
+   */
+  static async addMiscellaneousEntry(
+    timesheetId: string,
+    date: string,
+    activity: string,
+    hours: number
+  ): Promise<{ entry?: TimeEntry; error?: string }> {
+    try {
+      const response = await backendApi.post(`/timesheets/${timesheetId}/entries/miscellaneous`, {
+        date,
+        activity,
+        hours
+      });
+
+      if (response.success && response.data) {
+        return { entry: response.data as TimeEntry };
+      } else {
+        return { error: response.error || 'Failed to add miscellaneous entry' };
+      }
+    } catch (error: any) {
+      console.error('Error adding miscellaneous entry:', error);
+      return { error: error.message || 'Failed to add miscellaneous entry' };
+    }
+  }
+
+  /**
+   * Add project entry
+   */
+  static async addProjectEntry(
+    timesheetId: string,
+    data: {
+      projectId: string;
+      date: string;
+      hours: number;
+      taskType: 'project_task' | 'custom_task';
+      taskId?: string;
+      customTaskDescription?: string;
+      description?: string;
+      isBillable?: boolean;
+    }
+  ): Promise<{ entry?: TimeEntry; error?: string }> {
+    try {
+      const response = await backendApi.post(`/timesheets/${timesheetId}/entries/project`, {
+        projectId: data.projectId,
+        date: data.date,
+        hours: data.hours,
+        taskType: data.taskType,
+        taskId: data.taskId,
+        customTaskDescription: data.customTaskDescription,
+        description: data.description,
+        isBillable: data.isBillable
+      });
+
+      if (response.success && response.data) {
+        return { entry: response.data as TimeEntry };
+      } else {
+        return { error: response.error || 'Failed to add project entry' };
+      }
+    } catch (error: any) {
+      console.error('Error adding project entry:', error);
+      return { error: error.message || 'Failed to add project entry' };
+    }
+  }
+
+  /**
+   * Add training entry
+   */
+  static async addTrainingEntry(
+    timesheetId: string,
+    data: {
+      date: string;
+      hours: number;
+      taskType: 'project_task' | 'custom_task';
+      taskId?: string;
+      customTaskDescription?: string;
+      description?: string;
+    }
+  ): Promise<{ entry?: TimeEntry; error?: string }> {
+    try {
+      const response = await backendApi.post(`/timesheets/${timesheetId}/entries/training`, {
+        date: data.date,
+        hours: data.hours,
+        taskType: data.taskType,
+        taskId: data.taskId,
+        customTaskDescription: data.customTaskDescription,
+        description: data.description
+      });
+
+      if (response.success && response.data) {
+        return { entry: response.data as TimeEntry };
+      } else {
+        return { error: response.error || 'Failed to add training entry' };
+      }
+    } catch (error: any) {
+      console.error('Error adding training entry:', error);
+      return { error: error.message || 'Failed to add training entry' };
+    }
+  }
+
+  /**
    * Update timesheet total hours (handled automatically by backend)
    */
   private static async updateTimesheetTotalHours(timesheetId: string): Promise<void> {
