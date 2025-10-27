@@ -27,8 +27,18 @@ const app = express();
 const DEFAULT_PORT = Number(process.env.PORT) || 5000;
 const MAX_PORT_RETRIES = Number(process.env.PORT_RETRIES || 5);
 
-// Security middleware
-app.use(helmet());
+// Trust proxy for Heroku (needed for rate limiting and correct IP detection)
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
+// Security middleware - Configure helmet with relaxed CSP for production
+app.use(
+  helmet({
+    contentSecurityPolicy: false, // Disable CSP as it's blocking API calls in production
+    crossOriginEmbedderPolicy: false,
+  })
+);
 
 // Rate limiting (disabled for development)
 if (process.env.NODE_ENV === 'production') {
