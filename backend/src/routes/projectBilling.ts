@@ -1,13 +1,13 @@
 import { Router } from 'express';
+import { ProjectBillingController } from '@/controllers/ProjectBillingController';
 import {
-  ProjectBillingController,
   getProjectBillingViewValidation,
   getTaskBillingViewValidation,
   getUserBillingViewValidation,
   updateBillableHoursValidation,
   updateProjectBillableTotalValidation,
   getUserBreakdownValidation
-} from '@/controllers/ProjectBillingController';
+} from '@/validation/projectBillingValidation';
 import { requireAuth, requireManager } from '@/middleware/auth';
 
 const router = Router();
