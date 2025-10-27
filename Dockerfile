@@ -68,9 +68,6 @@ RUN npm ci --only=production
 # Copy built backend from builder stage
 COPY --from=backend-builder /app/backend/dist ./dist
 
-# Copy any additional backend assets
-COPY backend/mock-date.js ./mock-date.js 2>/dev/null || true
-
 # ----------------
 # Setup Frontend
 # ----------------
