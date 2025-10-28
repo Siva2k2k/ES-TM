@@ -28,7 +28,6 @@ import type { Project, Task } from '../../types';
 // Custom Hooks
 import { useProjectData } from '../../hooks/useProjectData';
 import { useProjectActions, ProjectFormData } from '../../hooks/useProjectActions';
-import { useProjectMembers } from '../../hooks/useProjectMembers';
 import { useProjectTasks } from '../../hooks/useProjectTasks';
 import { useProjectFilters } from '../../hooks/useProjectFilters';
 
@@ -54,17 +53,24 @@ export const ProjectListPage: React.FC = () => {
   const { currentUser } = useAuth();
 
   // Custom hooks for data and actions
-  const { projects, clients, users, analytics, loading, error, refresh } = useProjectData([currentUser]);
-  const { createProject, updateProject, deleteProject, isSubmitting } = useProjectActions(refresh);
-  const {
-    projectMembersMap,
-    availableUsers,
-    loadProjectMembers,
-    loadAvailableUsers,
+  const { 
+    projects, 
+    clients, 
+    users, 
+    analytics, 
+    loading, 
+    error, 
+    refresh,
+    getMembersForProject,
+    getTasksForProject,
     addMemberToProject,
     removeMemberFromProject,
-    getMembersForProject,
-  } = useProjectMembers();
+    isAddingMember,
+    isRemovingMember,
+    availableUsers,
+    loadAvailableUsers
+  } = useProjectData();
+  const { createProject, updateProject, deleteProject, isSubmitting } = useProjectActions(refresh);
   const {
     showTaskSlide,
     taskSlideProjectId,
@@ -74,7 +80,6 @@ export const ProjectListPage: React.FC = () => {
     openTaskSlide,
     closeTaskSlide,
     handleTaskSaved,
-    getTasksForProject,
   } = useProjectTasks();
   const {
     searchTerm,
@@ -169,7 +174,6 @@ export const ProjectListPage: React.FC = () => {
       });
       // Load members and tasks for this project
       await Promise.all([
-        loadProjectMembers(project.id),
         loadProjectTasks(project.id),
       ]);
     }
@@ -206,10 +210,7 @@ export const ProjectListPage: React.FC = () => {
   const handleMembersTabProjectSelect = async (projectId: string) => {
     setMembersTabProjectId(projectId);
     if (projectId) {
-      await Promise.all([
-        loadProjectMembers(projectId),
-        loadAvailableUsers(),
-      ]);
+      await loadAvailableUsers();
     }
   };
 

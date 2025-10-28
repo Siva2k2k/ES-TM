@@ -311,6 +311,8 @@ export type AuditAction =
   | 'TIMESHEET_REJECTED'
   | 'PROJECT_CREATED'
   | 'PROJECT_UPDATED'
+  | 'PROJECT_MEMBER_ADDED'
+  | 'PROJECT_MEMBER_REMOVED'
   | 'PROJECT_DELETED'
   | 'BILLING_SNAPSHOT_GENERATED'
   | 'BILLING_APPROVED' // Enhanced for new billing workflow

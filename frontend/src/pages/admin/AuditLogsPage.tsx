@@ -48,6 +48,8 @@ const AUDIT_ACTIONS = [
   'PROJECT_CREATED',
   'PROJECT_UPDATED',
   'PROJECT_DELETED',
+  'PROJECT_MEMBER_ADDED',
+  'PROJECT_MEMBER_REMOVED',
   'BILLING_SNAPSHOT_GENERATED',
   'BILLING_APPROVED',
   'ROLE_SWITCHED',
@@ -210,9 +212,6 @@ export const AuditLogsPage: React.FC = () => {
       }
 
       showSuccess('Audit logs export initiated');
-      if (result.downloadUrl) {
-        window.open(result.downloadUrl, '_blank');
-      }
     } catch (error) {
       showError('Failed to export audit logs');
       console.error('Error exporting audit logs:', error);

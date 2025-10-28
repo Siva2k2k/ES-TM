@@ -1,7 +1,7 @@
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock, AlertCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '../../store/contexts/AuthContext';
 import { loginSchema, type LoginInput } from '../../schemas/auth.schema';
@@ -17,11 +17,7 @@ import { Button } from '../../components/ui/Button';
 export function LoginPage() {
   const { signIn, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
   const [serverError, setServerError] = React.useState('');
-
-  // Get the intended destination from location state (for redirect after login)
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
 
   const {
     register,
@@ -53,8 +49,8 @@ export function LoginPage() {
           return;
         }
 
-        // Navigate to intended destination or dashboard on successful login
-        navigate(from, { replace: true });
+        // Always navigate to dashboard on successful login
+        navigate('/dashboard', { replace: true });
       }
     } catch (err) {
       console.error('🔐 LoginPage - Unexpected error:', err);

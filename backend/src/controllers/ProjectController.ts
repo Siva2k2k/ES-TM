@@ -384,8 +384,7 @@ export class ProjectController {
     const { projectId } = req.params;
     const { userId, projectRole } = req.body;
     const isPrimaryManager = Boolean(req.body.is_primary_manager ?? req.body.isPrimaryManager ?? false);
-    const isSecondaryManager = Boolean(req.body.is_secondary_manager ?? req.body.isSecondaryManager ?? false);
-    const result = await ProjectService.addProjectMember(projectId, userId, projectRole || 'member', isPrimaryManager, isSecondaryManager, req.user);
+    const result = await ProjectService.addProjectMember(projectId, userId, projectRole || 'employee', isPrimaryManager, req.user);
 
     if (!result.success) {
       return res.status(400).json({
@@ -1317,7 +1316,7 @@ export const createProjectValidation = [
     .withMessage('End date must be a valid date'),
   body('status')
     .optional()
-    .isIn(['planning', 'active', 'on_hold', 'completed', 'cancelled'])
+    .isIn(['planning', 'active', 'on_hold', 'completed', 'archived'])
     .withMessage('Invalid project status'),
   body('priority')
     .optional()
@@ -1368,7 +1367,7 @@ export const addProjectMemberValidation = [
 
 export const projectStatusValidation = [
   query('status')
-    .isIn(['planning', 'active', 'on_hold', 'completed', 'cancelled'])
+    .isIn(['planning', 'active', 'on_hold', 'completed', 'archived'])
     .withMessage('Invalid project status')
 ];
 

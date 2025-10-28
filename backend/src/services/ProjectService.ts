@@ -1144,7 +1144,7 @@ export class ProjectService {
   }
 
   /**
-   * Remove user from project
+   * Remove user from project (hard delete)
    */
   static async removeUserFromProject(projectId: string, userId: string, currentUser: AuthUser): Promise<{ success: boolean; error?: string }> {
     try {
@@ -1154,18 +1154,50 @@ export class ProjectService {
       const project = await (Project.findById as any)(projectId).select('name primary_manager_id').lean();
       const projectMember = await (ProjectMember.findOne as any)({
         project_id: projectId,
-        user_id: userId
-      }).lean();
+        user_id: userId,
+        removed_at: { $exists: false },
+        deleted_at: { $exists: false }
+      }).populate('user_id', 'full_name email').lean();
 
-      const result = await (ProjectMember.updateOne as any)({
-        project_id: projectId,
-        user_id: userId
-      }, {
-        removed_at: new Date(),
-        updated_at: new Date()
+      if (!projectMember) {
+        throw new NotFoundError('Project member not found');
+      }
+
+      // Audit log: Project member removed
+      await AuditLogService.logEvent(
+        'project_members',
+        projectMember._id.toString(),
+        'PROJECT_MEMBER_REMOVED',
+        currentUser.id,
+        currentUser.full_name,
+        {
+          project_id: projectId,
+          project_name: project?.name,
+          user_id: userId,
+          user_name: projectMember.user_id?.full_name,
+          user_email: projectMember.user_id?.email,
+          project_role: projectMember.project_role,
+          is_primary_manager: projectMember.is_primary_manager,
+          is_secondary_manager: projectMember.is_secondary_manager
+        },
+        {
+          project_id: projectId,
+          user_id: userId,
+          project_role: projectMember.project_role,
+          is_primary_manager: projectMember.is_primary_manager,
+          is_secondary_manager: projectMember.is_secondary_manager,
+          assigned_at: projectMember.assigned_at
+        },
+        null,
+        null
+      );
+
+      // Hard delete the project member
+      const result = await (ProjectMember.deleteOne as any)({
+        _id: projectMember._id
       });
 
-      if (result.matchedCount === 0) {
+      if (result.deletedCount === 0) {
         throw new NotFoundError('Project member not found');
       }
 
@@ -1173,7 +1205,7 @@ export class ProjectService {
       if (project && projectMember) {
         try {
           const recipientIds = [userId];
-          
+
           // Add project manager to recipients
           if (project.primary_manager_id && project.primary_manager_id.toString() !== currentUser.id) {
             recipientIds.push(project.primary_manager_id.toString());
@@ -1210,7 +1242,6 @@ export class ProjectService {
     userId: string,
     projectRole: string,
     isPrimaryManager = false,
-    isSecondaryManager = false,
     currentUser: AuthUser
   ): Promise<{ success: boolean; error?: string }> {
     try {
@@ -1221,7 +1252,6 @@ export class ProjectService {
         user_id: userId,
         project_role: projectRole,
         is_primary_manager: isPrimaryManager,
-        is_secondary_manager: isSecondaryManager,
         assigned_at: new Date()
       });
 
@@ -1428,8 +1458,8 @@ export class ProjectService {
   /**
    * Add project member (alias for addUserToProject with simpler interface)
    */
-  static async addProjectMember(projectId: string, userId: string, projectRole: string, isPrimaryManager: boolean, isSecondaryManager: boolean,  currentUser: AuthUser): Promise<{ success: boolean; error?: string }> {
-    return this.addUserToProject(projectId, userId, projectRole, isPrimaryManager, isSecondaryManager, currentUser);
+  static async addProjectMember(projectId: string, userId: string, projectRole: string, isPrimaryManager: boolean,  currentUser: AuthUser): Promise<{ success: boolean; error?: string }> {
+    return this.addUserToProject(projectId, userId, projectRole, isPrimaryManager, currentUser);
   }
 
   /**
