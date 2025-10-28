@@ -21,6 +21,8 @@ import NotFoundPage from './pages/auth/NotFoundPage';
 // Dashboard Pages
 import { DashboardPage } from './pages/dashboard';
 import NotificationsPage from './pages/NotificationsPage';
+import { SettingsPage } from './pages/settings';
+import { ProfilePage } from './pages/profile';
 
 // User Management
 import { UserManagementPage } from './pages/users';
@@ -98,6 +100,20 @@ const App: React.FC = () => {
 
           {/* Notifications */}
           <Route path="notifications" element={<NotificationsPage />} />
+
+          {/* Settings */}
+          <Route path="settings" element={
+            <ProtectedRoute>
+              <SettingsPage />
+            </ProtectedRoute>
+          } />
+
+          {/* Profile */}
+          <Route path="profile" element={
+            <ProtectedRoute>
+              <ProfilePage />
+            </ProtectedRoute>
+          } />
 
           {/* User Management - Admin/Management/Manager Only */}
           <Route path="users" element={

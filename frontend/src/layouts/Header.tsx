@@ -162,7 +162,7 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick, onSidebarToggle, si
                   </div>
                   <div className="py-2">
                     <Link
-                      to="/profile"
+                      to="/dashboard/profile"
                       className="flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                       onClick={() => setShowUserMenu(false)}
                     >
@@ -170,7 +170,7 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick, onSidebarToggle, si
                       My Profile
                     </Link>
                     <Link
-                      to="/settings"
+                      to="/dashboard/settings"
                       className="flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                       onClick={() => setShowUserMenu(false)}
                     >
