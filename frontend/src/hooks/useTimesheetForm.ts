@@ -24,8 +24,10 @@ function isWeekendDate(dateStr: string): boolean {
 }
 
 function prepareEntriesForPersistence(entries: Array<TimeEntry | (TimeEntry & { _uid?: string })>): TimeEntry[] {
-  return (entries || []).map((entry) => {
-    const { _uid, is_editable, project_name, ...rest } = entry as TimeEntry & { _uid?: string; is_editable?: boolean; project_name?: string };
+  return (entries || [])
+    .filter((entry) => entry.entry_type !== 'holiday')
+    .map((entry) => {
+      const { _uid, is_editable, project_name, ...rest } = entry as TimeEntry & { _uid?: string; is_editable?: boolean; project_name?: string };
     const coercedHours =
       typeof rest.hours === 'number'
         ? rest.hours

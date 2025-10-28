@@ -1474,12 +1474,89 @@ export const createClientValidation = [
   body('name')
     .trim()
     .isLength({ min: 2, max: 200 })
-    .withMessage('Client name must be between 2 and 200 characters'),
+    .withMessage('Client name must be between 2 and 200 characters')
+    .custom(async (value) => {
+      const Client = (await import('@/models/Client')).default;
+      const existingClient = await (Client.findOne as any)({
+        name: { $regex: new RegExp(`^${value.trim()}$`, 'i') },
+        deleted_at: { $exists: false }
+      });
+      if (existingClient) {
+        throw new Error('A client with this name already exists');
+      }
+      return true;
+    }),
   body('email')
     .optional()
     .isEmail()
     .normalizeEmail()
-    .withMessage('Valid email is required'),
+    .withMessage('Valid email is required')
+    .custom(async (value) => {
+      if (!value) return true; // Skip if email is not provided
+      const Client = (await import('@/models/Client')).default;
+      const existingClient = await (Client.findOne as any)({
+        contact_email: value.toLowerCase(),
+        deleted_at: { $exists: false }
+      });
+      if (existingClient) {
+        throw new Error('A client with this email already exists');
+      }
+      return true;
+    }),
+  body('phone')
+    .optional()
+    .trim()
+    .isLength({ min: 10, max: 20 })
+    .withMessage('Phone must be between 10 and 20 characters'),
+  body('company')
+    .optional()
+    .trim()
+    .isLength({ max: 200 })
+    .withMessage('Company name must be less than 200 characters'),
+  body('address')
+    .optional()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('Address must be less than 500 characters')
+];
+
+export const updateClientValidation = [
+  body('name')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 200 })
+    .withMessage('Client name must be between 2 and 200 characters')
+    .custom(async (value, { req }) => {
+      if (!value) return true; // Skip if name is not being updated
+      const Client = (await import('@/models/Client')).default;
+      const existingClient = await (Client.findOne as any)({
+        name: { $regex: new RegExp(`^${value.trim()}$`, 'i') },
+        _id: { $ne: req.params.clientId },
+        deleted_at: { $exists: false }
+      });
+      if (existingClient) {
+        throw new Error('A client with this name already exists');
+      }
+      return true;
+    }),
+  body('email')
+    .optional()
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Valid email is required')
+    .custom(async (value, { req }) => {
+      if (!value) return true; // Skip if email is not being updated
+      const Client = (await import('@/models/Client')).default;
+      const existingClient = await (Client.findOne as any)({
+        contact_email: value.toLowerCase(),
+        _id: { $ne: req.params.clientId },
+        deleted_at: { $exists: false }
+      });
+      if (existingClient) {
+        throw new Error('A client with this email already exists');
+      }
+      return true;
+    }),
   body('phone')
     .optional()
     .trim()

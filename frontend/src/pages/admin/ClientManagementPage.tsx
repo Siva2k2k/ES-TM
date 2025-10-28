@@ -189,7 +189,7 @@ export const ClientManagement: React.FC = () => {
       });
 
       if (result.error) {
-        if ((result as any).status === 409) {
+        if ((result as any).statusCode === 409) {
           showError('A client with this name already exists');
         } else {
           showError(`Error creating client: ${result.error}`);

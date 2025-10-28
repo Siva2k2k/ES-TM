@@ -78,12 +78,18 @@ export const TimesheetEntryRow: React.FC<TimesheetEntryRowProps> = ({
   const isMiscEntry = entryCategory === 'miscellaneous';
   const isTrainingEntry = entryCategory === 'training';
   const isProjectEntry = entryCategory === 'project';
+  const isHolidayEntry = entry.entry_type === 'holiday' || entryCategory === 'holiday';
 
-  const projectName = isLeaveEntry ? '🏖️ Leave' :
-                      isMiscEntry ? '🎯 Miscellaneous' :
-                      isTrainingEntry ? '📚 Training' :
-                      projects.find(p => p.value === entry.project_id)?.label || 'Unknown';
-  const projectApproval = entry.project_id ? projectApprovalsMap?.[entry.project_id] : undefined;
+  const projectName = isHolidayEntry
+    ? 'Holiday'
+    : isLeaveEntry
+      ? 'Leave'
+      : isMiscEntry
+        ? 'Miscellaneous'
+        : isTrainingEntry
+          ? 'Training'
+          : projects.find(p => p.value === entry.project_id)?.label || 'Unknown';
+const projectApproval = entry.project_id ? projectApprovalsMap?.[entry.project_id] : undefined;
   const isProjectApproved = projectApproval?.manager_status === 'approved';
   const isProjectRejectedByLead = projectApproval?.lead_status === 'rejected';
   const isProjectRejectedByManager = projectApproval?.manager_status === 'rejected';
@@ -99,8 +105,8 @@ export const TimesheetEntryRow: React.FC<TimesheetEntryRowProps> = ({
   : !isViewMode ? true : isProjectRejected || isTimesheetRejected;
   
   const entryLocked = !entryEditable;
-  const canCopy = !isPartialRejection || !isProjectRejected;
-  const canRemove = !isPartialRejection || !isProjectRejected;
+  const canCopy = !isHolidayEntry && (!isPartialRejection || !isProjectRejected);
+  const canRemove = !isHolidayEntry && (!isPartialRejection || !isProjectRejected);
 
   const toggleCopySelection = (value: string) => {
     setCopySelection(prev =>
@@ -133,8 +139,9 @@ export const TimesheetEntryRow: React.FC<TimesheetEntryRowProps> = ({
             <Badge variant="secondary">{projectName}</Badge>
             <span className="text-sm text-gray-600">{formatDate(entry.date)}</span>
             <span className="font-semibold">{entry.hours}h</span>
-            {entry.is_billable && !isTrainingEntry && <Badge variant="success" size="sm">Billable</Badge>}
-            {(isTrainingEntry || isLeaveEntry || isMiscEntry) && <Badge variant="outline" size="sm">Non-Billable</Badge>}
+            {entry.is_billable && !isTrainingEntry && !isHolidayEntry && <Badge variant="success" size="sm">Billable</Badge>}
+            {(isTrainingEntry || isLeaveEntry || isMiscEntry || isHolidayEntry) && <Badge variant="outline" size="sm">Non-Billable</Badge>}
+            {isHolidayEntry && <Badge variant="secondary" size="sm">Holiday</Badge>}
             {entryType === 'custom_task' && <Badge variant="outline" size="sm">Custom</Badge>}
             {isEntryRejected && <Badge variant="danger" size="sm">Entry Rejected</Badge>}
             {isProjectRejected && !isEntryRejected && <Badge variant="danger" size="sm">Project Rejected</Badge>}
@@ -213,7 +220,14 @@ export const TimesheetEntryRow: React.FC<TimesheetEntryRowProps> = ({
         <div className="mt-4 pt-4 border-t space-y-4">
           {entryLocked ? (
             <div className="space-y-2">
-              {isLeaveEntry ? (
+              {isHolidayEntry ? (
+                <>
+                  <div><p className="text-xs text-gray-500 uppercase mb-1">Holiday</p><p className="text-sm">{entry.description || 'Company Holiday'}</p></div>
+                  <div><p className="text-xs text-gray-500 uppercase mb-1">Date</p><p className="text-sm">{entry.date}</p></div>
+                  <div><p className="text-xs text-gray-500 uppercase mb-1">Hours</p><p className="text-sm">{entry.hours}h</p></div>
+                  <div><p className="text-xs text-gray-500 uppercase mb-1">Note</p><p className="text-sm">Holiday entries are informational and do not require minimum hours.</p></div>
+                </>
+              ) : isLeaveEntry ? (
                 <>
                   <div><p className="text-xs text-gray-500 uppercase mb-1">Session</p><p className="text-sm">{(entry as any).leave_session === 'morning' ? 'Morning' : (entry as any).leave_session === 'afternoon' ? 'Afternoon' : 'Full Day'}</p></div>
                   <div><p className="text-xs text-gray-500 uppercase mb-1">Date</p><p className="text-sm">{entry.date}</p></div>
@@ -238,7 +252,59 @@ export const TimesheetEntryRow: React.FC<TimesheetEntryRowProps> = ({
             </div>
           ) : (
             <>
-              {isLeaveEntry ? (
+              {isHolidayEntry ? (
+                <>
+                  <Controller
+                    name={`entries.${index}.date`}
+                    control={control}
+                    render={({ field }) => (
+                      <Input
+                        {...field}
+                        type="date"
+                        label="Date"
+                        disabled
+                        readOnly
+                        helperText="Holiday date is locked"
+                      />
+                    )}
+                  />
+
+                  <Controller
+                    name={`entries.${index}.hours`}
+                    control={control}
+                    rules={{
+                      min: { value: 0, message: 'Min 0h' },
+                      max: { value: 24, message: 'Max 24h' }
+                    }}
+                    render={({ field }) => (
+                      <Input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        max="24"
+                        label="Hours"
+                        helperText="Adjust if you worked during the holiday"
+                        error={errors?.hours?.message}
+                        value={field.value as any}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          setValue(
+                            `entries.${index}.hours`,
+                            e.target.valueAsNumber ?? Number(e.target.value),
+                            { shouldValidate: true, shouldDirty: true }
+                          )
+                        }
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
+                      />
+                    )}
+                  />
+
+                  <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-sm text-slate-600">
+                    Holiday entries ensure validation passes on company-observed days. Add project work separately if you logged time on this date.
+                  </div>
+                </>
+              ) : isLeaveEntry ? (
                 <>
                   <Controller name={`entries.${index}.leave_session`} control={control} rules={{ required: 'Session is required' }} render={({ field }) => (
                     <Select

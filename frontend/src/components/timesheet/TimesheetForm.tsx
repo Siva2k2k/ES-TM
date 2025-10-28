@@ -24,6 +24,7 @@ import { Alert, AlertTitle, AlertDescription } from '../ui/Alert';
 import { formatDate, formatDuration } from '../../utils/formatting';
 import type { TimeEntry } from '../../types/timesheet.schemas';
 import { backendApi } from '../../lib/backendApi';
+import { CompanyHolidayService, type CompanyHoliday } from '../../services/CompanyHolidayService';
 import type { TimesheetProjectApproval, TimesheetStatus } from '../../types/timesheetApprovals';
 import { TimesheetEntryRow } from './TimesheetEntryRow';
 import { WeekSelector } from './WeekSelector';
@@ -90,6 +91,8 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
   const [trainingProject, setTrainingProject] = useState<{ id: string; name: string } | null>(null);
   const [trainingTasks, setTrainingTasks] = useState<Array<{ id: string; name: string }>>([]);
   const [loadingTrainingData, setLoadingTrainingData] = useState(false);
+  const [holidayMap, setHolidayMap] = useState<Record<string, Pick<CompanyHoliday, 'name' | 'holiday_type'>>>({});
+  const [, setLoadingHolidayData] = useState(false);
   const isViewMode = mode === 'view';
 
   const {
@@ -112,6 +115,10 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
   });
 
   // Fetch training project and tasks on mount
+  const { control, watch, setValue, formState: { errors } } = form;
+  const entries = watch('entries') || [];
+  const weekStartDate = watch('week_start_date');
+
   useEffect(() => {
     const fetchTrainingData = async () => {
       setLoadingTrainingData(true);
@@ -129,7 +136,7 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
             }))
           );
         }
-       
+
       } catch (error) {
         console.error('Failed to fetch training project:', error);
       } finally {
@@ -139,6 +146,83 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
 
     fetchTrainingData();
   }, []);
+
+  useEffect(() => {
+    if (!weekStartDate) {
+      setHolidayMap({});
+      setLoadingHolidayData(false);
+      return;
+    }
+
+    let isMounted = true;
+
+    const fetchHolidayData = async () => {
+      setLoadingHolidayData(true);
+      try {
+        const weekEnd = new Date(weekStartDate);
+        if (Number.isNaN(weekEnd.getTime())) {
+          if (isMounted) {
+            setHolidayMap({});
+          }
+          return;
+        }
+
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        const weekEndIso = weekEnd.toISOString().split('T')[0];
+        const result = await CompanyHolidayService.getHolidaysInRange(weekStartDate, weekEndIso);
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (result.error) {
+          console.error('Failed to fetch holiday calendar:', result.error);
+          setHolidayMap({});
+          return;
+        }
+
+        const activeHolidays = (result.holidays || []).filter((holiday) => holiday && holiday.is_active !== false);
+        const nextMap: Record<string, Pick<CompanyHoliday, 'name' | 'holiday_type'>> = {};
+
+        activeHolidays.forEach((holiday) => {
+          const rawDate = holiday.date;
+          let isoDate: string | null = null;
+
+          if (typeof rawDate === 'string') {
+            isoDate = rawDate.split('T')[0];
+          } else if (rawDate instanceof Date) {
+            isoDate = rawDate.toISOString().split('T')[0];
+          }
+
+          if (!isoDate) {
+            return;
+          }
+
+          nextMap[isoDate] = {
+            name: holiday.name,
+            holiday_type: holiday.holiday_type,
+          };
+        });
+
+        setHolidayMap(nextMap);
+      } catch (error) {
+        console.error('Failed to fetch holiday calendar:', error);
+        if (isMounted) {
+          setHolidayMap({});
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingHolidayData(false);
+        }
+      }
+    };
+
+    void fetchHolidayData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [weekStartDate]); // Removed isCreateMode dependency to fetch holidays in all modes
 
   useEffect(() => {
     if (initialData) {
@@ -167,6 +251,59 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
       setSelectedProject('');
     }
   }, [initialData, initialWeekStartDate, form, mode]);
+
+  useEffect(() => {
+    // Holiday logic: Apply holiday entries across all modes (create, edit, view)
+    // Holiday entries are automatically added with 8 hours and persist across all timesheet states
+    const currentEntries = form.getValues('entries') || [];
+    const holidayDates = Object.keys(holidayMap);
+
+    // Remove holiday entries that are no longer valid holidays
+    let updatedEntries = currentEntries.filter(
+      (entry) => entry.entry_type !== 'holiday' || holidayDates.includes(entry.date)
+    );
+
+    let changed = updatedEntries.length !== currentEntries.length;
+
+    // Add new holiday entries for dates that don't have them
+    holidayDates.forEach((date) => {
+      const hasEntry = updatedEntries.some(
+        (entry) => entry.entry_type === 'holiday' && entry.date === date
+      );
+
+      if (!hasEntry) {
+        const holidayInfo = holidayMap[date];
+        const defaultEntry = {
+          project_id: '',
+          task_id: '',
+          date,
+          hours: 8, // Default to 8 hours for holiday entries to satisfy daily minimum
+          description: holidayInfo?.name || 'Company Holiday',
+          is_billable: false,
+          entry_type: 'holiday',
+          is_editable: true,
+        } as TimeEntry & { _uid: string };
+
+        (defaultEntry as any)._uid = generateUid();
+        (defaultEntry as any).entry_category = 'holiday';
+
+        updatedEntries = [...updatedEntries, defaultEntry];
+        changed = true;
+      }
+    });
+
+    if (changed) {
+      const sortedEntries = [...updatedEntries].sort((a, b) => {
+        if (!a.date || !b.date) return 0;
+        return a.date.localeCompare(b.date);
+      });
+
+      form.setValue('entries', sortedEntries, {
+        shouldValidate: true,
+        shouldDirty: true,
+      });
+    }
+  }, [form, holidayMap]); // Apply holiday logic in all modes for consistency
 
   const projectApprovalMap = useMemo<Record<string, ProjectApproval>>(() => {
     const map: Record<string, ProjectApproval> = {};
@@ -201,9 +338,6 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
 
 
   const allowRejectionEdit = hasRejections;
-  const { control, watch, setValue, formState: { errors } } = form;
-  const entries = watch('entries') || [];
-  const weekStartDate = watch('week_start_date');
 
   const activeProjects: SelectOption[] = useMemo(() => {
     const list = Array.isArray(projects) ? projects : [];
@@ -381,7 +515,10 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
 
   const getDayTotal = (dayIndex: number): number => {
     const date = weekDates[dayIndex].toISOString().split('T')[0];
-    return dailyTotals[date] || 0;
+    // Include both regular entries and holiday entries for display purposes
+    return entries
+      .filter(entry => entry.date === date)
+      .reduce((sum, entry) => sum + entry.hours, 0);
   };
 
   const validation = getValidationWarnings(entries, dailyTotals, weeklyTotal, weekDates);
@@ -561,17 +698,28 @@ export const TimesheetForm: React.FC<TimesheetFormProps> = ({
         <div className="grid grid-cols-7 gap-2">
           {WEEKDAYS.map((day, idx) => {
             const total = getDayTotal(idx);
+            const date = weekDates[idx].toISOString().split('T')[0];
+            const isHoliday = Object.keys(holidayMap).includes(date);
+            const holidayInfo = isHoliday ? holidayMap[date] : null;
+            
             return (
               <div key={day} className="text-center p-3 bg-gray-50 rounded-lg border">
                 <p className="text-xs font-medium text-gray-600">{day}</p>
                 <p className="text-sm text-gray-500">{formatDate(weekDates[idx], 'MM/DD')}</p>
+                
                 <p className={`text-lg font-bold mt-1 ${
+                  isHoliday ? 'text-orange-600' : // Holiday styling
                   total === 0 ? 'text-gray-400' :
                   total < 8 ? 'text-yellow-600' :
                   total > 10 ? 'text-red-600' : 'text-green-600'
                 }`}>
                   {total}h
                 </p>
+                {isHoliday && holidayInfo && (
+                  <p className="text-xs text-orange-600 font-md mb-1">
+                    🎉 {holidayInfo.name}
+                  </p>
+                )}  
               </div>
             );
           })}

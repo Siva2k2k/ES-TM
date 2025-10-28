@@ -15,7 +15,7 @@ export const timeEntrySchema = z.object({
   task_id: z.string().optional(),
   date: z.string().min(1, 'Date is required'),
   hours: z.number()
-    .min(0.5, 'Minimum 0.5 hours required')
+    .min(0, 'Minimum 0 hours required')
     .max(24, 'Maximum 24 hours per day'),
   // Description is optional in the UI; make it optional here to avoid blocking submissions
   description: z.string().max(500, 'Description too long').optional(),
@@ -75,6 +75,17 @@ export const timeEntrySchema = z.object({
     message: 'Future dates are not allowed',
     path: ['date'],
   }
+).refine(
+  (data) => {
+    if (data.entry_type === 'holiday') {
+      return data.hours >= 0;
+    }
+    return data.hours >= 0.5;
+  },
+  {
+    message: 'Minimum 0.5 hours required',
+    path: ['hours'],
+  }
 );
 
 // Timesheet form schema
@@ -85,18 +96,29 @@ export const timesheetFormSchema = z.object({
   (data) => {
     // Validate daily totals (8-10 hours per day)
       const dailyTotals: Record<string, number> = {};
+      const holidayDates = new Set<string>();
 
-      // Only enforce daily 8-10 hour rule for weekdays (Mon-Fri).
-      // Weekend days (Saturday/Sunday) are optional and should not cause validation failures.
+      // Track holiday dates to skip mandatory hour validation
+      data.entries.forEach((entry) => {
+        if (entry.entry_type === 'holiday') {
+          holidayDates.add(entry.date);
+        }
+      });
+
+      // Only enforce daily 8-10 hour rule for weekdays (Mon-Fri) that are not holidays.
       data.entries.forEach((entry) => {
         const d = new Date(entry.date);
         const day = d.getDay(); // Sunday=0, Saturday=6
-        // skip weekends when computing the required daily totals
         if (day === 0 || day === 6) return;
+        if (entry.entry_type === 'holiday') return;
+
         dailyTotals[entry.date] = (dailyTotals[entry.date] || 0) + entry.hours;
       });
 
-      const invalidDays = Object.values(dailyTotals).filter((total) => total < 8 || total > 10);
+      const invalidDays = Object.entries(dailyTotals)
+        .filter(([date]) => !holidayDates.has(date))
+        .map(([, total]) => total)
+        .filter((total) => total < 8 || total > 10);
 
       return invalidDays.length === 0;
   },
@@ -107,7 +129,9 @@ export const timesheetFormSchema = z.object({
 ).refine(
   (data) => {
     // Validate weekly total (max 56 hours)
-    const weekTotal = data.entries.reduce((sum, entry) => sum + entry.hours, 0);
+    const weekTotal = data.entries
+      .filter((entry) => entry.entry_type !== 'holiday')
+      .reduce((sum, entry) => sum + entry.hours, 0);
     return weekTotal <= 56;
   },
   {
@@ -178,13 +202,21 @@ export function validateWeeklyHours(hours: number): boolean {
 
 export function getDailyTotals(entries: TimeEntry[]): Record<string, number> {
   return entries.reduce((acc, entry) => {
+    if (entry.entry_type === 'holiday') {
+      return acc;
+    }
     acc[entry.date] = (acc[entry.date] || 0) + entry.hours;
     return acc;
   }, {} as Record<string, number>);
 }
 
 export function getWeeklyTotal(entries: TimeEntry[]): number {
-  return entries.reduce((sum, entry) => sum + entry.hours, 0);
+  return entries.reduce((sum, entry) => {
+    if (entry.entry_type === 'holiday') {
+      return sum;
+    }
+    return sum + entry.hours;
+  }, 0);
 }
 
 export function hasDuplicateEntries(entries: TimeEntry[]): boolean {

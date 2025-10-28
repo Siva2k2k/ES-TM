@@ -10,6 +10,7 @@ import {
   updateTaskValidation,
   taskIdValidation,
   createClientValidation,
+  updateClientValidation,
   clientIdValidation,
   addProjectMemberEnhancedValidation,
   updateProjectMemberRoleValidation,
@@ -78,7 +79,7 @@ router.get('/clients/:clientId', requireManager, clientIdValidation, ProjectCont
  * @desc Update client (Management+ only)
  * @access Private (Management+)
  */
-router.put('/clients/:clientId', requireManagement, clientIdValidation, createClientValidation, ProjectController.updateClient);
+router.put('/clients/:clientId', requireManagement, clientIdValidation, updateClientValidation, ProjectController.updateClient);
 
 /**
  * @route DELETE /api/v1/projects/clients/:clientId
