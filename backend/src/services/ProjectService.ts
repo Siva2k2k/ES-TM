@@ -50,7 +50,7 @@ export class ProjectService {
    */
   static async createProject(projectData: Partial<IProject>, currentUser: AuthUser): Promise<{ project?: IProject; error?: string }> {
     try {
-      requireManagementRole(currentUser);
+      requireManagerRole(currentUser);
 
       // Validate project data
       const validation = this.validateProjectData(projectData);
@@ -117,7 +117,7 @@ export class ProjectService {
    */
   static async updateProject(projectId: string, updates: Partial<IProject>, currentUser: AuthUser): Promise<{ success: boolean; error?: string }> {
     try {
-      requireManagementRole(currentUser);
+      requireManagerRole(currentUser);
 
       // Sanitize updates: convert empty date strings to null
       const payload: any = { ...updates };
