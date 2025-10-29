@@ -197,9 +197,14 @@ export class ProjectBillingController {
 
           (resource.tasks ?? []).forEach((task) => {
             userEntry.tasks.push({
-              ...task,
-              project_id: task.project_id ?? project.project_id,
-              project_name: task.project_name ?? project.project_name
+              task_id: task.task_id,
+              task_name: task.task_name,
+              project_id: task.project_id,
+              project_name: task.project_name,
+              total_hours: task.total_hours,
+              billable_hours: task.billable_hours,
+              non_billable_hours: task.non_billable_hours,
+              amount: task.amount
             });
           });
         }

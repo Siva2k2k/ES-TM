@@ -9,6 +9,7 @@ import { Timesheet } from '@/models/Timesheet';
 import { User } from '@/models/User';
 import { BillingAdjustment } from '@/models/BillingAdjustment';
 import { TimesheetProjectApproval } from '@/models/TimesheetProjectApproval';
+import { TimeEntry } from '@/models/TimeEntry';
 import type {
   ProjectBillingData,
   ResourceBillingData,
@@ -155,16 +156,107 @@ export class ProjectBillingService {
   }
 
   /**
-   * Process user billing data for a project
+   * Fetch task-level data for user billing
    */
-  static processUserBillingData(
+  static async fetchTaskDataForUser(
+    projectObjectIds: mongoose.Types.ObjectId[],
+    userObjectId: mongoose.Types.ObjectId,
+    start: Date,
+    end: Date,
+    approvedTimesheetIds: mongoose.Types.ObjectId[]
+  ) {
+    console.log(`[fetchTaskDataForUser] Starting fetch for user ${userObjectId}`);
+    console.log(`[fetchTaskDataForUser] Approved timesheet count: ${approvedTimesheetIds.length}`);
+    console.log(`[fetchTaskDataForUser] Project count: ${projectObjectIds.length}`);
+    console.log(`[fetchTaskDataForUser] Date range: ${start} to ${end}`);
+
+    // Fetch time entries for this user within date range
+    const pipeline = [
+      {
+        $lookup: {
+          from: 'timesheets',
+          localField: 'timesheet_id',
+          foreignField: '_id',
+          as: 'timesheet'
+        }
+      },
+      { $unwind: '$timesheet' },
+      {
+        $match: {
+          'timesheet._id': { $in: approvedTimesheetIds },
+          'timesheet.user_id': userObjectId,
+          'timesheet.week_start_date': { $gte: start, $lte: end },
+          'timesheet.deleted_at': null,
+          project_id: { $in: projectObjectIds },
+          deleted_at: null,
+          entry_category: { $in: ['project', 'training'] } // Include both project and training entries
+        }
+      },
+      {
+        $lookup: {
+          from: 'tasks',
+          localField: 'task_id',
+          foreignField: '_id',
+          as: 'task'
+        }
+      },
+      {
+        $addFields: {
+          task_name: {
+            $cond: {
+              if: { $eq: ['$task_type', 'custom_task'] },
+              then: '$custom_task_description',
+              else: { $arrayElemAt: ['$task.name', 0] }
+            }
+          }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            project_id: '$project_id',
+            task_id: '$task_id',
+            task_name: '$task_name'
+          },
+          total_hours: { $sum: '$hours' },
+          billable_hours: { $sum: { $cond: ['$is_billable', '$hours', 0] } },
+          non_billable_hours: { $sum: { $cond: ['$is_billable', 0, '$hours'] } }
+        }
+      }
+    ];
+
+    const result = await (TimeEntry as any).aggregate(pipeline);
+    console.log(`[TaskData] User ${userObjectId}: Found ${result.length} tasks from ${approvedTimesheetIds.length} approved timesheets`);
+
+    if (result.length > 0) {
+      console.log(`[TaskData] Sample tasks for user ${userObjectId}:`, JSON.stringify(result.slice(0, 3), null, 2));
+    } else {
+      console.warn(`[TaskData] NO TASKS FOUND for user ${userObjectId}. Debugging info:`);
+      console.warn(`  - Approved timesheets: ${approvedTimesheetIds.map(id => id.toString()).join(', ')}`);
+      console.warn(`  - Projects: ${projectObjectIds.map(id => id.toString()).join(', ')}`);
+
+      // Let's check if there are ANY time entries for this user (without filters)
+      const anyEntries = await (TimeEntry as any).countDocuments({
+        project_id: { $in: projectObjectIds }
+      });
+      console.warn(`  - Total time entries for these projects: ${anyEntries}`);
+    }
+
+    return result;
+  }
+
+  /**
+   * Process user billing data for a project with task breakdown
+   */
+  static async processUserBillingData(
     approval: any,
     userMap: Map<string, any>,
     adjustmentMap: Map<string, any>,
     project: any,
     projectId: string,
-    view?: string
-  ): ResourceBillingData | null {
+    view?: string,
+    taskDataMap?: Map<string, any[]>
+  ): Promise<ResourceBillingData | null> {
     const userId = approval._id.user_id.toString();
     const user = userMap.get(userId);
 
@@ -201,6 +293,29 @@ export class ProjectBillingService {
     const hourlyRate = user.hourly_rate || 0;
     const totalAmount = finalBillableHours * hourlyRate;
 
+    // Get task breakdown for this user-project combination
+    const userTaskKey = `${userId}_${projectId}`;
+    const taskData = taskDataMap?.get(userTaskKey) || [];
+
+    console.log(`[processUserBilling] Looking up tasks with key: ${userTaskKey}`);
+    console.log(`[processUserBilling] Found ${taskData.length} tasks for ${user.full_name} in ${project.name}`);
+
+    // Process task data with proper billing calculation
+    const tasks = taskData.map((task: any) => ({
+      task_id: task._id.task_id?.toString() || 'custom',
+      task_name: task._id.task_name || 'Custom Task',
+      project_id: projectId,
+      project_name: project.name,
+      total_hours: task.total_hours || 0,
+      billable_hours: task.billable_hours || 0,
+      non_billable_hours: task.non_billable_hours || 0,
+      amount: (task.billable_hours || 0) * hourlyRate
+    }));
+
+    if (tasks.length > 0) {
+      console.log(`[ResourceBilling] User ${user.full_name} in ${project.name}: ${tasks.length} tasks attached`);
+    }
+
     return {
       user_id: userId,
       user_name: (user.full_name as string) || 'Unknown User',
@@ -217,7 +332,7 @@ export class ProjectBillingService {
       total_amount: totalAmount,
       verified_at: verifiedAt?.toISOString(),
       last_adjusted_at: lastAdjustedAt?.toISOString(),
-      tasks: [],
+      tasks,
       weekly_breakdown: view === 'weekly' ? [] : undefined
     };
   }
@@ -291,11 +406,24 @@ export class ProjectBillingService {
       return ProjectBillingService.createEmptyProjectBilling(projects);
     }
 
-    // Step 4: Get all unique user IDs
+    // Step 4: Get all unique user IDs and timesheet IDs from approved approvals
     const userIds = [...new Set(approvedApprovals.map((a: any) => a._id.user_id.toString()))];
     const userObjectIds = userIds
       .filter((id): id is string => typeof id === 'string' && mongoose.Types.ObjectId.isValid(id))
       .map((id) => new mongoose.Types.ObjectId(id));
+
+    // Extract unique timesheet IDs from the aggregation pipeline
+    // Note: We need to fetch the actual approval documents to get timesheet_id
+    const approvalTimesheets = await (TimesheetProjectApproval as any).find({
+      project_id: { $in: projectObjectIds },
+      management_status: 'approved'
+    }).distinct('timesheet_id');
+
+    const approvedTimesheetIds = approvalTimesheets
+      .filter((id: any) => id && mongoose.Types.ObjectId.isValid(id))
+      .map((id: any) => new mongoose.Types.ObjectId(id));
+
+    console.log(`[ProjectBilling] Found ${approvedTimesheetIds.length} approved timesheets for task breakdown`);
 
     // Step 5: Fetch user details including hourly_rate for cost calculation
     const users = await (User as any).find({ _id: { $in: userObjectIds } })
@@ -320,7 +448,43 @@ export class ProjectBillingService {
       ])
     );
 
-    // Step 7: Organize approvals by project
+    // Step 7: Fetch task data for all users and projects
+    const taskDataMap = new Map<string, any[]>();
+    if (userObjectIds.length > 0 && approvedTimesheetIds.length > 0) {
+      const allTaskData = await Promise.all(
+        userObjectIds.map(async (userObjectId) => {
+          const taskData = await ProjectBillingService.fetchTaskDataForUser(
+            projectObjectIds,
+            userObjectId,
+            start,
+            end,
+            approvedTimesheetIds
+          );
+          return { userId: userObjectId.toString(), taskData };
+        })
+      );
+
+      // Organize task data by user-project key
+      for (const { userId, taskData } of allTaskData) {
+        console.log(`[TaskDataMap] Processing ${taskData.length} tasks for user ${userId}`);
+        for (const task of taskData) {
+          const projectId = task._id.project_id.toString();
+          const userTaskKey = `${userId}_${projectId}`;
+
+          if (!taskDataMap.has(userTaskKey)) {
+            taskDataMap.set(userTaskKey, []);
+          }
+          taskDataMap.get(userTaskKey)!.push(task);
+        }
+      }
+
+      console.log(`[TaskDataMap] Total entries in map: ${taskDataMap.size}`);
+      console.log(`[TaskDataMap] Keys: ${Array.from(taskDataMap.keys()).join(', ')}`);
+    } else {
+      console.warn(`[TaskDataMap] Skipped task fetching: userObjectIds=${userObjectIds.length}, approvedTimesheetIds=${approvedTimesheetIds.length}`);
+    }
+
+    // Step 8: Organize approvals by project
     const projectApprovalMap = new Map<string, any[]>();
     for (const approval of approvedApprovals) {
       const projectId = approval._id.project_id.toString();
@@ -330,7 +494,7 @@ export class ProjectBillingService {
       projectApprovalMap.get(projectId)!.push(approval);
     }
 
-    // Step 8: Build billing data for each project
+    // Step 9: Build billing data for each project
     const billingData: ProjectBillingData[] = [];
 
     for (const project of projects) {
@@ -348,15 +512,16 @@ export class ProjectBillingService {
         resources: []
       };
 
-      // Step 9: Process each user's billing data
+      // Step 10: Process each user's billing data
       for (const approval of approvals) {
-        const resourceBilling = ProjectBillingService.processUserBillingData(
+        const resourceBilling = await ProjectBillingService.processUserBillingData(
           approval,
           userMap,
           adjustmentMap,
           project,
           projectId,
-          view
+          view,
+          taskDataMap
         );
 
         if (resourceBilling) {

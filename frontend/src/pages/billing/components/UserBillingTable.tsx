@@ -133,6 +133,11 @@ export function UserBillingTable({
                     </td>
                     <td className="px-4 py-3 text-right text-sm text-slate-600 dark:text-slate-300">
                       {user.projects.length}
+                      {user.tasks && user.tasks.length > 0 && (
+                        <span className="ml-1 text-xs text-blue-600 dark:text-blue-400" title={`${user.tasks.length} tasks tracked`}>
+                          ({user.tasks.length}T)
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right text-sm text-slate-600 dark:text-slate-300">
                       <button
@@ -153,6 +158,15 @@ export function UserBillingTable({
                             const projectTasks = (user.tasks ?? []).filter(
                               (task) => task.project_id === project.project_id
                             );
+
+                            // Debug logging to check task data
+                            console.log(`Project ${project.project_name}:`, {
+                              projectId: project.project_id,
+                              totalUserTasks: user.tasks?.length || 0,
+                              filteredTasks: projectTasks.length,
+                              userTasks: user.tasks,
+                              projectTasks
+                            });
 
                             return (
                               <div
@@ -262,7 +276,21 @@ export function UserBillingTable({
                                     </table>
                                   ) : (
                                     <div className="p-4 text-sm text-slate-500 dark:text-slate-400">
-                                      No task breakdown available for this project.
+                                      {user.tasks && user.tasks.length > 0 ? (
+                                        <div>
+                                          <p>No tasks found for this specific project.</p>
+                                          <details className="mt-2">
+                                            <summary className="cursor-pointer text-xs">Debug Info</summary>
+                                            <div className="mt-1 text-xs bg-slate-100 dark:bg-slate-800 p-2 rounded">
+                                              <p>Project ID: {project.project_id}</p>
+                                              <p>Total user tasks: {user.tasks.length}</p>
+                                              <p>Task project IDs: {user.tasks.map(t => t.project_id).join(', ')}</p>
+                                            </div>
+                                          </details>
+                                        </div>
+                                      ) : (
+                                        "No task breakdown available for this project."
+                                      )}
                                     </div>
                                   )}
                                 </div>

@@ -30,19 +30,19 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
       {/* Breadcrumbs */}
       {breadcrumbs && breadcrumbs.length > 0 && (
         <nav className="mb-3">
-          <ol className="flex items-center space-x-2 text-sm text-slate-600">
+          <ol className="flex items-center space-x-2 text-sm text-slate-600 dark:text-gray-400">
             {breadcrumbs.map((crumb, index) => (
               <li key={index} className="flex items-center">
-                {index > 0 && <span className="mx-2 text-slate-400">/</span>}
+                {index > 0 && <span className="mx-2 text-slate-400 dark:text-gray-600">/</span>}
                 {crumb.href ? (
                   <a
                     href={crumb.href}
-                    className="hover:text-slate-900 transition-colors"
+                    className="hover:text-slate-900 dark:hover:text-white transition-colors"
                   >
                     {crumb.label}
                   </a>
                 ) : (
-                  <span className="text-slate-900 font-medium">{crumb.label}</span>
+                  <span className="text-slate-900 dark:text-white font-medium">{crumb.label}</span>
                 )}
               </li>
             ))}
@@ -64,11 +64,11 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
             </Button>
           )}
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 truncate">
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white truncate">
               {title}
             </h1>
             {description && (
-              <p className="mt-1 text-slate-600 text-sm md:text-base">
+              <p className="mt-1 text-slate-600 dark:text-gray-400 text-sm md:text-base">
                 {description}
               </p>
             )}
