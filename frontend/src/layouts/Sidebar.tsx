@@ -78,9 +78,9 @@ export function Sidebar({ isOpen, isCollapsed, onClose }: SidebarProps) {
         const items: NavItem['subItems'] = [
           { id: 'billing-projects', label: 'Project View', path: '/dashboard/billing/projects', group: 'primary' },
           { id: 'billing-users', label: 'User View', path: '/dashboard/billing/users', group: 'primary' },
-          { id: 'billing-dashboard', label: 'Billing Dashboard', path: '/dashboard/billing/dashboard', group: 'others' },
-          { id: 'billing-invoices', label: 'Invoices', path: '/dashboard/billing/invoices', group: 'others' },
-          { id: 'billing-rates', label: 'Rates', path: '/dashboard/billing/rates', group: 'others' }
+          // { id: 'billing-dashboard', label: 'Billing Dashboard', path: '/dashboard/billing/dashboard', group: 'others' },
+          // { id: 'billing-invoices', label: 'Invoices', path: '/dashboard/billing/invoices', group: 'others' },
+          // { id: 'billing-rates', label: 'Rates', path: '/dashboard/billing/rates', group: 'others' }
         ];
 
         return items;
