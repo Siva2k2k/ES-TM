@@ -196,77 +196,9 @@ export class TeamReviewServiceV2 {
           // 1. Lead has reviewed all employee timesheets (no pending reviews)
           // 2. Lead has submitted their own timesheet for this week
           // EXCEPTION: Training projects are always visible to managers regardless of lead status
-          if ((approverRole === 'manager' || approverRole === 'super_admin') && project.project_type !== 'training') {
-            // Check if this project has a Lead
-            const hasLead = leadInfo?.id ? true : false;
+          
 
-            if (hasLead) {
-              // Check if lead has submitted their own timesheet for this week
-              const leadTimesheet = weekTimesheets.find(
-                t => t.user_id?.role === 'lead' || t.user_id?._id?.toString() === leadInfo.id
-              );
-              
-              // Check if any employees have pending lead approvals
-              const hasIncompleteLeadReviews = projectWeekApprovals.some(approval => {
-                const ts = weekTimesheets.find(t => t._id.toString() === approval.timesheet_id.toString());
-                const userRole = ts?.user_id?.role;
-
-                // Employee timesheet with pending lead approval
-                return (
-                  userRole === 'employee' &&
-                  approval.lead_status === 'pending' &&
-                  (ts.status === 'submitted' || ts.status === 'lead_approved' || ts.status === 'manager_approved')
-                );
-              });
-
-              // CRITICAL FIX: Skip project-week if EITHER condition is not met:
-              // 1. Lead has incomplete employee reviews (hasIncompleteLeadReviews = true), OR
-              // 2. Lead has NOT submitted their own timesheet (!leadTimesheet = true)
-              // Manager needs BOTH: all reviews done AND lead's timesheet submitted
-              if (hasIncompleteLeadReviews || !leadTimesheet) {
-                continue; // Move to next iteration, don't add to projectWeekMap
-              }
-            }
-          }
-
-          // FOR LEAD VIEW: Hide groups where not all employees have submitted entries for THIS project
-          if (approverRole === 'lead') {
-            // Get all employee members for this project (excluding the Lead themselves)
-            const employeeMembers = projectMembersForProject.filter(
-              pm => pm.project_role === 'employee' && pm.user_id.toString() !== approverId
-            );
-
-            // If there are no OTHER employees (Lead might be the only team member), allow the group to show
-            if (employeeMembers.length > 0) {
-              // Check if all employees have submitted entries for THIS project
-              const allEmployeesHaveProjectEntries = employeeMembers.every(empMember => {
-                // Find employee's timesheet for this week - search in ALL timesheets, not just weekTimesheets
-                const empTimesheet = timesheets.find(
-                  ts => ts.user_id?._id?.toString() === empMember.user_id.toString() &&
-                        ts.week_start_date?.getTime() === weekStart.getTime()
-                );
-
-                // Employee must have a submitted timesheet (not null and not draft)
-                if (!empTimesheet || empTimesheet.status === 'draft') {
-                  return false; // Employee hasn't submitted
-                }
-
-                // Check if employee has entries for THIS specific project
-                const empProjectEntries = entries.filter(
-                  e => e.timesheet_id.toString() === empTimesheet._id.toString() &&
-                       e.project_id.toString() === project._id.toString()
-                );
-
-                // Employee must have at least one entry for this project
-                return empProjectEntries.length > 0;
-              });
-
-              // Skip this project-week group if not all employees have submitted entries for this project
-              if (!allEmployeesHaveProjectEntries) {
-                continue; // Move to next iteration, don't add to projectWeekMap
-              }
-            }
-          }
+  
 
           // FOR MANAGEMENT VIEW: Hide groups where Manager hasn't completed all requirements
           // Management should ONLY see the group when BOTH conditions are met:
