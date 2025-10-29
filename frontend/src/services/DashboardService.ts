@@ -286,7 +286,7 @@ export class DashboardService {
     try {
       const response = await backendApi.getEmployeeDashboard();
 
-      if (!response.data.success) {
+      if (!response.success) {
         return { error: response.message || 'Failed to fetch employee dashboard' };
       }
 
