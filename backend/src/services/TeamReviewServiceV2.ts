@@ -197,7 +197,21 @@ export class TeamReviewServiceV2 {
           // 2. Lead has submitted their own timesheet for this week
           // EXCEPTION: Training projects are always visible to managers regardless of lead status
           
+          if (approverRole === 'lead') {
+            // Check if there's at least one employee (non-lead) in the weekTimesheets
+            const hasEmployeeSubmissions = weekTimesheets.some(ts => {
+              const userRole = ts.user_id?.role;
+              const userId = ts.user_id?._id?.toString();
+              
+              // Must be an employee (not the lead themselves) with a submitted timesheet
+              return userRole === 'employee' && userId !== approverId;
+            });
 
+            // Skip this project-week if no employees have submitted yet
+            if (!hasEmployeeSubmissions) {
+              continue; // Move to next iteration, don't add to projectWeekMap
+            }
+          }
   
 
           // FOR MANAGEMENT VIEW: Hide groups where Manager hasn't completed all requirements
