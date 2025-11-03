@@ -1,6 +1,6 @@
 // Export all models from a central location
 export { default as User, IUser } from './User';
-export { default as Calendar, ICalendar } from './Calendar';
+export { default as ICalendar } from './Calendar';
 export { default as Client, IClient } from './Client';
 export { default as CompanyHoliday, ICompanyHoliday } from './CompanyHoliday';
 export { default as Project, ProjectMember, IProject, IProjectMember } from './Project';
@@ -13,7 +13,7 @@ export { BillingSnapshot, IBillingSnapshot } from './BillingSnapshot';
 
 // Export types
 export type { UserRole } from './User';
-export type { CalendarType } from './Calendar';
+export type { Calendar } from './Calendar';
 export type { HolidayType } from './CompanyHoliday';
 export type { ProjectStatus } from './Project';
 export type { TimesheetStatus } from './Timesheet';

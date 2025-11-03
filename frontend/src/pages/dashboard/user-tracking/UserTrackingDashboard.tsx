@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users,
@@ -15,8 +15,14 @@ import {
 } from 'lucide-react';
 import { userTrackingService, DashboardOverview } from '../../../services/UserTrackingService';
 import { useAuth } from '../../../store/contexts/AuthContext';
-import LoadingSpinner from '../../../components/common/LoadingSpinner';
+import { LoadingSpinner } from '../../../components/ui/LoadingSpinner';
 import { cn } from '../../../utils/cn';
+import {
+  TeamPerformanceChart,
+  WeeklyTrendsChart,
+  MetricCard
+} from '../../../components/charts/UserTrackingCharts';
+import { COLORS } from '../../../components/charts/constants';
 
 const UserTrackingDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -26,17 +32,7 @@ const UserTrackingDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedWeeks, setSelectedWeeks] = useState(4);
 
-  useEffect(() => {
-    // Check permissions
-    if (!['manager', 'management'].includes(currentUserRole || '')) {
-      navigate('/dashboard');
-      return;
-    }
-
-    loadDashboardData();
-  }, [currentUserRole, navigate, selectedWeeks]);
-
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -52,7 +48,17 @@ const UserTrackingDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedWeeks]);
+
+  useEffect(() => {
+    // Check permissions
+    if (!['manager', 'management'].includes(currentUserRole || '')) {
+      navigate('/dashboard');
+      return;
+    }
+
+    loadDashboardData();
+  }, [currentUserRole, navigate, loadDashboardData]);
 
   const getAlertIcon = (type: string) => {
     switch (type) {
@@ -144,77 +150,48 @@ const UserTrackingDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Overview Cards */}
+      {/* Overview Cards with Mini Charts */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
-              <Users className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Total Users</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                {overview.overview.total_users}
-              </p>
-            </div>
-          </div>
-        </div>
+        <MetricCard
+          title="Total Users"
+          value={overview.overview.total_users}
+          icon={<Users className="w-6 h-6" />}
+          color={COLORS.primary}
+        />
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
-              <Activity className="w-6 h-6 text-green-600 dark:text-green-400" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Active Users</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                {overview.overview.active_users}
-              </p>
-            </div>
-          </div>
-        </div>
+        <MetricCard
+          title="Active Users"
+          value={overview.overview.active_users}
+          icon={<Activity className="w-6 h-6" />}
+          color={COLORS.success}
+        />
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg">
-              <BarChart3 className="w-6 h-6 text-purple-600 dark:text-purple-400" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Avg Utilization</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                {overview.overview.avg_utilization}%
-              </p>
-            </div>
-          </div>
-        </div>
+        <MetricCard
+          title="Avg Utilization"
+          value={overview.overview.avg_utilization}
+          suffix="%"
+          icon={<BarChart3 className="w-6 h-6" />}
+          color={COLORS.info}
+          trend={overview.trends.slice(-7).map(t => ({ value: t.avg_utilization }))}
+        />
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-yellow-100 dark:bg-yellow-900 rounded-lg">
-              <Clock className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Avg Punctuality</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                {overview.overview.avg_punctuality}%
-              </p>
-            </div>
-          </div>
-        </div>
+        <MetricCard
+          title="Avg Punctuality"
+          value={overview.overview.avg_punctuality}
+          suffix="%"
+          icon={<Clock className="w-6 h-6" />}
+          color={COLORS.warning}
+          trend={overview.trends.slice(-7).map(t => ({ value: t.avg_punctuality }))}
+        />
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-emerald-100 dark:bg-emerald-900 rounded-lg">
-              <Award className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Avg Quality</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                {overview.overview.avg_quality}%
-              </p>
-            </div>
-          </div>
-        </div>
+        <MetricCard
+          title="Avg Quality"
+          value={overview.overview.avg_quality}
+          suffix="%"
+          icon={<Award className="w-6 h-6" />}
+          color={COLORS.success}
+          trend={overview.trends.slice(-7).map(t => ({ value: t.avg_quality }))}
+        />
       </div>
 
       {/* Alerts */}
@@ -224,9 +201,9 @@ const UserTrackingDashboard: React.FC = () => {
             Alerts & Notifications
           </h2>
           <div className="space-y-3">
-            {overview.alerts.map((alert, index) => (
+            {overview.alerts.map((alert, alertIndex) => (
               <div
-                key={index}
+                key={`alert-${alert.type}-${alertIndex}`}
                 className={cn(
                   'flex items-center gap-3 p-4 rounded-lg border',
                   getAlertBgColor(alert.type)
@@ -310,11 +287,54 @@ const UserTrackingDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Weekly Trends */}
+      {/* Performance Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Team Performance Chart */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Team Performance Comparison
+            </h2>
+            <BarChart3 className="w-5 h-5 text-gray-400" />
+          </div>
+          {overview.top_performers.length > 0 ? (
+            <TeamPerformanceChart 
+              data={overview.top_performers} 
+              height={300}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-64 text-gray-500">
+              No performance data available
+            </div>
+          )}
+        </div>
+
+        {/* Weekly Trends Chart */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Weekly Performance Trends
+            </h2>
+            <TrendingUp className="w-5 h-5 text-gray-400" />
+          </div>
+          {overview.trends.length > 0 ? (
+            <WeeklyTrendsChart 
+              data={overview.trends} 
+              height={300}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-64 text-gray-500">
+              No trend data available
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Weekly Trends Data Table */}
       <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-            Weekly Trends
+            Weekly Data Summary
           </h2>
           <button
             onClick={() => navigate('/dashboard/user-tracking/analytics')}
@@ -327,7 +347,7 @@ const UserTrackingDashboard: React.FC = () => {
         
         {overview.trends.length > 0 ? (
           <div className="space-y-4">
-            {overview.trends.slice(-6).map((trend, index) => {
+            {overview.trends.slice(-6).map((trend) => {
               const weekDate = new Date(trend._id);
               return (
                 <div

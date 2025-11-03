@@ -15,28 +15,16 @@ import {
   LineChart,
   Line
 } from 'recharts';
-
-// Color palettes
-export const COLORS = {
-  primary: '#3b82f6',
-  secondary: '#8b5cf6',
-  success: '#10b981',
-  warning: '#f59e0b',
-  danger: '#ef4444',
-  info: '#06b6d4',
-  muted: '#6b7280'
-};
-
-export const PIE_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4'];
+import { COLORS, PIE_COLORS, TooltipProps } from './constants';
 
 // Custom Tooltip Component
-const CustomTooltip = ({ active, payload, label, formatter }: any) => {
-  if (active && payload && payload.length) {
+const CustomTooltip: React.FC<TooltipProps> = ({ active, payload, label, formatter }) => {
+  if (active && payload?.length) {
     return (
       <div className="bg-white dark:bg-gray-800 p-3 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg">
         <p className="text-gray-700 dark:text-gray-300 font-medium">{label}</p>
-        {payload.map((entry: any, index: number) => (
-          <p key={index} className="text-sm" style={{ color: entry.color }}>
+        {payload.map((entry, index: number) => (
+          <p key={`tooltip-${entry.name}-${index}`} className="text-sm" style={{ color: entry.color }}>
             {`${entry.name}: ${formatter ? formatter(entry.value) : entry.value}`}
           </p>
         ))}
@@ -148,7 +136,7 @@ export const PerformanceMetricsChart: React.FC<PerformanceMetricsProps> = ({
         />
         <Bar dataKey="value" fill={COLORS.primary}>
           {chartData.map((entry, index) => (
-            <Cell key={`cell-${index}`} fill={entry.color} />
+            <Cell key={`cell-${entry.name}-${index}`} fill={entry.color} />
           ))}
         </Bar>
       </BarChart>
@@ -179,11 +167,6 @@ export const ProjectHoursChart: React.FC<ProjectHoursProps> = ({
     isTraining: project.is_training
   }));
 
-  const renderLabel = (entry: any) => {
-    const percent = ((entry.value / data.reduce((sum, p) => sum + p.total_hours, 0)) * 100).toFixed(0);
-    return `${percent}%`;
-  };
-
   return (
     <ResponsiveContainer width="100%" height={height}>
       <PieChart>
@@ -192,13 +175,12 @@ export const ProjectHoursChart: React.FC<ProjectHoursProps> = ({
           cx="50%"
           cy="50%"
           labelLine={false}
-          label={renderLabel}
           outerRadius={80}
           fill="#8884d8"
           dataKey="value"
         >
-          {chartData.map((entry, index) => (
-            <Cell key={`cell-${index}`} fill={entry.color} />
+          {chartData.map((entry) => (
+            <Cell key={`cell-${entry.name}`} fill={entry.color} />
           ))}
         </Pie>
         <Tooltip 

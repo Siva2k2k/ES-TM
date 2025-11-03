@@ -13,7 +13,8 @@ import {
 } from 'lucide-react';
 import { userTrackingService, UserListItem } from '../../../services/UserTrackingService';
 import { useAuth } from '../../../store/contexts/AuthContext';
-import LoadingSpinner from '../../../components/common/LoadingSpinner';
+import { LoadingSpinner } from '../../../components/ui/LoadingSpinner';
+import { ProgressBar } from '../../../components/ui/ProgressBar';
 import { cn } from '../../../utils/cn';
 
 interface SortConfig {
@@ -98,18 +99,6 @@ const UserTrackingList: React.FC = () => {
   const handleSearch = (value: string) => {
     setSearchTerm(value);
     setPagination(prev => ({ ...prev, page: 1 }));
-  };
-
-  const getPerformanceBadge = (value: number, type: 'utilization' | 'punctuality' | 'quality') => {
-    if (type === 'utilization') {
-      if (value >= 80) return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-      if (value >= 60) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
-      return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
-    }
-    
-    if (value >= 90) return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-    if (value >= 70) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
-    return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
   };
 
   const renderSortIcon = (key: keyof UserListItem) => {
@@ -278,36 +267,54 @@ const UserTrackingList: React.FC = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <BarChart3 className="w-4 h-4 text-purple-500" />
-                      <span className={cn(
-                        'px-2 py-1 text-sm font-medium rounded',
-                        getPerformanceBadge(user.avg_utilization, 'utilization')
-                      )}>
-                        {user.avg_utilization}%
-                      </span>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <BarChart3 className="w-4 h-4 text-purple-500" />
+                          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {user.avg_utilization}%
+                          </span>
+                        </div>
+                      </div>
+                      <ProgressBar 
+                        value={user.avg_utilization} 
+                        size="sm" 
+                        className="w-20"
+                      />
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-yellow-500" />
-                      <span className={cn(
-                        'px-2 py-1 text-sm font-medium rounded',
-                        getPerformanceBadge(user.avg_punctuality, 'punctuality')
-                      )}>
-                        {user.avg_punctuality}%
-                      </span>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-yellow-500" />
+                          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {user.avg_punctuality}%
+                          </span>
+                        </div>
+                      </div>
+                      <ProgressBar 
+                        value={user.avg_punctuality} 
+                        size="sm" 
+                        className="w-20"
+                      />
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <Award className="w-4 h-4 text-green-500" />
-                      <span className={cn(
-                        'px-2 py-1 text-sm font-medium rounded',
-                        getPerformanceBadge(user.avg_quality, 'quality')
-                      )}>
-                        {user.avg_quality}%
-                      </span>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Award className="w-4 h-4 text-green-500" />
+                          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {user.avg_quality}%
+                          </span>
+                        </div>
+                      </div>
+                      <ProgressBar 
+                        value={user.avg_quality} 
+                        size="sm" 
+                        className="w-20"
+                      />
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
