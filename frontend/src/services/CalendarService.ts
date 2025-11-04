@@ -1,21 +1,22 @@
 import { backendApi } from './backendApi';
 
-export type CalendarType = 'system' | 'company' | 'regional' | 'personal';
-
 export interface Calendar {
   id: string;
   name: string;
   description?: string;
-  type: CalendarType;
   timezone: string;
-  is_default: boolean;
   is_active: boolean;
-  include_public_holidays: boolean;
-  include_company_holidays: boolean;
+
+  // Holiday-related settings
+  auto_create_holiday_entries: boolean;
+  default_holiday_hours: number;
+
+  // Timesheet-related settings
   working_days: number[];
   business_hours_start?: string;
   business_hours_end?: string;
   working_hours_per_day: number;
+
   created_by: {
     id: string;
     full_name: string;
@@ -40,8 +41,9 @@ export interface CalendarWithHolidays extends Calendar {
 export interface CreateCalendarData {
   name: string;
   description?: string;
-  type: CalendarType;
   timezone?: string;
+  auto_create_holiday_entries?: boolean;
+  default_holiday_hours?: number;
   working_days?: number[];
   business_hours_start?: string;
   business_hours_end?: string;
@@ -49,26 +51,20 @@ export interface CreateCalendarData {
 }
 
 export interface UpdateCalendarData extends Partial<CreateCalendarData> {
-  is_default?: boolean;
+  is_active?: boolean;
 }
 
-export interface CloneCalendarData {
-  name: string;
-  description?: string;
-  type?: CalendarType;
-}
-
+/**
+ * Simplified Calendar Service for Single Company Calendar System
+ * This service manages the single active company calendar
+ */
 export class CalendarService {
   /**
-   * Get all active calendars
+   * Get all calendars (typically returns only the active company calendar)
    */
-  static async getCalendars(params?: {
-    type?: CalendarType;
-    is_active?: boolean;
-    created_by?: string;
-  }): Promise<{ calendars: Calendar[]; error?: string }> {
+  static async getCalendars(): Promise<{ calendars: Calendar[]; error?: string }> {
     try {
-      const response = await backendApi.get('/calendars', { params });
+      const response = await backendApi.get('/calendars');
 
       if (response.data.success) {
         return { calendars: response.data.calendars };
@@ -80,6 +76,34 @@ export class CalendarService {
       const errorMessage = error instanceof Error ? error.message : 'Failed to fetch calendars';
       return {
         calendars: [],
+        error: errorMessage
+      };
+    }
+  }
+
+  /**
+   * Get the active company calendar
+   */
+  static async getCompanyCalendar(): Promise<{ calendar?: Calendar; error?: string }> {
+    try {
+      const response = await this.getCalendars();
+      
+      if (response.error) {
+        return { error: response.error };
+      }
+
+      // In simplified system, there's only one active calendar
+      const activeCalendar = response.calendars.find(cal => cal.is_active);
+      
+      if (activeCalendar) {
+        return { calendar: activeCalendar };
+      } else {
+        return { error: 'No active company calendar found' };
+      }
+    } catch (error: unknown) {
+      console.error('❌ Error fetching company calendar:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch company calendar';
+      return {
         error: errorMessage
       };
     }
@@ -111,13 +135,24 @@ export class CalendarService {
    */
   static async getCalendarWithHolidays(id: string): Promise<{
     calendar?: CalendarWithHolidays;
+    holidays?: Array<{
+      id: string;
+      name: string;
+      date: string;
+      holiday_type: 'public' | 'company' | 'optional';
+      description?: string;
+      is_active: boolean;
+    }>;
     error?: string;
   }> {
     try {
       const response = await backendApi.get(`/calendars/${id}/with-holidays`);
 
       if (response.data.success) {
-        return { calendar: response.data };
+        return { 
+          calendar: response.data.calendar,
+          holidays: response.data.holidays
+        };
       } else {
         return { error: response.data.error || 'Failed to fetch calendar with holidays' };
       }
@@ -131,31 +166,7 @@ export class CalendarService {
   }
 
   /**
-   * Get default calendar for a type
-   */
-  static async getDefaultCalendar(type: CalendarType): Promise<{
-    calendar?: Calendar;
-    error?: string;
-  }> {
-    try {
-      const response = await backendApi.get(`/calendars/default/${type}`);
-
-      if (response.data.success) {
-        return { calendar: response.data.calendar };
-      } else {
-        return { error: response.data.error || 'Failed to fetch default calendar' };
-      }
-    } catch (error: unknown) {
-      console.error('❌ Error fetching default calendar:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch default calendar';
-      return {
-        error: errorMessage
-      };
-    }
-  }
-
-  /**
-   * Create a new calendar
+   * Create a new calendar (replaces any existing active calendar)
    */
   static async createCalendar(data: CreateCalendarData): Promise<{
     calendar?: Calendar;
@@ -224,34 +235,6 @@ export class CalendarService {
   }
 
   /**
-   * Clone calendar with holidays
-   */
-  static async cloneCalendar(id: string, data: CloneCalendarData): Promise<{
-    calendar?: Calendar;
-    holidaysCloned?: number;
-    error?: string;
-  }> {
-    try {
-      const response = await backendApi.post(`/calendars/${id}/clone`, data);
-
-      if (response.data.success) {
-        return {
-          calendar: response.data.calendar,
-          holidaysCloned: response.data.holidaysCloned
-        };
-      } else {
-        return { error: response.data.error || 'Failed to clone calendar' };
-      }
-    } catch (error: unknown) {
-      console.error('❌ Error cloning calendar:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to clone calendar';
-      return {
-        error: errorMessage
-      };
-    }
-  }
-
-  /**
    * Check if a date is a working day according to calendar
    */
   static isWorkingDay(calendar: Calendar, date: Date): boolean {
@@ -260,14 +243,12 @@ export class CalendarService {
   }
 
   /**
-   * Check if a date is a holiday in the calendar
+   * Check if a date is a holiday (simplified - checks global company holidays)
    */
-  static async isHoliday(calendarId: string, date: Date): Promise<boolean> {
+  static async isHoliday(date: Date): Promise<boolean> {
     try {
       const dateStr = date.toISOString().split('T')[0];
-      const response = await backendApi.get(`/holidays/check/${dateStr}`, {
-        params: { calendar_id: calendarId }
-      });
+      const response = await backendApi.get(`/holidays/check/${dateStr}`);
 
       return response.data.success && response.data.is_holiday;
     } catch (error) {
@@ -277,67 +258,37 @@ export class CalendarService {
   }
 
   /**
-   * Get working days count between two dates
+   * Get working days count between two dates for the company calendar
    */
   static async getWorkingDaysCount(
-    calendar: Calendar,
     startDate: Date,
     endDate: Date
   ): Promise<number> {
-    let workingDays = 0;
-    const currentDate = new Date(startDate);
-
-    while (currentDate <= endDate) {
-      if (this.isWorkingDay(calendar, currentDate)) {
-        // Check if it's not a holiday
-        const isHoliday = await this.isHoliday(calendar.id, currentDate);
-        if (!isHoliday) {
-          workingDays++;
-        }
-      }
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-
-    return workingDays;
-  }
-
-  /**
-   * Get calendar-aware holidays for a date range
-   */
-  static async getHolidaysForCalendar(
-    calendarId: string,
-    params?: {
-      startDate?: string;
-      endDate?: string;
-      holiday_type?: string;
-      year?: number;
-    }
-  ): Promise<{
-    holidays: Array<{
-      id: string;
-      name: string;
-      date: string;
-      holiday_type: string;
-      description?: string;
-      is_active: boolean;
-    }>;
-    error?: string;
-  }> {
     try {
-      const response = await backendApi.get(`/holidays/calendar/${calendarId}`, { params });
-
-      if (response.data.success) {
-        return { holidays: response.data.holidays };
-      } else {
-        return { holidays: [], error: response.data.error || 'Failed to fetch holidays' };
+      const calendarResult = await this.getCompanyCalendar();
+      
+      if (calendarResult.error || !calendarResult.calendar) {
+        throw new Error('Could not fetch company calendar');
       }
-    } catch (error: unknown) {
-      console.error('❌ Error fetching calendar holidays:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch holidays';
-      return {
-        holidays: [],
-        error: errorMessage
-      };
+
+      let workingDays = 0;
+      const currentDate = new Date(startDate);
+
+      while (currentDate <= endDate) {
+        if (this.isWorkingDay(calendarResult.calendar, currentDate)) {
+          // Check if it's not a holiday
+          const isHoliday = await this.isHoliday(currentDate);
+          if (!isHoliday) {
+            workingDays++;
+          }
+        }
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      return workingDays;
+    } catch (error) {
+      console.error('❌ Error calculating working days:', error);
+      return 0;
     }
   }
 }

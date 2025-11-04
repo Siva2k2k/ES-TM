@@ -4,7 +4,6 @@ export type HolidayType = 'public' | 'company' | 'optional';
 
 export interface CompanyHoliday {
   _id: string;
-  calendar_id?: string;
   name: string;
   date: Date | string;
   holiday_type: HolidayType;
@@ -29,7 +28,6 @@ export interface CreateHolidayData {
   date: string;
   holiday_type?: HolidayType;
   description?: string;
-  calendar_id?: string;
 }
 
 export interface UpdateHolidayData {
@@ -40,9 +38,40 @@ export interface UpdateHolidayData {
   is_active?: boolean;
 }
 
+// API Response types - matching actual backend responses
+interface HolidaysApiResponse {
+  success: boolean;
+  holidays: CompanyHoliday[];
+  error?: string;
+  message?: string;
+}
+
+interface HolidayApiResponse {
+  success: boolean;
+  holiday: CompanyHoliday;
+  error?: string;
+  message?: string;
+}
+
+interface UpcomingHolidaysApiResponse {
+  success: boolean;
+  holidays: CompanyHoliday[];
+  count: number;
+  error?: string;
+  message?: string;
+}
+
+interface CheckHolidayApiResponse {
+  success: boolean;
+  is_holiday: boolean;
+  holiday?: CompanyHoliday;
+  error?: string;
+  message?: string;
+}
+
 /**
- * Company Holiday Management Service
- * Handles all holiday-related operations
+ * Company Holiday Management Service - Simplified for Single Company Calendar
+ * Handles all holiday-related operations for the unified company calendar
  */
 export class CompanyHolidayService {
   /**
@@ -59,16 +88,18 @@ export class CompanyHolidayService {
       if (filters?.year) params.append('year', String(filters.year));
 
       const queryString = params.toString();
-      const response = await backendApi.get(`/holidays${queryString ? `?${queryString}` : ''}`);
+      const endpoint = queryString ? `/holidays?${queryString}` : '/holidays';
+      const response = await backendApi.get<HolidaysApiResponse>(endpoint);
 
       if (response.success && response.holidays) {
-        return { holidays: response.holidays as CompanyHoliday[] };
+        return { holidays: response.holidays };
       } else {
         return { holidays: [], error: response.error || 'Failed to fetch holidays' };
       }
-    } catch (error: any) {
-      console.error('Error fetching holidays:', error);
-      return { holidays: [], error: error.message || 'Failed to fetch holidays' };
+    } catch (error: unknown) {
+      console.error('❌ Error fetching holidays:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch holidays';
+      return { holidays: [], error: errorMessage };
     }
   }
 
@@ -77,19 +108,22 @@ export class CompanyHolidayService {
    */
   static async getUpcomingHolidays(days: number = 30): Promise<{ holidays: CompanyHoliday[]; count: number; error?: string }> {
     try {
-      const response = await backendApi.get(`/holidays/upcoming?days=${days}`);
+      const response = await backendApi.get<UpcomingHolidaysApiResponse>(
+        `/holidays/upcoming?days=${days}`
+      );
 
       if (response.success && response.holidays) {
         return {
-          holidays: response.holidays as CompanyHoliday[],
+          holidays: response.holidays,
           count: response.count || 0
         };
       } else {
         return { holidays: [], count: 0, error: response.error || 'Failed to fetch upcoming holidays' };
       }
-    } catch (error: any) {
-      console.error('Error fetching upcoming holidays:', error);
-      return { holidays: [], count: 0, error: error.message || 'Failed to fetch upcoming holidays' };
+    } catch (error: unknown) {
+      console.error('❌ Error fetching upcoming holidays:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch upcoming holidays';
+      return { holidays: [], count: 0, error: errorMessage };
     }
   }
 
@@ -98,16 +132,17 @@ export class CompanyHolidayService {
    */
   static async getHolidayById(id: string): Promise<{ holiday?: CompanyHoliday; error?: string }> {
     try {
-      const response = await backendApi.get(`/holidays/${id}`);
+      const response = await backendApi.get<HolidayApiResponse>(`/holidays/${id}`);
 
       if (response.success && response.holiday) {
-        return { holiday: response.holiday as CompanyHoliday };
+        return { holiday: response.holiday };
       } else {
         return { error: response.error || 'Holiday not found' };
       }
-    } catch (error: any) {
-      console.error('Error fetching holiday:', error);
-      return { error: error.message || 'Failed to fetch holiday' };
+    } catch (error: unknown) {
+      console.error('❌ Error fetching holiday:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch holiday';
+      return { error: errorMessage };
     }
   }
 
@@ -116,16 +151,17 @@ export class CompanyHolidayService {
    */
   static async createHoliday(data: CreateHolidayData): Promise<{ holiday?: CompanyHoliday; error?: string }> {
     try {
-      const response = await backendApi.post('/holidays', data);
+      const response = await backendApi.post<HolidayApiResponse>('/holidays', data);
 
       if (response.success && response.holiday) {
-        return { holiday: response.holiday as CompanyHoliday };
+        return { holiday: response.holiday };
       } else {
         return { error: response.error || 'Failed to create holiday' };
       }
-    } catch (error: any) {
-      console.error('Error creating holiday:', error);
-      return { error: error.message || 'Failed to create holiday' };
+    } catch (error: unknown) {
+      console.error('❌ Error creating holiday:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create holiday';
+      return { error: errorMessage };
     }
   }
 
@@ -134,16 +170,17 @@ export class CompanyHolidayService {
    */
   static async updateHoliday(id: string, data: UpdateHolidayData): Promise<{ holiday?: CompanyHoliday; error?: string }> {
     try {
-      const response = await backendApi.put(`/holidays/${id}`, data);
+      const response = await backendApi.put<HolidayApiResponse>(`/holidays/${id}`, data);
 
       if (response.success && response.holiday) {
-        return { holiday: response.holiday as CompanyHoliday };
+        return { holiday: response.holiday };
       } else {
         return { error: response.error || 'Failed to update holiday' };
       }
-    } catch (error: any) {
-      console.error('Error updating holiday:', error);
-      return { error: error.message || 'Failed to update holiday' };
+    } catch (error: unknown) {
+      console.error('❌ Error updating holiday:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update holiday';
+      return { error: errorMessage };
     }
   }
 
@@ -152,16 +189,17 @@ export class CompanyHolidayService {
    */
   static async deleteHoliday(id: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await backendApi.delete(`/holidays/${id}`);
+      const response = await backendApi.delete<{ success: boolean; error?: string; message?: string }>(`/holidays/${id}`);
 
       if (response.success) {
         return { success: true };
       } else {
         return { success: false, error: response.error || 'Failed to delete holiday' };
       }
-    } catch (error: any) {
-      console.error('Error deleting holiday:', error);
-      return { success: false, error: error.message || 'Failed to delete holiday' };
+    } catch (error: unknown) {
+      console.error('❌ Error deleting holiday:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete holiday';
+      return { success: false, error: errorMessage };
     }
   }
 
@@ -174,19 +212,20 @@ export class CompanyHolidayService {
     error?: string
   }> {
     try {
-      const response = await backendApi.get(`/holidays/check/${date}`);
+      const response = await backendApi.get<CheckHolidayApiResponse>(`/holidays/check/${date}`);
 
       if (response.success) {
         return {
           is_holiday: response.is_holiday || false,
-          holiday: response.holiday as CompanyHoliday | undefined
+          holiday: response.holiday
         };
       } else {
         return { is_holiday: false, error: response.error || 'Failed to check holiday' };
       }
-    } catch (error: any) {
-      console.error('Error checking holiday:', error);
-      return { is_holiday: false, error: error.message || 'Failed to check holiday' };
+    } catch (error: unknown) {
+      console.error('❌ Error checking holiday:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to check holiday';
+      return { is_holiday: false, error: errorMessage };
     }
   }
 
