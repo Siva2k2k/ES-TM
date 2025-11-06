@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Mail, DollarSign, Calendar, Shield, X, AlertCircle, CheckCircle, Save } from 'lucide-react';
 import { UserService } from '../services/UserService';
+import { themeClasses, cn } from '../contexts/theme';
 
 interface UserProfileModalProps {
   isOpen: boolean;
@@ -130,15 +131,19 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+      <div className={cn(themeClasses.modal, "rounded-lg shadow-xl w-full max-w-lg mx-4")}>
+        <div className={cn("flex items-center justify-between p-6 border-b", themeClasses.border.default)}>
           <div className="flex items-center">
-            <User className="w-6 h-6 text-blue-600 mr-3" />
-            <h2 className="text-xl font-semibold text-gray-900">User Profile</h2>
+            <User className="w-6 h-6 text-blue-600 dark:text-blue-400 mr-3" />
+            <h2 className={cn("text-xl font-semibold", themeClasses.heading)}>User Profile</h2>
           </div>
           <button
             onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className={cn(
+              "transition-colors",
+              themeClasses.muted,
+              "hover:text-gray-600 dark:hover:text-gray-300"
+            )}
           >
             <X className="w-6 h-6" />
           </button>
@@ -146,16 +151,16 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
         <form onSubmit={handleSubmit} className="p-6">
           {success && (
-            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <div className={cn("mb-4 p-3 border rounded-lg", themeClasses.status.success)}>
               <div className="flex items-center">
-                <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
-                <span className="text-green-800 font-medium">Profile updated successfully!</span>
+                <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 mr-2" />
+                <span className="text-green-800 dark:text-green-200 font-medium">Profile updated successfully!</span>
               </div>
             </div>
           )}
 
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <div className={cn("mb-4 p-3 border rounded-lg", themeClasses.status.error)}>
               <div className="flex items-center">
                 <AlertCircle className="w-5 h-5 text-red-600 mr-2" />
                 <span className="text-red-800">{error}</span>

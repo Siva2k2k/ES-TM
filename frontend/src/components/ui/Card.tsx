@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '../../utils/cn';
+import { themeClasses, cn } from '../../contexts/theme';
 
 const Card = React.forwardRef<
   HTMLDivElement,
@@ -7,10 +7,7 @@ const Card = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn(
-      'rounded-xl border border-slate-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm dark:shadow-gray-900/50',
-      className
-    )}
+    className={cn(themeClasses.card, className)}
     {...props}
   />
 ));
@@ -34,7 +31,7 @@ const CardTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <h3
     ref={ref}
-    className={cn('text-xl font-semibold leading-none tracking-tight text-slate-900 dark:text-gray-100', className)}
+    className={cn('text-xl font-semibold leading-none tracking-tight', themeClasses.heading, className)}
     {...props}
   />
 ));
@@ -46,7 +43,7 @@ const CardDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <p
     ref={ref}
-    className={cn('text-sm text-slate-500 dark:text-gray-400', className)}
+    className={cn('text-sm', themeClasses.muted, className)}
     {...props}
   />
 ));

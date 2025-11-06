@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, Command, ArrowRight, Clock, User, Folder, CheckSquare, CreditCard, BarChart, Settings, Home } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BackendApiClient } from '../../lib/backendApi';
+import { themeClasses, cn } from '../../contexts/theme';
 
 interface SearchResult {
   id: string;
@@ -408,18 +409,26 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ className = '' }) =>
       {/* Search Modal */}
       <div 
         ref={modalRef}
-        className="fixed top-20 left-1/2 transform -translate-x-1/2 w-full max-w-2xl bg-white rounded-lg shadow-xl border border-gray-200 z-50"
+        className={cn(
+          "fixed top-20 left-1/2 transform -translate-x-1/2 w-full max-w-2xl rounded-lg shadow-xl z-50",
+          themeClasses.modal,
+          themeClasses.border.default
+        )}
       >
         {/* Search Input */}
-        <div className="flex items-center px-4 py-3 border-b border-gray-200">
-          <Search className="h-5 w-5 text-gray-400" />
+        <div className={cn("flex items-center px-4 py-3 border-b", themeClasses.border.default)}>
+          <Search className={cn("h-5 w-5", themeClasses.muted)} />
           <input
             ref={searchInputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search for anything..."
-            className="flex-1 ml-3 text-lg bg-transparent border-none outline-none placeholder-gray-500"
+            className={cn(
+              "flex-1 ml-3 text-lg bg-transparent border-none outline-none",
+              themeClasses.body,
+              "placeholder-gray-500 dark:placeholder-gray-400"
+            )}
           />
           {loading && (
             <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent" />
@@ -432,18 +441,31 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ className = '' }) =>
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-200 px-4 py-3 text-xs text-gray-500 flex items-center justify-between">
+        <div className={cn(
+          "border-t px-4 py-3 text-xs flex items-center justify-between",
+          themeClasses.border.default,
+          themeClasses.muted
+        )}>
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-1">
-              <kbd className="px-1.5 py-0.5 font-semibold bg-gray-100 border border-gray-300 rounded">Up/Down</kbd>
+              <kbd className={cn(
+                "px-1.5 py-0.5 font-semibold border rounded",
+                "bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600"
+              )}>Up/Down</kbd>
               <span>Navigate</span>
             </div>
             <div className="flex items-center space-x-1">
-              <kbd className="px-1.5 py-0.5 font-semibold bg-gray-100 border border-gray-300 rounded">Enter</kbd>
+              <kbd className={cn(
+                "px-1.5 py-0.5 font-semibold border rounded",
+                "bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600"
+              )}>Enter</kbd>
               <span>Select</span>
             </div>
             <div className="flex items-center space-x-1">
-              <kbd className="px-1.5 py-0.5 font-semibold bg-gray-100 border border-gray-300 rounded">Esc</kbd>
+              <kbd className={cn(
+                "px-1.5 py-0.5 font-semibold border rounded",
+                "bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600"
+              )}>Esc</kbd>
               <span>Close</span>
             </div>
           </div>
