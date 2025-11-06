@@ -1,17 +1,8 @@
-import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { SettingsService } from '../services/SettingsService';
 import { ThemeContextType, Theme, ResolvedTheme } from './theme/types';
 import { lightTheme, darkTheme } from './theme/colors';
-
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
-
-export const useTheme = (): ThemeContextType => {
-  const context = useContext(ThemeContext);
-  if (!context) {
-    throw new Error('useTheme must be used within a ThemeProvider');
-  }
-  return context;
-};
+import { ThemeContext } from './theme/context';
 
 interface ThemeProviderProps {
   children: React.ReactNode;
@@ -107,7 +98,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     }
   }, [resolvedTheme]);
 
-  const setTheme = async (newTheme: Theme): Promise<void> => {
+  const setTheme = useCallback(async (newTheme: Theme): Promise<void> => {
     setThemeState(newTheme);
     localStorage.setItem('theme', newTheme);
 
@@ -120,7 +111,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
         // Silent fail - theme is already saved in localStorage
       }
     }
-  };
+  }, []);
 
   // Memoize the context value to prevent unnecessary rerenders
   const contextValue = useMemo<ThemeContextType>(() => ({
@@ -130,7 +121,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     isLoading,
     colors: resolvedTheme === 'dark' ? darkTheme : lightTheme,
     isDark: resolvedTheme === 'dark',
-  }), [theme, resolvedTheme, isLoading]);
+  }), [theme, resolvedTheme, isLoading, setTheme]);
 
   return (
     <ThemeContext.Provider value={contextValue}>

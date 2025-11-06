@@ -1,9 +1,7 @@
 import { Response } from 'express';
 import mongoose from 'mongoose';
 import { UserWeekSummary, IUserWeekSummary } from '../models/UserWeekSummary';
-import { User, IUser } from '../models/User';
-import { Timesheet } from '../models/Timesheet';
-import { Project } from '../models/Project';
+import { User } from '../models/User';
 import UserWeekAggregationService from '../services/UserWeekAggregationService';
 import logger from '../config/logger';
 import { AuthRequest } from '../middleware/auth';
@@ -24,7 +22,7 @@ export class UserTrackingController {
    */
   async getDashboardOverview(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { role } = req.user!;
+      const { role } = req.user;
       const { weeks = 4 } = req.query;
 
       let userIds: mongoose.Types.ObjectId[] = [];
@@ -41,7 +39,7 @@ export class UserTrackingController {
       } else if (role === 'manager') {
         // Managers can see their direct reports
         const users = await (User.find as any)({
-          manager_id: new mongoose.Types.ObjectId(req.user!.id),
+          manager_id: new mongoose.Types.ObjectId(req.user.id),
           is_active: true,
           deleted_at: null
         }).select('_id');
@@ -85,7 +83,7 @@ export class UserTrackingController {
       if (role === 'management') {
         userQuery.role = { $in: ['employee', 'lead', 'manager'] };
       } else if (role === 'manager') {
-        userQuery.manager_id = new mongoose.Types.ObjectId(req.user!.id);
+        userQuery.manager_id = new mongoose.Types.ObjectId(req.user.id);
       } else {
         res.status(403).json({ error: 'Insufficient permissions' });
         return;
@@ -226,7 +224,7 @@ export class UserTrackingController {
         }).select('_id');
         managerIds = managers.map((m: any) => m._id);
       } else if (role === 'manager') {
-        managerIds = [new mongoose.Types.ObjectId(req.user!.id)];
+        managerIds = [new mongoose.Types.ObjectId(req.user.id)];
       } else {
         res.status(403).json({ error: 'Insufficient permissions' });
         return;
@@ -268,7 +266,7 @@ export class UserTrackingController {
         userIds = users.map((u: any) => u._id);
       } else if (role === 'manager') {
         const users = await (User.find as any)({
-          manager_id: new mongoose.Types.ObjectId(req.user!.id),
+          manager_id: new mongoose.Types.ObjectId(req.user.id),
           is_active: true,
           deleted_at: null
         }).select('_id');
@@ -309,17 +307,17 @@ export class UserTrackingController {
       
       if (timesheetId) {
         result = await UserWeekAggregationService.aggregateTimesheet(
-          new mongoose.Types.ObjectId(timesheetId)
+          new mongoose.Types.ObjectId(String(timesheetId))
         );
       } else if (projectId) {
         // Recalculate all timesheets for a specific project (useful when project gets management approval)
         result = await UserWeekAggregationService.recalculateTimesheetsForProject(
-          new mongoose.Types.ObjectId(projectId)
+          new mongoose.Types.ObjectId(String(projectId))
         );
       } else if (userId) {
         // Recalculate all timesheets for a specific user
         result = await UserWeekAggregationService.recalculateTimesheetsForUser(
-          new mongoose.Types.ObjectId(userId),
+          new mongoose.Types.ObjectId(String(userId)),
           weeks
         );
       } else {
@@ -636,8 +634,8 @@ export class UserTrackingController {
   private aggregateProjectBreakdown(summaries: IUserWeekSummary[]) {
     const projectMap = new Map();
     
-    summaries.forEach(summary => {
-      summary.project_breakdown.forEach(project => {
+    for (const summary of summaries) {
+      for (const project of summary.project_breakdown) {
         const key = project.project_id.toString();
         const existing = projectMap.get(key) || {
           project_id: project.project_id,
@@ -653,8 +651,8 @@ export class UserTrackingController {
         existing.weeks_worked += 1;
         
         projectMap.set(key, existing);
-      });
-    });
+      }
+    }
     
     return Array.from(projectMap.values()).sort((a, b) => b.total_hours - a.total_hours);
   }

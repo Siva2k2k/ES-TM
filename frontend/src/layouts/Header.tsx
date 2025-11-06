@@ -13,7 +13,7 @@ import { cn } from '../utils/cn';
 import { useAuth } from '../store/contexts/AuthContext';
 import { NotificationBell } from '../components/notifications/NotificationBell';
 import { GlobalSearch } from '../components/search/GlobalSearch';
-import { useTheme } from '../contexts/ThemeContext';
+import { useTheme } from '../contexts/theme';
 import { useEffect } from 'react';
 
 export interface HeaderProps {

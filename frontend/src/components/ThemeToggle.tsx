@@ -2,10 +2,34 @@ import React from 'react';
 import { Sun, Moon, Monitor } from 'lucide-react';
 import { useTheme, cn, type Theme } from '../contexts/theme';
 
+type SizeType = 'sm' | 'md' | 'lg';
+
 interface ThemeToggleProps {
   className?: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: SizeType;
   showLabel?: boolean;
+}
+
+function getIconSize(size: SizeType): string {
+  switch (size) {
+    case 'sm':
+      return 'h-3 w-3';
+    case 'md':
+      return 'h-4 w-4';
+    case 'lg':
+      return 'h-5 w-5';
+  }
+}
+
+function getButtonSize(size: SizeType): string {
+  switch (size) {
+    case 'sm':
+      return 'p-1.5';
+    case 'md':
+      return 'p-2';
+    case 'lg':
+      return 'p-3';
+  }
 }
 
 export const ThemeToggle: React.FC<ThemeToggleProps> = ({ 
@@ -36,28 +60,6 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({
       label: 'System',
     },
   ];
-
-  function getIconSize(size: 'sm' | 'md' | 'lg'): string {
-    switch (size) {
-      case 'sm':
-        return 'h-3 w-3';
-      case 'md':
-        return 'h-4 w-4';
-      case 'lg':
-        return 'h-5 w-5';
-    }
-  }
-
-  function getButtonSize(size: 'sm' | 'md' | 'lg'): string {
-    switch (size) {
-      case 'sm':
-        return 'p-1.5';
-      case 'md':
-        return 'p-2';
-      case 'lg':
-        return 'p-3';
-    }
-  }
 
   const handleThemeChange = async (newTheme: Theme): Promise<void> => {
     await setTheme(newTheme);

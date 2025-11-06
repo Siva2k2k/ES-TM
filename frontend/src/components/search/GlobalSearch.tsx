@@ -35,6 +35,101 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ className = '' }) =>
   const [modifierKey, setModifierKey] = useState<'Ctrl' | 'Cmd'>('Ctrl');
   const isMountedRef = useRef(true);
 
+  // Define all functions with useCallback to prevent dependency issues
+  const fetchQuickActions = useCallback(async () => {
+    try {
+      const data = await apiClient.get<{ success: boolean; data?: { quick_actions?: SearchResult[] } }>('/search/quick-actions');
+      if (isMountedRef.current) {
+        setQuickActions(data?.data?.quick_actions || []);
+        setSelectedIndex(0);
+      }
+    } catch (error) {
+      console.error('Error fetching quick actions:', error);
+    }
+  }, [apiClient]);
+
+  const performSearch = useCallback(async (searchQuery: string) => {
+    setLoading(true);
+    try {
+      const data = await apiClient.get<{ success: boolean; data?: { results?: SearchResult[] } }>(
+        `/search?q=${encodeURIComponent(searchQuery)}&limit=8`
+      );
+
+      if (isMountedRef.current) {
+        setResults(data?.data?.results || []);
+        setSelectedIndex(0);
+      }
+    } catch (error) {
+      console.error('Error performing search:', error);
+    } finally {
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
+    }
+  }, [apiClient]);
+
+  const resolveSearchNavigation = useCallback((result: SearchResult): string | null => {
+    if (!result.url) {
+      return null;
+    }
+
+    const normalizedUrl = result.url.trim();
+    const searchRouteMap: Record<string, string> = {
+      'dashboard': '/dashboard',
+      'dashboard|': '/dashboard',
+      'timesheet': '/dashboard/timesheets',
+      'timesheets': '/dashboard/timesheets',
+      'project': '/dashboard/projects',
+      'projects': '/dashboard/projects',
+      'user': '/dashboard/users',
+      'users': '/dashboard/users',
+      'report': '/dashboard/reports',
+      'reports': '/dashboard/reports',
+      'setting': '/dashboard/settings',
+      'settings': '/dashboard/settings',
+      'profile': '/dashboard/profile',
+      'profile|': '/dashboard/profile',
+      'notification': '/dashboard/notifications',
+      'notifications': '/dashboard/notifications',
+      'help': '/help',
+      'help|': '/help'
+    };
+
+    // Check for exact route match
+    if (searchRouteMap[normalizedUrl]) {
+      return searchRouteMap[normalizedUrl];
+    }
+
+    // Check for partial matches
+    for (const [key, value] of Object.entries(searchRouteMap)) {
+      if (normalizedUrl.includes(key) || key.includes(normalizedUrl)) {
+        return value;
+      }
+    }
+
+    // Fallback: construct route based on result type and category
+    if (result.type === 'page' && result.category !== 'external') {
+      return `/${normalizedUrl}`;
+    }
+
+    return `/${normalizedUrl}`;
+  }, []);
+
+  const handleResultClick = useCallback((result: SearchResult) => {
+    const targetPath = resolveSearchNavigation(result);
+
+    if (targetPath) {
+      navigate(targetPath);
+    } else if (result.url?.startsWith('http')) {
+      window.open(result.url, '_blank', 'noopener,noreferrer');
+    }
+    
+    setIsOpen(false);
+    setQuery('');
+    setResults([]);
+    setSelectedIndex(0);
+  }, [navigate, resolveSearchNavigation]);
+
   // Handle global keyboard shortcuts
   const handleGlobalKeyDown = useCallback((e: KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -46,8 +141,8 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ className = '' }) =>
 
   useEffect(() => {
     isMountedRef.current = true;
-    const platform = typeof navigator !== 'undefined' ? navigator.platform : '';
-    if (platform && /Mac|iPhone|iPad|iPod/i.test(platform)) {
+    const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent;
+    if (userAgent && /Mac|iPhone|iPad|iPod/i.test(userAgent)) {
       setModifierKey('Cmd');
     }
 
@@ -85,7 +180,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ className = '' }) =>
         handleResultClick(items[selectedIndex]);
       }
     }
-  }, [isOpen, results, quickActions, selectedIndex]);
+  }, [isOpen, results, quickActions, selectedIndex, handleResultClick]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -109,7 +204,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ className = '' }) =>
     if (isOpen && quickActions.length === 0) {
       fetchQuickActions();
     }
-  }, [isOpen, quickActions.length]);
+  }, [isOpen, quickActions.length, fetchQuickActions]);
 
   // Search with debouncing
   useEffect(() => {
@@ -124,116 +219,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ className = '' }) =>
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [query]);
-
-  const fetchQuickActions = async () => {
-    try {
-      const data = await apiClient.get<{ success: boolean; data?: { quick_actions?: SearchResult[] } }>('/search/quick-actions');
-      if (isMountedRef.current) {
-        setQuickActions(data?.data?.quick_actions || []);
-        setSelectedIndex(0);
-      }
-    } catch (error) {
-      console.error('Error fetching quick actions:', error);
-    }
-  };
-
-  const performSearch = async (searchQuery: string) => {
-    setLoading(true);
-    try {
-      const data = await apiClient.get<{ success: boolean; data?: { results?: SearchResult[] } }>(
-        `/search?q=${encodeURIComponent(searchQuery)}&limit=8`
-      );
-
-      if (isMountedRef.current) {
-        setResults(data?.data?.results || []);
-        setSelectedIndex(0);
-      }
-    } catch (error) {
-      console.error('Error performing search:', error);
-    } finally {
-      if (isMountedRef.current) {
-        setLoading(false);
-      }
-    }
-  };
-
-  const resolveSearchNavigation = (result: SearchResult): string | null => {
-    if (!result.url) {
-      return null;
-    }
-
-    const normalizedUrl = result.url.trim();
-    const searchRouteMap: Record<string, string> = {
-      'dashboard': '/dashboard',
-      'dashboard|': '/dashboard',
-      'timesheet': '/dashboard/timesheets',
-      'timesheet|timesheet-list': '/dashboard/timesheets',
-      'timesheet|timesheet-calendar': '/dashboard/timesheets',
-      'timesheet|timesheet-status': '/dashboard/timesheets/status',
-      'timesheet|timesheet-team': '/dashboard/team-review',
-      'timesheet-status': '/dashboard/timesheets/status',
-      'timesheet-team': '/dashboard/team-review',
-      'projects': '/dashboard/projects',
-      'projects|projects-overview': '/dashboard/projects',
-      'projects|projects-tasks': '/dashboard/projects',
-      'users': '/dashboard/users',
-      'clients': '/dashboard/clients',
-      'billing': '/dashboard/billing',
-      'billing|billing-projects': '/dashboard/billing/projects',
-      'billing|billing-tasks': '/dashboard/billing/tasks',
-      'billing|billing-others': '/dashboard/billing',
-      'reports': '/dashboard/reports',
-      'audit': '/dashboard/admin/audit-logs',
-      'settings': '/dashboard'
-    };
-
-    if (normalizedUrl.includes('|')) {
-      const [sectionRaw, subsectionRaw = ''] = normalizedUrl.split('|');
-      const sectionKey = sectionRaw.trim().toLowerCase();
-      const subsectionKey = subsectionRaw.trim().toLowerCase();
-      const compositeKey = `${sectionKey}|${subsectionKey}`;
-
-      if (searchRouteMap[compositeKey]) {
-        return searchRouteMap[compositeKey];
-      }
-
-      if (searchRouteMap[sectionKey]) {
-        return searchRouteMap[sectionKey];
-      }
-
-      if (sectionKey) {
-        return `/dashboard/${sectionKey}`;
-      }
-
-      return '/dashboard';
-    }
-
-    if (normalizedUrl.startsWith('http')) {
-      return null;
-    }
-
-    if (normalizedUrl.startsWith('/')) {
-      return normalizedUrl;
-    }
-
-    return `/${normalizedUrl}`;
-  };
-
-  const handleResultClick = (result: SearchResult) => {
-    const targetPath = resolveSearchNavigation(result);
-
-    if (targetPath) {
-      navigate(targetPath);
-    } else if (result.url && result.url.startsWith('http')) {
-      window.open(result.url, '_blank', 'noopener,noreferrer');
-    }
-    
-    setIsOpen(false);
-    setQuery('');
-    setResults([]);
-    setSelectedIndex(0);
-  };
+  }, [query, performSearch]);
 
   const getIcon = (iconName?: string, category?: string) => {
     const iconProps = { className: "h-4 w-4" };
@@ -305,7 +291,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ className = '' }) =>
                 {result.title}
               </p>
               <span className={`text-xs px-2 py-1 rounded-full ${getCategoryColor(result.category)}`}>
-                {result.category.replace(/_/g, ' ')}
+                {result.category.split('_').join(' ')}
               </span>
             </div>
             <p className="text-sm text-gray-500 truncate mt-1">

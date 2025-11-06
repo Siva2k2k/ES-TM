@@ -27,6 +27,33 @@ import {
   Bar
 } from 'recharts';
 
+// Helper function to get alert styles based on type
+const getAlertStyles = (type: string) => {
+  switch (type) {
+    case 'error':
+      return {
+        container: 'border-red-500 bg-red-50 dark:bg-red-900/20',
+        title: 'text-red-800 dark:text-red-200',
+        message: 'text-red-600 dark:text-red-300',
+        count: 'text-red-700 dark:text-red-200'
+      };
+    case 'warning':
+      return {
+        container: 'border-orange-500 bg-orange-50 dark:bg-orange-900/20',
+        title: 'text-orange-800 dark:text-orange-200',
+        message: 'text-orange-600 dark:text-orange-300',
+        count: 'text-orange-700 dark:text-orange-200'
+      };
+    default:
+      return {
+        container: 'border-blue-500 bg-blue-50 dark:bg-blue-900/20',
+        title: 'text-blue-800 dark:text-blue-200',
+        message: 'text-blue-600 dark:text-blue-300',
+        count: 'text-blue-700 dark:text-blue-200'
+      };
+  }
+};
+
 const GeneralAnalyticsPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUserRole } = useAuth();
@@ -394,40 +421,27 @@ const GeneralAnalyticsPage: React.FC = () => {
             </h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {overview.alerts.map((alert, index) => (
-              <div 
-                key={index}
-                className={`p-4 rounded-lg border-l-4 ${
-                  alert.type === 'error' ? 'border-red-500 bg-red-50 dark:bg-red-900/20' :
-                  alert.type === 'warning' ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20' :
-                  'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                }`}
-              >
-                <h3 className={`font-medium ${
-                  alert.type === 'error' ? 'text-red-800 dark:text-red-200' :
-                  alert.type === 'warning' ? 'text-orange-800 dark:text-orange-200' :
-                  'text-blue-800 dark:text-blue-200'
-                }`}>
-                  {alert.title}
-                </h3>
-                <p className={`text-sm mt-1 ${
-                  alert.type === 'error' ? 'text-red-600 dark:text-red-300' :
-                  alert.type === 'warning' ? 'text-orange-600 dark:text-orange-300' :
-                  'text-blue-600 dark:text-blue-300'
-                }`}>
-                  {alert.message}
-                </p>
-                {alert.count > 0 && (
-                  <p className={`text-xs mt-2 font-medium ${
-                    alert.type === 'error' ? 'text-red-700 dark:text-red-200' :
-                    alert.type === 'warning' ? 'text-orange-700 dark:text-orange-200' :
-                    'text-blue-700 dark:text-blue-200'
-                  }`}>
-                    {alert.count} affected users
+            {overview.alerts.map((alert, index) => {
+              const alertStyles = getAlertStyles(alert.type);
+              return (
+                <div 
+                  key={`${alert.type}-${alert.title}-${index}`}
+                  className={`p-4 rounded-lg border-l-4 ${alertStyles.container}`}
+                >
+                  <h3 className={`font-medium ${alertStyles.title}`}>
+                    {alert.title}
+                  </h3>
+                  <p className={`text-sm mt-1 ${alertStyles.message}`}>
+                    {alert.message}
                   </p>
-                )}
-              </div>
-            ))}
+                  {alert.count > 0 && (
+                    <p className={`text-xs mt-2 font-medium ${alertStyles.count}`}>
+                      {alert.count} affected users
+                    </p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

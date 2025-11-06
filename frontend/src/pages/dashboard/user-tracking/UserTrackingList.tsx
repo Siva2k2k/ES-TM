@@ -47,7 +47,7 @@ const UserTrackingList: React.FC = () => {
         limit: pagination.limit,
         search: searchTerm || undefined
       });      
-      if (response && response.users) {
+      if (response?.users) {
         setUsers(response.users);
         setPagination(response.pagination);
       } else {        setUsers([]);

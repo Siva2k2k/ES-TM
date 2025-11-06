@@ -169,7 +169,7 @@ const NotificationsPage: React.FC = () => {
     }
     
     if (notification.action_url) {
-      window.location.href = notification.action_url;
+      globalThis.location.href = notification.action_url;
     }
   };
 
@@ -180,6 +180,16 @@ const NotificationsPage: React.FC = () => {
       case 'low': return 'border-l-green-500 bg-green-50';
       default: return 'border-l-gray-500 bg-gray-50';
     }
+  };
+
+  const getEmptyStateMessage = () => {
+    if (filter === 'unread') {
+      return "You're all caught up! No unread notifications.";
+    }
+    if (filter === 'read') {
+      return "No read notifications yet.";
+    }
+    return "You don't have any notifications yet.";
   };
 
   const filteredNotifications = notifications.filter(notification => {
@@ -364,10 +374,11 @@ const NotificationsPage: React.FC = () => {
             <div className={cn("p-4 border-t bg-gray-50 dark:bg-gray-800", themeClasses.border.default)}>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="type-filter" className="block text-sm font-medium text-gray-700 mb-2">
                     Type
                   </label>
                   <select
+                    id="type-filter"
                     value={typeFilter}
                     onChange={(e) => setTypeFilter(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -375,17 +386,18 @@ const NotificationsPage: React.FC = () => {
                     <option value="all">All Types</option>
                     {notificationTypes.map(type => (
                       <option key={type} value={type}>
-                        {type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                        {type.split('_').join(' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
                       </option>
                     ))}
                   </select>
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="priority-filter" className="block text-sm font-medium text-gray-700 mb-2">
                     Priority
                   </label>
                   <select
+                    id="priority-filter"
                     value={priorityFilter}
                     onChange={(e) => setPriorityFilter(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -398,11 +410,12 @@ const NotificationsPage: React.FC = () => {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="date-filter" className="block text-sm font-medium text-gray-700 mb-2">
                     <Calendar className="inline h-4 w-4 mr-1" />
                     Date Range
                   </label>
                   <select
+                    id="date-filter"
                     value={dateFilter}
                     onChange={(e) => setDateFilter(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -443,11 +456,7 @@ const NotificationsPage: React.FC = () => {
               <Bell className="h-16 w-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
               <h3 className={cn("text-lg font-medium mb-2", themeClasses.heading)}>No notifications found</h3>
               <p>
-                {filter === 'unread' 
-                  ? "You're all caught up! No unread notifications." 
-                  : filter === 'read'
-                  ? "No read notifications yet."
-                  : "You don't have any notifications yet."}
+                {getEmptyStateMessage()}
               </p>
             </div>
           ) : (

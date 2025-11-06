@@ -1,5 +1,6 @@
 import React from 'react';
-import { useTheme, themeClasses, ThemeToggle } from '../contexts/theme';
+import { useTheme, themeClasses } from '../contexts/theme';
+import { ThemeToggle } from './ThemeToggle';
 import { PageLayout, Section } from './Layout';
 import { StatusBadge, StatusAlert } from './StatusComponents';
 import { Button } from './ui/Button';
@@ -109,16 +110,16 @@ export const ThemeTestPage: React.FC = () => {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className={`block text-sm font-medium mb-2 ${themeClasses.subheading}`}>
+                <label htmlFor="text-input" className={`block text-sm font-medium mb-2 ${themeClasses.subheading}`}>
                   Text Input
                 </label>
-                <Input placeholder="Enter some text..." />
+                <Input id="text-input" placeholder="Enter some text..." />
               </div>
               <div>
-                <label className={`block text-sm font-medium mb-2 ${themeClasses.subheading}`}>
+                <label htmlFor="email-input" className={`block text-sm font-medium mb-2 ${themeClasses.subheading}`}>
                   Email Input
                 </label>
-                <Input type="email" placeholder="Enter your email..." />
+                <Input id="email-input" type="email" placeholder="Enter your email..." />
               </div>
             </div>
           </CardContent>

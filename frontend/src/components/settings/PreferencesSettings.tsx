@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Palette, Monitor, Globe, Save, Sun, Moon, Laptop } from 'lucide-react';
 import { SettingsService, UserSettings } from '../../services/SettingsService';
-import { useTheme } from '../../contexts/ThemeContext';
+import { useTheme } from '../../contexts/theme';
 import { useToast } from '../../hooks/useToast';
 
 interface PreferencesSettingsProps {

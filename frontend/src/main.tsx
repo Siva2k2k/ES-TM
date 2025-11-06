@@ -4,7 +4,7 @@ import 'regenerator-runtime/runtime';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './store/contexts/AuthContext';
-import { ThemeProvider } from './contexts/ThemeContext';
+import { ThemeProvider } from './contexts/theme';
 import { VoiceProvider } from './contexts/VoiceContext';
 import { SuspenseWrapper } from './components/common/SuspenseWrapper';
 import App from './App.tsx';
