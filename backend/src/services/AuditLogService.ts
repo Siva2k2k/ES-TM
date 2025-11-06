@@ -69,7 +69,7 @@ export class AuditLogService {
 
       return { success: true };
     } catch (error: any) {
-      console.error('Error logging audit event:', error);
+
       return { success: false, error: 'Failed to log audit event' };
     }
   }
@@ -134,7 +134,7 @@ export class AuditLogService {
         hasMore
       };
     } catch (error: any) {
-      console.error('Error fetching audit logs:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -172,7 +172,7 @@ export class AuditLogService {
 
       return { events: result.logs };
     } catch (error: any) {
-      console.error('Error fetching security events:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -209,7 +209,7 @@ export class AuditLogService {
 
       return { activities: result.logs };
     } catch (error: any) {
-      console.error('Error fetching user activity:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -272,7 +272,7 @@ export class AuditLogService {
         topUsers
       };
     } catch (error: any) {
-      console.error('Error fetching activity summary:', error);
+
       if (error instanceof AuthorizationError) {
         return {
           totalEvents: 0,
@@ -330,7 +330,7 @@ export class AuditLogService {
         downloadUrl
       };
     } catch (error: any) {
-      console.error('Error exporting audit logs:', error);
+
       if (error instanceof AuthorizationError) {
         return { success: false, error: error.message };
       }
@@ -368,7 +368,7 @@ export class AuditLogService {
 
       return { logs };
     } catch (error: any) {
-      console.error('Error searching audit logs:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -403,7 +403,7 @@ export class AuditLogService {
 
       return { deletedCount };
     } catch (error: any) {
-      console.error('Error clearing old logs:', error);
+
       if (error instanceof AuthorizationError) {
         return { deletedCount: 0, error: error.message };
       }
@@ -427,7 +427,7 @@ export class AuditLogService {
 
       return { log };
     } catch (error: any) {
-      console.error('Error fetching audit log:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }

@@ -41,45 +41,28 @@ const UserTrackingList: React.FC = () => {
   const loadUsers = React.useCallback(async () => {
     try {
       setLoading(true);
-      setError(null);
-      
-      console.log('Loading users with filters:', { weeks: selectedWeeks, page: pagination.page, limit: pagination.limit, search: searchTerm });
-      const response = await userTrackingService.getUserList({
+      setError(null);      const response = await userTrackingService.getUserList({
         weeks: selectedWeeks,
         page: pagination.page,
         limit: pagination.limit,
         search: searchTerm || undefined
-      });
-      
-      console.log('Users API response:', response);
-      
+      });      
       if (response && response.users) {
         setUsers(response.users);
         setPagination(response.pagination);
-      } else {
-        console.warn('No user data received from API');
-        setUsers([]);
+      } else {        setUsers([]);
       }
-    } catch (err) {
-      console.error('Failed to load users:', err);
-      setError(`Failed to load user data: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } catch (err) {      setError(`Failed to load user data: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
   }, [selectedWeeks, pagination.page, pagination.limit, searchTerm]);
 
   useEffect(() => {
-    // Check permissions and log current user info for debugging
-    console.log('Current user role for UserTrackingList:', currentUserRole);
-    
-    if (!['manager', 'management', 'super_admin'].includes(currentUserRole || '')) {
-      console.log('Access denied to UserTrackingList. Role required: manager, management, or super_admin. Current role:', currentUserRole);
-      navigate('/dashboard');
+    // Check permissions and log current user info for debugging    
+    if (!['manager', 'management', 'super_admin'].includes(currentUserRole || '')) {      navigate('/dashboard');
       return;
-    }
-
-    console.log('Permission granted to UserTrackingList. Loading users...');
-    loadUsers();
+    }    loadUsers();
   }, [currentUserRole, navigate, loadUsers]);
 
   const handleSort = (key: keyof UserListItem) => {
@@ -160,21 +143,13 @@ const UserTrackingList: React.FC = () => {
         <div className="flex items-center gap-4">
           <button
             onClick={async () => {
-              try {
-                console.log('Testing Users API connectivity...');
-                const testResponse = await fetch('/api/v1/user-tracking/users?weeks=4&page=1&limit=20', {
+              try {                const testResponse = await fetch('/api/v1/user-tracking/users?weeks=4&page=1&limit=20', {
                   headers: {
                     'Authorization': `Bearer ${localStorage.getItem('accessToken') || localStorage.getItem('authToken')}`,
                     'Content-Type': 'application/json'
                   }
-                });
-                console.log('Test response status:', testResponse.status);
-                const testData = await testResponse.json();
-                console.log('Test response data:', testData);
-                alert(`Users API Test: ${testResponse.status} - ${JSON.stringify(testData, null, 2)}`);
-              } catch (error) {
-                console.error('Users API test failed:', error);
-                alert(`Users API Test Failed: ${error}`);
+                });                const testData = await testResponse.json();                alert(`Users API Test: ${testResponse.status} - ${JSON.stringify(testData, null, 2)}`);
+              } catch (error) {                alert(`Users API Test Failed: ${error}`);
               }
             }}
             className="px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm"
@@ -184,28 +159,20 @@ const UserTrackingList: React.FC = () => {
 
           <button
             onClick={async () => {
-              try {
-                console.log('Triggering aggregation for users...');
-                const aggResponse = await fetch('/api/v1/user-tracking/aggregate', {
+              try {                const aggResponse = await fetch('/api/v1/user-tracking/aggregate', {
                   method: 'POST',
                   headers: {
                     'Authorization': `Bearer ${localStorage.getItem('accessToken') || localStorage.getItem('authToken')}`,
                     'Content-Type': 'application/json'
                   },
                   body: JSON.stringify({ weeks: 8 })
-                });
-                console.log('Aggregation response status:', aggResponse.status);
-                const aggData = await aggResponse.json();
-                console.log('Aggregation response data:', aggData);
-                alert(`Aggregation: ${aggResponse.status} - Processed: ${aggData.data?.processed || 0} records`);
+                });                const aggData = await aggResponse.json();                alert(`Aggregation: ${aggResponse.status} - Processed: ${aggData.data?.processed || 0} records`);
                 
                 // Reload data after aggregation
                 if (aggResponse.ok) {
                   loadUsers();
                 }
-              } catch (error) {
-                console.error('Aggregation failed:', error);
-                alert(`Aggregation Failed: ${error}`);
+              } catch (error) {                alert(`Aggregation Failed: ${error}`);
               }
             }}
             className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
@@ -215,21 +182,13 @@ const UserTrackingList: React.FC = () => {
 
           <button
             onClick={async () => {
-              try {
-                console.log('Checking aggregation stats...');
-                const statsResponse = await fetch('/api/v1/user-tracking/stats?weeks=4', {
+              try {                const statsResponse = await fetch('/api/v1/user-tracking/stats?weeks=4', {
                   headers: {
                     'Authorization': `Bearer ${localStorage.getItem('accessToken') || localStorage.getItem('authToken')}`,
                     'Content-Type': 'application/json'
                   }
-                });
-                console.log('Stats response status:', statsResponse.status);
-                const statsData = await statsResponse.json();
-                console.log('Stats response data:', statsData);
-                alert(`Stats: ${statsResponse.status} - ${JSON.stringify(statsData, null, 2)}`);
-              } catch (error) {
-                console.error('Stats check failed:', error);
-                alert(`Stats Check Failed: ${error}`);
+                });                const statsData = await statsResponse.json();                alert(`Stats: ${statsResponse.status} - ${JSON.stringify(statsData, null, 2)}`);
+              } catch (error) {                alert(`Stats Check Failed: ${error}`);
               }
             }}
             className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm"

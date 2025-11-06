@@ -168,7 +168,7 @@ export class TimesheetService {
 
       return { timesheets };
     } catch (error) {
-      console.error('Error fetching all timesheets:', error);
+
       return {
         timesheets: [],
         error: error instanceof Error ? error.message : 'Failed to fetch timesheets'
@@ -200,7 +200,7 @@ export class TimesheetService {
 
       return { timesheets };
     } catch (error) {
-      console.error('Error fetching timesheets by status:', error);
+
       return {
         timesheets: [],
         error: error instanceof Error ? error.message : 'Failed to fetch timesheets by status'
@@ -452,7 +452,7 @@ export class TimesheetService {
         total: enhancedTimesheets.length
       };
     } catch (error) {
-      console.error('Error in getUserTimesheets:', error);
+
       return {
         timesheets: [],
         total: 0,
@@ -541,7 +541,7 @@ export class TimesheetService {
         }
       } catch (holidayError) {
         // Log holiday creation error but don't fail timesheet creation
-        console.error('Error creating holiday entries for timesheet:', holidayError);
+
       }
 
       // Audit log: Timesheet created
@@ -559,7 +559,7 @@ export class TimesheetService {
 
       return { timesheet };
     } catch (error) {
-      console.error('Error in createTimesheet:', error);
+
 
       if (error instanceof ConflictError) {
         return { error: error.message };
@@ -779,7 +779,7 @@ export class TimesheetService {
 
       return { timesheet: enhancedTimesheet };
     } catch (error) {
-      console.error('Error in getTimesheetByUserAndWeek:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to fetch timesheet' };
     }
   }
@@ -926,7 +926,7 @@ export class TimesheetService {
 
       return { canSubmit: true, pendingReviews: [], message: '' };
     } catch (error) {
-      console.error('Error in validateLeadCanSubmit:', error);
+
       // On error, allow submission (validation will happen on backend anyway)
       return { canSubmit: true, pendingReviews: [], message: '' };
     }
@@ -1171,7 +1171,7 @@ export class TimesheetService {
             totalHours: timesheet.total_hours
           });
         } catch (notificationError) {
-          console.error('Failed to send timesheet submission notifications:', notificationError);
+
         }
       }
 
@@ -1190,7 +1190,7 @@ export class TimesheetService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error in submitTimesheet:', error);
+
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to submit timesheet'
@@ -1269,7 +1269,7 @@ export class TimesheetService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error in managerApproveRejectTimesheet:', error);
+
       return {
         success: false,
         error: error instanceof Error ? error.message : `Failed to ${action} timesheet`
@@ -1349,7 +1349,7 @@ export class TimesheetService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error in managementApproveRejectTimesheet:', error);
+
       return {
         success: false,
         error: error instanceof Error ? error.message : `Failed to ${action} timesheet`
@@ -1440,7 +1440,7 @@ export class TimesheetService {
 
       return { entry };
     } catch (error) {
-      console.error('Error in addTimeEntry:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to add time entry' };
     }
   }
@@ -1523,7 +1523,7 @@ export class TimesheetService {
 
       return { valid: true };
     } catch (error) {
-      console.error('Error in validateTimeEntry:', error);
+
       return { valid: false, error: 'Failed to validate time entry' };
     }
   }
@@ -1579,7 +1579,7 @@ export class TimesheetService {
 
       return { success: true, changes };
     } catch (error) {
-      console.error('Error synchronizing holiday entries:', error);
+
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'Failed to synchronize holiday entries' 
@@ -1608,7 +1608,7 @@ export class TimesheetService {
       }).exec();
 
     } catch (error) {
-      console.error('Error in updateTimesheetTotalHours:', error);
+
     }
   }
 
@@ -1697,7 +1697,7 @@ export class TimesheetService {
         completionRate: (verified / Math.max(totalTimesheets, 1)) * 100
       };
     } catch (error) {
-      console.error('Error in getTimesheetDashboard:', error);
+
       return {
         totalTimesheets: 0,
         pendingApproval: 0,
@@ -1953,12 +1953,12 @@ export class TimesheetService {
         await this.synchronizeHolidayEntries(timesheetId, currentUser);
       } catch (holidayError) {
         // Log holiday sync error but don't fail the main operation
-        console.error('Error synchronizing holiday entries during timesheet update:', holidayError);
+
       }
 
       return { updatedEntries };
     } catch (error) {
-      console.error('Error in updateTimesheetEntries:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to update timesheet entries' };
     }
   }
@@ -1996,7 +1996,7 @@ export class TimesheetService {
 
       return { entries };
     } catch (error) {
-      console.error('Error in getTimeEntries:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to get time entries' };
     }
   }
@@ -2061,7 +2061,7 @@ export class TimesheetService {
 
       return { updatedEntries: addedEntries };
     } catch (error) {
-      console.error('Error in addMultipleEntries:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to add multiple entries' };
     }
   }
@@ -2172,7 +2172,7 @@ export class TimesheetService {
 
       return { calendarData };
     } catch (error) {
-      console.error('Error in getCalendarData:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to fetch calendar data' };
     }
   }
@@ -2284,7 +2284,7 @@ export class TimesheetService {
 
       return { timesheets: enhancedTimesheets };
     } catch (error) {
-      console.error('Error in getTimesheetsForApproval:', error);
+
       return {
         timesheets: [],
         error: error instanceof Error ? error.message : 'Failed to fetch timesheets for approval'
@@ -2342,7 +2342,7 @@ export class TimesheetService {
 
       return { timesheet: detailedTimesheet };
     } catch (error) {
-      console.error('Error in getTimesheetById:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to get timesheet' };
     }
   }
@@ -2472,7 +2472,7 @@ export class TimesheetService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error in softDeleteTimesheet:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -2550,7 +2550,7 @@ export class TimesheetService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error in deleteTimesheet:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -2629,7 +2629,7 @@ export class TimesheetService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error in hardDeleteTimesheet:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -2696,7 +2696,7 @@ export class TimesheetService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error in restoreTimesheet:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -2726,7 +2726,7 @@ export class TimesheetService {
 
       return { timesheets };
     } catch (error) {
-      console.error('Error in getDeletedTimesheets:', error);
+
       if (error instanceof AuthorizationError) {
         return { timesheets: [], error: error.message };
       }
@@ -2763,7 +2763,7 @@ export class TimesheetService {
 
       return dependencies;
     } catch (error) {
-      console.error('Error checking timesheet dependencies:', error);
+
       return ['Error checking dependencies'];
     }
   }
@@ -2866,7 +2866,7 @@ export class TimesheetService {
 
       return { entry };
     } catch (error) {
-      console.error('Error in addLeaveEntry:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to add leave entry' };
     }
   }
@@ -2956,7 +2956,7 @@ export class TimesheetService {
 
       return { entry };
     } catch (error) {
-      console.error('Error in addMiscellaneousEntry:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to add miscellaneous entry' };
     }
   }
@@ -3074,7 +3074,7 @@ export class TimesheetService {
 
       return { entry };
     } catch (error) {
-      console.error('Error in addProjectEntry:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to add project entry' };
     }
   }
@@ -3201,7 +3201,7 @@ export class TimesheetService {
 
       return { entry };
     } catch (error) {
-      console.error('Error in addTrainingEntry:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to add training entry' };
     }
   }

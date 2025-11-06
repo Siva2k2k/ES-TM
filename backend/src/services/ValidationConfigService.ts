@@ -242,7 +242,6 @@ export class ValidationConfigService {
 
       return entries as ITimeEntry[];
     } catch (error) {
-      console.error('Error getting leave entries:', error);
       return [];
     }
   }

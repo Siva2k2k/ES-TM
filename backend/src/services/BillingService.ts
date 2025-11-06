@@ -186,7 +186,7 @@ export class BillingService {
 
       return { snapshots: snapshots as IBillingSnapshot[] };
     } catch (error: any) {
-      console.error('Error generating weekly snapshot:', error);
+
       if (error instanceof AuthorizationError || error instanceof ValidationError) {
         return { error: error.message };
       }
@@ -207,7 +207,7 @@ export class BillingService {
 
       return { snapshots };
     } catch (error: any) {
-      console.error('Error fetching billing snapshots:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -266,7 +266,7 @@ export class BillingService {
         revenueGrowth: 18 // Mock growth percentage for now
       };
     } catch (error: any) {
-      console.error('Error fetching billing dashboard:', error);
+
       if (error instanceof AuthorizationError) {
         return {
           totalRevenue: 0,
@@ -457,7 +457,7 @@ export class BillingService {
 
       return { summary };
     } catch (error: any) {
-      console.error('Error fetching billing summary:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -570,7 +570,7 @@ export class BillingService {
 
       return { success: true };
     } catch (error: any) {
-      console.error('Error updating billable hours:', error);
+
       if (error instanceof AuthorizationError || error instanceof ValidationError) {
         return { success: false, error: error.message };
       }
@@ -611,7 +611,7 @@ export class BillingService {
 
       return { success: true };
     } catch (error: any) {
-      console.error('Error approving monthly billing:', error);
+
       if (error instanceof AuthorizationError) {
         return { success: false, error: error.message };
       }
@@ -713,7 +713,7 @@ export class BillingService {
 
       return { projects };
     } catch (error: any) {
-      console.error('Error fetching revenue by project:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -813,7 +813,7 @@ export class BillingService {
         buffer: Buffer.from(csvContent, 'utf-8')
       };
     } catch (error: any) {
-      console.error('Error exporting billing report:', error);
+
       if (error instanceof AuthorizationError) {
         return { success: false, error: error.message };
       }
@@ -1333,7 +1333,7 @@ export class BillingService {
 
       return { snapshot };
     } catch (error: any) {
-      console.error('Error fetching billing snapshot:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }

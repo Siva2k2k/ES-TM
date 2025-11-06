@@ -770,7 +770,7 @@ export class ProjectBillingService {
 
       return { success: true, adjustment };
     } catch (error: any) {
-      console.error('Error applying billing adjustment:', error);
+
       return { success: false, error: error.message };
     }
   }
@@ -912,7 +912,7 @@ export class ProjectBillingService {
         ? { adjustment_hours: adjustment.adjustment_hours || 0, adjusted_at: adjustment.adjusted_at }
         : null;
     } catch (error) {
-      console.error('Error fetching billing adjustment:', error);
+
       return null;
     }
   }

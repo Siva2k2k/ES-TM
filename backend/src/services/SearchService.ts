@@ -1,4 +1,4 @@
-﻿import { SearchIndex, SearchCategory, SearchItemType } from '@/models/SearchIndex';
+import { SearchIndex, SearchCategory, SearchItemType } from '@/models/SearchIndex';
 import { User } from '@/models/User';
 import { Project } from '@/models/Project';
 
@@ -391,7 +391,7 @@ export class SearchService {
         });
       });
     } catch (error) {
-      console.error('Error searching users:', error);
+
     }
 
     // Search projects
@@ -421,7 +421,7 @@ export class SearchService {
         });
       });
     } catch (error) {
-      console.error('Error searching projects:', error);
+
     }
 
     return results;
@@ -483,7 +483,7 @@ export class SearchService {
         );
       }
     } catch (error) {
-      console.error('Error updating search index:', error);
+
     }
   }
 
@@ -494,7 +494,7 @@ export class SearchService {
     try {
       await (SearchIndex as any).deleteMany({ entity_id: entityId });
     } catch (error) {
-      console.error('Error removing from search index:', error);
+
     }
   }
 

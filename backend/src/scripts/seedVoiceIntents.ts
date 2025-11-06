@@ -37,16 +37,8 @@ async function seedVoiceIntents() {
       }, {} as Record<string, number>)
     });
 
-    console.log('\n✅ Voice intents seeded successfully!');
-    console.log(`📊 Total Intents: ${count}`);
-    console.log('📂 By Category:');
-    categories.forEach(cat => {
-      console.log(`   - ${cat._id}: ${cat.count} intents`);
-    });
-
   } catch (error) {
     logger.error('Failed to seed voice intents', { error });
-    console.error('❌ Error seeding voice intents:', error);
     process.exit(1);
   } finally {
     process.exit(0);

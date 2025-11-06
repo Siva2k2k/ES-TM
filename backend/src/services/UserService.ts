@@ -271,7 +271,7 @@ export class UserService {
 
       return { user };
     } catch (error) {
-      console.error('Error in createUserForApproval:', error);
+
       if (error instanceof ValidationError || error instanceof ConflictError || error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -417,7 +417,7 @@ export class UserService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error in approveUser:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -471,7 +471,7 @@ export class UserService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error in setUserStatus:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -530,7 +530,7 @@ export class UserService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error in setUserBilling:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError || error instanceof ValidationError) {
         return { success: false, error: error.message };
       }
@@ -551,7 +551,7 @@ export class UserService {
 
       return { users };
     } catch (error) {
-      console.error('Error in getAllUsers:', error);
+
       if (error instanceof AuthorizationError) {
         return { users: [], error: error.message };
       }
@@ -592,7 +592,7 @@ export class UserService {
 
       return { users };
     } catch (error) {
-      console.error('Error in getUsers:', error);
+
       return { users: [], error: 'Failed to fetch users' };
     }
   }
@@ -615,7 +615,7 @@ export class UserService {
 
       return { users };
     } catch (error) {
-      console.error('Error in getPendingApprovals:', error);
+
       if (error instanceof AuthorizationError) {
         return { users: [], error: error.message };
       }
@@ -666,7 +666,7 @@ export class UserService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error in updateUser:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -995,7 +995,7 @@ export class UserService {
 
       return { user };
     } catch (error) {
-      console.error('Error in getUserById:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { error: error.message };
       }
@@ -1022,7 +1022,7 @@ export class UserService {
 
       return { users };
     } catch (error) {
-      console.error('Error in getTeamMembers:', error);
+
       if (error instanceof AuthorizationError) {
         return { users: [], error: error.message };
       }
@@ -1048,7 +1048,7 @@ export class UserService {
 
       return { users };
     } catch (error) {
-      console.error('Error in getUsersByRole:', error);
+
       if (error instanceof AuthorizationError) {
         return { users: [], error: error.message };
       }
@@ -1136,7 +1136,7 @@ export class UserService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error in setUserCredentials:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError || error instanceof ValidationError) {
         return { success: false, error: error.message };
       }
@@ -1196,7 +1196,7 @@ export class UserService {
 
       return { success: true, results };
     } catch (error) {
-      console.error('Error in bulkUserAction:', error);
+
       if (error instanceof AuthorizationError || error instanceof ValidationError) {
         return { success: false, error: error.message };
       }

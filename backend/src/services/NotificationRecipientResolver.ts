@@ -15,7 +15,7 @@ export class NotificationRecipientResolver {
       const timesheet = await Timesheet.findById(timesheetId).select('user_id');
       return timesheet ? timesheet.user_id.toString() : null;
     } catch (error) {
-      console.error('Error getting timesheet owner:', error);
+
       return null;
     }
   }
@@ -34,7 +34,7 @@ export class NotificationRecipientResolver {
 
       return leads.map((lead: any) => lead.user_id.toString());
     } catch (error) {
-      console.error('Error getting leads for project:', error);
+
       return [];
     }
   }
@@ -53,7 +53,7 @@ export class NotificationRecipientResolver {
 
       return managers.map((manager: any) => manager.user_id.toString());
     } catch (error) {
-      console.error('Error getting managers for project:', error);
+
       return [];
     }
   }
@@ -72,7 +72,7 @@ export class NotificationRecipientResolver {
 
       return primaryManager ? primaryManager.user_id.toString() : null;
     } catch (error) {
-      console.error('Error getting primary manager for project:', error);
+
       return null;
     }
   }
@@ -91,7 +91,7 @@ export class NotificationRecipientResolver {
 
       return managementUsers.map((user: any) => user._id.toString());
     } catch (error) {
-      console.error('Error getting management users:', error);
+
       return [];
     }
   }
@@ -110,7 +110,7 @@ export class NotificationRecipientResolver {
 
       return admins.map((admin: any) => admin._id.toString());
     } catch (error) {
-      console.error('Error getting super admins:', error);
+
       return [];
     }
   }
@@ -129,7 +129,7 @@ export class NotificationRecipientResolver {
 
       return managers.map((manager: any) => manager._id.toString());
     } catch (error) {
-      console.error('Error getting all managers:', error);
+
       return [];
     }
   }
@@ -154,7 +154,7 @@ export class NotificationRecipientResolver {
       const members = await (ProjectMember as any).find(query).select('user_id').lean().exec();
       return members.map((member: any) => member.user_id.toString());
     } catch (error) {
-      console.error('Error getting project members by role:', error);
+
       return [];
     }
   }
@@ -173,7 +173,7 @@ export class NotificationRecipientResolver {
 
       return members.map((member: any) => member.user_id.toString());
     } catch (error) {
-      console.error('Error getting all project members:', error);
+
       return [];
     }
   }
@@ -209,7 +209,7 @@ export class NotificationRecipientResolver {
       // Remove duplicates
       return [...new Set(recipients)];
     } catch (error) {
-      console.error('Error getting timesheet approval recipients:', error);
+
       return [];
     }
   }
@@ -222,7 +222,7 @@ export class NotificationRecipientResolver {
       // Return the specific lead who did the approval
       return [leadUserId];
     } catch (error) {
-      console.error('Error getting lead for feedback:', error);
+
       return [];
     }
   }
@@ -235,7 +235,7 @@ export class NotificationRecipientResolver {
       // Return the specific manager who did the approval
       return [managerUserId];
     } catch (error) {
-      console.error('Error getting manager for feedback:', error);
+
       return [];
     }
   }

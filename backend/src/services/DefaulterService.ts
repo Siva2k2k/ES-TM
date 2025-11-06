@@ -112,7 +112,7 @@ export class DefaulterService {
 
       return defaulters;
     } catch (error) {
-      console.error('Error getting project defaulters:', error);
+
       return [];
     }
   }
@@ -184,7 +184,7 @@ export class DefaulterService {
         all_defaulters: allDefaulters
       };
     } catch (error) {
-      console.error('Error getting manager defaulters:', error);
+
       return {
         total_defaulters: 0,
         by_project: {},
@@ -282,7 +282,7 @@ export class DefaulterService {
         critical_defaulters: 0
       };
     } catch (error) {
-      console.error('Error getting defaulter stats:', error);
+
       return {
         total_defaulters: 0,
         by_project: {},
@@ -347,7 +347,7 @@ export class DefaulterService {
 
         return 1;
       } catch (err) {
-        console.error('Error sending defaulter notification for user', d.user_id, err);
+
         return 0;
       }
     });
@@ -468,7 +468,7 @@ export class DefaulterService {
 
       return missingSubmissions;
     } catch (error) {
-      console.error('Error getting missing submissions for past weeks:', error);
+
       return [];
     }
   }

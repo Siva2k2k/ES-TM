@@ -39,41 +39,25 @@ const GeneralAnalyticsPage: React.FC = () => {
   const loadAnalytics = React.useCallback(async () => {
     try {
       setLoading(true);
-      setError(null);
-      
-      console.log('Loading general analytics data...');
-      
+      setError(null);      
       // Load dashboard overview and project performance in parallel
       const [overviewResponse, projectsResponse] = await Promise.all([
         userTrackingService.getDashboardOverview({ weeks: selectedWeeks }),
         userTrackingService.getProjectPerformance({ weeks: selectedWeeks })
-      ]);
-      
-      console.log('Overview response:', overviewResponse);
-      console.log('Projects response:', projectsResponse);
-      
+      ]);      
       setOverview(overviewResponse);
       setProjectPerformance(projectsResponse);
-    } catch (err) {
-      console.error('Failed to load analytics:', err);
-      setError(`Failed to load analytics data: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } catch (err) {      setError(`Failed to load analytics data: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
   }, [selectedWeeks]);
 
   useEffect(() => {
-    // Check permissions
-    console.log('Current user role for GeneralAnalytics:', currentUserRole);
-    
-    if (!['manager', 'management', 'super_admin'].includes(currentUserRole || '')) {
-      console.log('Access denied to GeneralAnalytics. Role required: manager, management, or super_admin');
-      navigate('/dashboard');
+    // Check permissions    
+    if (!['manager', 'management', 'super_admin'].includes(currentUserRole || '')) {      navigate('/dashboard');
       return;
-    }
-
-    console.log('Permission granted to GeneralAnalytics. Loading data...');
-    loadAnalytics();
+    }    loadAnalytics();
   }, [currentUserRole, navigate, loadAnalytics]);
 
   if (loading) {
@@ -149,21 +133,13 @@ const GeneralAnalyticsPage: React.FC = () => {
         <div className="flex items-center gap-4">
           <button
             onClick={async () => {
-              try {
-                console.log('Testing Analytics API connectivity...');
-                const testResponse = await fetch('/api/v1/user-tracking/dashboard?weeks=4', {
+              try {                const testResponse = await fetch('/api/v1/user-tracking/dashboard?weeks=4', {
                   headers: {
                     'Authorization': `Bearer ${localStorage.getItem('accessToken') || localStorage.getItem('authToken')}`,
                     'Content-Type': 'application/json'
                   }
-                });
-                console.log('Test response status:', testResponse.status);
-                const testData = await testResponse.json();
-                console.log('Test response data:', testData);
-                alert(`Analytics API Test: ${testResponse.status} - ${JSON.stringify(testData, null, 2)}`);
-              } catch (error) {
-                console.error('Analytics API test failed:', error);
-                alert(`Analytics API Test Failed: ${error}`);
+                });                const testData = await testResponse.json();                alert(`Analytics API Test: ${testResponse.status} - ${JSON.stringify(testData, null, 2)}`);
+              } catch (error) {                alert(`Analytics API Test Failed: ${error}`);
               }
             }}
             className="px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm"
@@ -173,28 +149,20 @@ const GeneralAnalyticsPage: React.FC = () => {
 
           <button
             onClick={async () => {
-              try {
-                console.log('Triggering aggregation for analytics...');
-                const aggResponse = await fetch('/api/v1/user-tracking/aggregate', {
+              try {                const aggResponse = await fetch('/api/v1/user-tracking/aggregate', {
                   method: 'POST',
                   headers: {
                     'Authorization': `Bearer ${localStorage.getItem('accessToken') || localStorage.getItem('authToken')}`,
                     'Content-Type': 'application/json'
                   },
                   body: JSON.stringify({ weeks: selectedWeeks })
-                });
-                console.log('Aggregation response status:', aggResponse.status);
-                const aggData = await aggResponse.json();
-                console.log('Aggregation response data:', aggData);
-                alert(`Aggregation: ${aggResponse.status} - Processed: ${aggData.data?.processed || 0} records`);
+                });                const aggData = await aggResponse.json();                alert(`Aggregation: ${aggResponse.status} - Processed: ${aggData.data?.processed || 0} records`);
                 
                 // Reload data after aggregation
                 if (aggResponse.ok) {
                   loadAnalytics();
                 }
-              } catch (error) {
-                console.error('Aggregation failed:', error);
-                alert(`Aggregation Failed: ${error}`);
+              } catch (error) {                alert(`Aggregation Failed: ${error}`);
               }
             }}
             className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"

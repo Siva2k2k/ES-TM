@@ -207,7 +207,7 @@ export class DashboardService {
 
       return { dashboard };
     } catch (error: any) {
-      console.error('Error fetching super admin dashboard:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -255,7 +255,7 @@ export class DashboardService {
 
       return { dashboard };
     } catch (error: any) {
-      console.error('Error fetching management dashboard:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -307,7 +307,7 @@ export class DashboardService {
 
       return { dashboard };
     } catch (error: any) {
-      console.error('Error fetching manager dashboard:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -348,7 +348,7 @@ export class DashboardService {
 
       return { dashboard };
     } catch (error: any) {
-      console.error('Error fetching lead dashboard:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -385,7 +385,7 @@ export class DashboardService {
 
       return { dashboard };
     } catch (error: any) {
-      console.error('Error fetching employee dashboard:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }

@@ -67,9 +67,8 @@ export class HolidaySystemService {
               ...holidayData,
               created_by: currentUser.id
             });
-          } catch (error) {
-            // Continue if holiday already exists
-            console.log(`Holiday ${holidayData.name} may already exist:`, error.message);
+          } catch (error: any) {
+            // Continue if holiday already exists - holidays may be duplicated in seed data
           }
         }
         message += `. Created ${defaultHolidays.length} default holidays for ${currentYear}.`;
@@ -77,7 +76,6 @@ export class HolidaySystemService {
 
       return { success: true, message };
     } catch (error) {
-      console.error('Error initializing holiday system:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Failed to initialize holiday system' };
     }
   }
@@ -117,7 +115,6 @@ export class HolidaySystemService {
         holidayCount
       };
     } catch (error) {
-      console.error('Error getting holiday system status:', error);
       return { 
         holidayCount: 0, 
         error: error instanceof Error ? error.message : 'Failed to get system status' 
@@ -173,7 +170,6 @@ export class HolidaySystemService {
         }
       };
     } catch (error) {
-      console.error('Error updating calendar settings:', error);
       return { error: error instanceof Error ? error.message : 'Failed to update calendar settings' };
     }
   }
@@ -188,7 +184,6 @@ export class HolidaySystemService {
       
       return { holidays };
     } catch (error) {
-      console.error('Error getting yearly holidays:', error);
       return { error: error instanceof Error ? error.message : 'Failed to get yearly holidays' };
     }
   }
@@ -229,7 +224,6 @@ export class HolidaySystemService {
 
       return { success: true, imported, skipped, errors };
     } catch (error) {
-      console.error('Error bulk importing holidays:', error);
       return { 
         success: false, 
         imported: 0, 

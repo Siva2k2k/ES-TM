@@ -33,7 +33,7 @@ export class SettingsService {
       
       return { settings };
     } catch (error) {
-      console.error('Error getting user settings:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to get user settings' };
     }
   }
@@ -67,7 +67,7 @@ export class SettingsService {
 
       return { settings };
     } catch (error) {
-      console.error('Error updating user settings:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to update user settings' };
     }
   }
@@ -92,7 +92,7 @@ export class SettingsService {
 
       return { settings: defaultSettings };
     } catch (error) {
-      console.error('Error resetting user settings:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to reset user settings' };
     }
   }
@@ -130,7 +130,7 @@ export class SettingsService {
 
       return { templates: templates as IReportTemplate[] };
     } catch (error) {
-      console.error('Error getting report templates:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to get report templates' };
     }
   }
@@ -167,7 +167,7 @@ export class SettingsService {
 
       return { template };
     } catch (error) {
-      console.error('Error creating report template:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to create report template' };
     }
   }
@@ -203,7 +203,7 @@ export class SettingsService {
 
       return { template };
     } catch (error) {
-      console.error('Error updating report template:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to update report template' };
     }
   }
@@ -235,7 +235,7 @@ export class SettingsService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error deleting report template:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to delete report template' };
     }
   }
@@ -273,7 +273,7 @@ export class SettingsService {
 
       return { settings: settings as ISystemSettings[] };
     } catch (error) {
-      console.error('Error getting system settings:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to get system settings' };
     }
   }
@@ -311,7 +311,7 @@ export class SettingsService {
 
       return { setting };
     } catch (error) {
-      console.error('Error updating system setting:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to update system setting' };
     }
   }
@@ -373,7 +373,7 @@ export class SettingsService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error initializing holiday settings:', error);
+
       return { success: false, error: error instanceof Error ? error.message : 'Failed to initialize holiday settings' };
     }
   }
@@ -394,7 +394,7 @@ export class SettingsService {
 
       return { settings: settingsMap };
     } catch (error) {
-      console.error('Error getting holiday settings:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to get holiday settings' };
     }
   }

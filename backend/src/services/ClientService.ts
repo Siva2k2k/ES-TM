@@ -154,12 +154,12 @@ export class ClientService {
           });
         }
       } catch (notifError) {
-        console.error('Error sending client created notification:', notifError);
+
       }
 
       return { client: client as IClient };
     } catch (error: any) {
-      console.error('Error creating client:', error);
+
       if (error instanceof AuthorizationError || error instanceof ValidationError || error instanceof ConflictError) {
         return { error: error.message };
       }
@@ -235,7 +235,7 @@ export class ClientService {
 
       return { clients: clientsWithProjects };
     } catch (error: any) {
-      console.error('Error fetching clients:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -303,7 +303,7 @@ export class ClientService {
 
       return { client: clientWithProjects };
     } catch (error: any) {
-      console.error('Error fetching client:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -404,12 +404,12 @@ export class ClientService {
           });
         }
       } catch (notifError) {
-        console.error('Error sending client updated notification:', notifError);
+
       }
 
       return { success: true, client: updatedClient as IClient };
     } catch (error: any) {
-      console.error('Error updating client:', error);
+
       if (error instanceof AuthorizationError || error instanceof ValidationError) {
         return { success: false, error: error.message };
       }
@@ -464,7 +464,7 @@ export class ClientService {
 
       return { success: true };
     } catch (error: any) {
-      console.error('Error deactivating client:', error);
+
       if (error instanceof AuthorizationError) {
         return { success: false, error: error.message };
       }
@@ -509,7 +509,7 @@ export class ClientService {
 
       return { success: true };
     } catch (error: any) {
-      console.error('Error reactivating client:', error);
+
       if (error instanceof AuthorizationError) {
         return { success: false, error: error.message };
       }
@@ -584,12 +584,12 @@ export class ClientService {
           });
         }
       } catch (notifError) {
-        console.error('Error sending client deleted notification:', notifError);
+
       }
 
       return { success: true };
     } catch (error: any) {
-      console.error('Error deleting client:', error);
+
       if (error instanceof AuthorizationError) {
         return { success: false, error: error.message };
       }
@@ -656,7 +656,7 @@ export class ClientService {
 
       return { success: true };
     } catch (error: any) {
-      console.error('Error hard deleting client:', error);
+
       if (error instanceof AuthorizationError) {
         return { success: false, error: error.message };
       }
@@ -710,7 +710,7 @@ export class ClientService {
 
       return { success: true };
     } catch (error: any) {
-      console.error('Error restoring client:', error);
+
       if (error instanceof AuthorizationError) {
         return { success: false, error: error.message };
       }
@@ -736,7 +736,7 @@ export class ClientService {
 
       return { clients: clients as IClient[] };
     } catch (error: any) {
-      console.error('Error fetching deleted clients:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -811,7 +811,7 @@ export class ClientService {
 
       return { stats };
     } catch (error: any) {
-      console.error('Error fetching client stats:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }

@@ -100,12 +100,12 @@ export class ProjectService {
           });
         }
       } catch (notifError) {
-        console.error('Error sending project created notification:', notifError);
+
       }
 
       return { project };
     } catch (error) {
-      console.error('Error in createProject:', error);
+
       if (error instanceof ValidationError || error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -189,7 +189,7 @@ export class ProjectService {
               });
             }
           } catch (notifError) {
-            console.error('Error sending manager assignment notification:', notifError);
+
           }
         }
 
@@ -208,13 +208,13 @@ export class ProjectService {
             });
           }
         } catch (notifError) {
-          console.error('Error sending project updated notification:', notifError);
+
         }
       }
 
       return { success: true };
     } catch (error) {
-      console.error('Error in updateProject:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -239,7 +239,7 @@ export class ProjectService {
 
       return { projects };
     } catch (error) {
-      console.error('Error in getAllProjects:', error);
+
       if (error instanceof AuthorizationError) {
         return { projects: [], error: error.message };
       }
@@ -339,7 +339,7 @@ export class ProjectService {
 
       return { projects: projectsWithTasks };
     } catch (error) {
-      console.error('Error in getProjectsByStatus:', error);
+
       if (error instanceof AuthorizationError) {
         return { projects: [], error: error.message };
       }
@@ -383,7 +383,7 @@ export class ProjectService {
 
       return { tasks };
     } catch (error) {
-      console.error('Error in getProjectTasks:', error);
+
       if (error instanceof AuthorizationError) {
         return { tasks: [], error: error.message };
       }
@@ -418,7 +418,7 @@ export class ProjectService {
         tasks: tasksResult.tasks
       };
     } catch (error) {
-      console.error('Error in getProjectWithTasks:', error);
+
       return { tasks: [], error: 'Failed to fetch project with tasks' };
     }
   }
@@ -444,7 +444,7 @@ export class ProjectService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error in updateProjectStatus:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -488,7 +488,7 @@ export class ProjectService {
         budgetUtilization: tasks.length > 0 ? (completedTasks / tasks.length) * 100 : 0
       };
     } catch (error) {
-      console.error('Error in getProjectAnalytics:', error);
+
       return {
         totalProjects: 0,
         activeProjects: 0,
@@ -515,7 +515,7 @@ export class ProjectService {
 
       return { clients };
     } catch (error) {
-      console.error('Error in getAllClients:', error);
+
       if (error instanceof AuthorizationError) {
         return { clients: [], error: error.message };
       }
@@ -565,7 +565,7 @@ export class ProjectService {
 
       return { client };
     } catch (error) {
-      console.error('Error in createClient:', error);
+
       if (error instanceof ValidationError || error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -612,7 +612,7 @@ export class ProjectService {
 
       return { project, warnings };
     } catch (error) {
-      console.error('Error in getProjectById:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { error: error.message };
       }
@@ -713,12 +713,12 @@ export class ProjectService {
           });
         }
       } catch (notifError) {
-        console.error('Error sending project deleted notification:', notifError);
+
       }
 
       return { success: true };
     } catch (error) {
-      console.error('Error in deleteProject:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -782,7 +782,7 @@ export class ProjectService {
         counts
       };
     } catch (error) {
-      console.error('Error checking project dependencies:', error);
+
       return {
         canDelete: false,
         dependencies: ['Error checking dependencies'],
@@ -859,7 +859,7 @@ export class ProjectService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error in hardDeleteProject:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -914,7 +914,7 @@ export class ProjectService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error in restoreProject:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -940,7 +940,7 @@ export class ProjectService {
 
       return { projects };
     } catch (error) {
-      console.error('Error in getDeletedProjects:', error);
+
       if (error instanceof AuthorizationError) {
         return { projects: [], error: error.message };
       }
@@ -1102,7 +1102,7 @@ export class ProjectService {
 
       return { projects: projectsWithTasks as unknown as ProjectWithDetails[] };
     } catch (error) {
-      console.error('Error in getUserProjects:', error);
+
       if (error instanceof AuthorizationError) {
         return { projects: [], error: error.message };
       }
@@ -1150,7 +1150,7 @@ export class ProjectService {
 
       return { members: membersData };
     } catch (error) {
-      console.error('Error in getProjectMembers:', error);
+
       if (error instanceof AuthorizationError) {
         return { members: [], error: error.message };
       }
@@ -1235,13 +1235,13 @@ export class ProjectService {
             removedByName: currentUser.full_name
           });
         } catch (notifError) {
-          console.error('Error sending project member removed notification:', notifError);
+
         }
       }
 
       return { success: true };
     } catch (error) {
-      console.error('Error in removeUserFromProject:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -1274,7 +1274,7 @@ export class ProjectService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error in addUserToProject:', error);
+
       if (error instanceof AuthorizationError) {
         return { success: false, error: error.message };
       }
@@ -1316,7 +1316,7 @@ export class ProjectService {
 
       return { task };
     } catch (error) {
-      console.error('Error in createTask:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -1358,7 +1358,7 @@ export class ProjectService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error in updateTask:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -1386,7 +1386,7 @@ export class ProjectService {
 
       return { tasks };
     } catch (error) {
-      console.error('Error in getUserTasks:', error);
+
       if (error instanceof AuthorizationError) {
         return { tasks: [], error: error.message };
       }
@@ -1462,7 +1462,7 @@ export class ProjectService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error in deleteTask:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -1505,7 +1505,7 @@ export class ProjectService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error in updateClient:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -1533,7 +1533,7 @@ export class ProjectService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error in deleteClient:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -1559,7 +1559,7 @@ export class ProjectService {
 
       return { client };
     } catch (error) {
-      console.error('Error in getClientById:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { error: error.message };
       }
@@ -1731,7 +1731,7 @@ export class ProjectService {
       };
 
     } catch (error) {
-      console.error('Error getting project permissions:', error);
+
       return {
         projectRole: null,
         systemRole: 'employee',
@@ -1813,7 +1813,7 @@ export class ProjectService {
       return { canAdd: true };
 
     } catch (error) {
-      console.error('Error checking add permission:', error);
+
       return {
         canAdd: false,
         reason: 'Error validating permissions'
@@ -1886,13 +1886,13 @@ export class ProjectService {
           });
         }
       } catch (notifError) {
-        console.error('Error sending project member added notification:', notifError);
+
       }
 
       return { success: true };
 
     } catch (error) {
-      console.error('Error in addProjectMemberEnhanced:', error);
+
       return {
         success: false,
         error: 'Failed to add project member'
@@ -1971,7 +1971,7 @@ export class ProjectService {
       return { success: true };
 
     } catch (error) {
-      console.error('Error in updateProjectMemberRole:', error);
+
       return {
         success: false,
         error: 'Failed to update project member role'
@@ -2017,7 +2017,7 @@ export class ProjectService {
       return { userProjectRoles };
 
     } catch (error) {
-      console.error('Error in getUserProjectRoles:', error);
+
       return {
         error: 'Failed to fetch user project roles'
       };
@@ -2106,7 +2106,7 @@ export class ProjectService {
       return { users: availableUsers };
 
     } catch (error) {
-      console.error('Error in getAvailableUsersForProject:', error);
+
       return {
         error: 'Failed to fetch available users'
       };
@@ -2121,7 +2121,7 @@ export class ProjectService {
       const permissions = await this.getProjectPermissions(userId, projectId);
       return permissions.hasManagerAccess;
     } catch (error) {
-      console.error('Error checking manager access:', error);
+
       return false;
     }
   }
@@ -2201,7 +2201,7 @@ export class ProjectService {
       return { members: enhancedMembers };
 
     } catch (error) {
-      console.error('Error in getProjectMembersEnhanced:', error);
+
       return { error: 'Failed to fetch project members' };
     }
   }
@@ -2242,7 +2242,7 @@ export class ProjectService {
         tasks
       };
     } catch (error) {
-      console.error('Error in getTrainingProjectWithTasks:', error);
+
       return {
         success: false,
         error: 'Failed to fetch training project'
@@ -2289,7 +2289,7 @@ export class ProjectService {
         task
       };
     } catch (error) {
-      console.error('Error in addTrainingTask:', error);
+
       return {
         success: false,
         error: 'Failed to create training task'
@@ -2349,7 +2349,7 @@ export class ProjectService {
         task
       };
     } catch (error) {
-      console.error('Error in updateTrainingTask:', error);
+
       return {
         success: false,
         error: 'Failed to update training task'
@@ -2400,7 +2400,7 @@ export class ProjectService {
         success: true
       };
     } catch (error) {
-      console.error('Error in deleteTrainingTask:', error);
+
       return {
         success: false,
         error: 'Failed to delete training task'

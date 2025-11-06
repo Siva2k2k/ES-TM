@@ -199,6 +199,6 @@ export const PermissionCheckers = {
 };
 
 // Example usage patterns:
-// const permissions = getUserEffectivePermissions('lead', 'secondary_manager', projectId);
-// const canApprove = PermissionCheckers.canApproveTimesheets('lead', 'secondary_manager');
-// const availableRoles = getAvailableProjectRoles('employee'); // ['lead', 'employee']
+// getUserEffectivePermissions('lead', 'secondary_manager', projectId);
+// PermissionCheckers.canApproveTimesheets('lead', 'secondary_manager');
+// getAvailableProjectRoles('employee');

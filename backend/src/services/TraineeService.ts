@@ -123,7 +123,6 @@ export class TraineeService {
         message: 'User successfully assigned to Training Program'
       };
     } catch (error) {
-      console.error('Error auto-assigning to training program:', error);
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Failed to assign to training program'
@@ -186,7 +185,6 @@ export class TraineeService {
         message: 'User successfully graduated from Training Program'
       };
     } catch (error) {
-      console.error('Error graduating from training:', error);
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Failed to graduate from training'
@@ -249,7 +247,6 @@ export class TraineeService {
 
       return trainees;
     } catch (error) {
-      console.error('Error getting current trainees:', error);
       return [];
     }
   }
@@ -290,7 +287,6 @@ export class TraineeService {
         graduated_this_month: graduatedThisMonth
       };
     } catch (error) {
-      console.error('Error getting trainee stats:', error);
       return {
         total_trainees: 0,
         active_trainees: 0,

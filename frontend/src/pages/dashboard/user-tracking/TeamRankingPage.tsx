@@ -34,39 +34,22 @@ const TeamRankingPage: React.FC = () => {
   const loadRankings = React.useCallback(async () => {
     try {
       setLoading(true);
-      setError(null);
-      
-      console.log('Loading team rankings with weeks:', selectedWeeks);
-      const response = await userTrackingService.getTeamRanking({ weeks: selectedWeeks });
-      
-      console.log('Team rankings response:', response);
-      
+      setError(null);      const response = await userTrackingService.getTeamRanking({ weeks: selectedWeeks });      
       if (response && Array.isArray(response)) {
         setRankings(response);
-      } else {
-        console.warn('No ranking data received from API');
-        setRankings([]);
+      } else {        setRankings([]);
       }
-    } catch (err) {
-      console.error('Failed to load team rankings:', err);
-      setError(`Failed to load team rankings: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } catch (err) {      setError(`Failed to load team rankings: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
   }, [selectedWeeks]);
 
   useEffect(() => {
-    // Check permissions
-    console.log('Current user role for TeamRanking:', currentUserRole);
-    
-    if (!['manager', 'management', 'super_admin'].includes(currentUserRole || '')) {
-      console.log('Access denied to TeamRanking. Role required: manager, management, or super_admin');
-      navigate('/dashboard');
+    // Check permissions    
+    if (!['manager', 'management', 'super_admin'].includes(currentUserRole || '')) {      navigate('/dashboard');
       return;
-    }
-
-    console.log('Permission granted to TeamRanking. Loading rankings...');
-    loadRankings();
+    }    loadRankings();
   }, [currentUserRole, navigate, loadRankings]);
 
   const handleSort = (key: keyof TeamRankingItem) => {
@@ -163,21 +146,13 @@ const TeamRankingPage: React.FC = () => {
         <div className="flex items-center gap-4">
           <button
             onClick={async () => {
-              try {
-                console.log('Testing Team Ranking API connectivity...');
-                const testResponse = await fetch('/api/v1/user-tracking/team/ranking?weeks=4', {
+              try {                const testResponse = await fetch('/api/v1/user-tracking/team/ranking?weeks=4', {
                   headers: {
                     'Authorization': `Bearer ${localStorage.getItem('accessToken') || localStorage.getItem('authToken')}`,
                     'Content-Type': 'application/json'
                   }
-                });
-                console.log('Test response status:', testResponse.status);
-                const testData = await testResponse.json();
-                console.log('Test response data:', testData);
-                alert(`Team Ranking API Test: ${testResponse.status} - ${JSON.stringify(testData, null, 2)}`);
-              } catch (error) {
-                console.error('Team Ranking API test failed:', error);
-                alert(`Team Ranking API Test Failed: ${error}`);
+                });                const testData = await testResponse.json();                alert(`Team Ranking API Test: ${testResponse.status} - ${JSON.stringify(testData, null, 2)}`);
+              } catch (error) {                alert(`Team Ranking API Test Failed: ${error}`);
               }
             }}
             className="px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm"
@@ -187,28 +162,20 @@ const TeamRankingPage: React.FC = () => {
 
           <button
             onClick={async () => {
-              try {
-                console.log('Triggering aggregation for rankings...');
-                const aggResponse = await fetch('/api/v1/user-tracking/aggregate', {
+              try {                const aggResponse = await fetch('/api/v1/user-tracking/aggregate', {
                   method: 'POST',
                   headers: {
                     'Authorization': `Bearer ${localStorage.getItem('accessToken') || localStorage.getItem('authToken')}`,
                     'Content-Type': 'application/json'
                   },
                   body: JSON.stringify({ weeks: selectedWeeks })
-                });
-                console.log('Aggregation response status:', aggResponse.status);
-                const aggData = await aggResponse.json();
-                console.log('Aggregation response data:', aggData);
-                alert(`Aggregation: ${aggResponse.status} - Processed: ${aggData.data?.processed || 0} records`);
+                });                const aggData = await aggResponse.json();                alert(`Aggregation: ${aggResponse.status} - Processed: ${aggData.data?.processed || 0} records`);
                 
                 // Reload rankings after aggregation
                 if (aggResponse.ok) {
                   loadRankings();
                 }
-              } catch (error) {
-                console.error('Aggregation failed:', error);
-                alert(`Aggregation Failed: ${error}`);
+              } catch (error) {                alert(`Aggregation Failed: ${error}`);
               }
             }}
             className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
