@@ -4,10 +4,8 @@
  * Handles WebSocket events for real-time voice recognition
  */
 
-import { v4 as uuidv4 } from 'uuid';
 import { AuthenticatedSocket } from '../middleware/socketAuth';
 import AzureSpeechService from '../services/AzureSpeechService';
-import { AudioValidator } from '../utils/audioValidator';
 import logger from '../config/logger';
 import {
   VoiceSocketEvents,
@@ -36,15 +34,15 @@ const MAX_TOTAL_AUDIO_SIZE = 50 * 1024 * 1024; // 50MB
  * Voice Socket Controller class
  */
 class VoiceSocketController {
-  private socketSessions: Map<string, string> = new Map(); // socketId -> sessionId
-  private sessionTimeouts: Map<string, NodeJS.Timeout> = new Map();
+  private readonly socketSessions: Map<string, string> = new Map(); // socketId -> sessionId
+  private readonly sessionTimeouts: Map<string, NodeJS.Timeout> = new Map();
 
   /**
    * Attach event handlers to socket
    */
   attachHandlers(socket: AuthenticatedSocket): void {
-    socket.on(VoiceSocketEvents.VOICE_START, (data: VoiceStartEvent) => {
-      this.handleVoiceStart(socket, data);
+    socket.on(VoiceSocketEvents.VOICE_START, async (data: VoiceStartEvent) => {
+      await this.handleVoiceStart(socket, data);
     });
 
     socket.on(VoiceSocketEvents.VOICE_AUDIO_CHUNK, (data: VoiceAudioChunkEvent) => {
@@ -63,11 +61,13 @@ class VoiceSocketController {
   /**
    * Handle voice:start event
    */
-  private handleVoiceStart(socket: AuthenticatedSocket, data: VoiceStartEvent): void {
+  private async handleVoiceStart(socket: AuthenticatedSocket, data: VoiceStartEvent): Promise<void> {
     const user = socket.user;
-    const sessionId = uuidv4();
-
+    
     try {
+      // Dynamic import of uuid
+      const { v4: uuidv4 } = await import('uuid');
+      const sessionId = uuidv4();
       // Check if Azure Speech is configured
       if (!AzureSpeechService.isServiceConfigured()) {
         this.emitError(socket, {
@@ -171,7 +171,7 @@ class VoiceSocketController {
    */
   private handleAudioChunk(socket: AuthenticatedSocket, data: VoiceAudioChunkEvent): void {
     const user = socket.user;
-    const { sessionId, audioData, chunkIndex, timestamp } = data;
+    const { sessionId, audioData, chunkIndex } = data;
 
     try {
       // Verify session exists
@@ -283,7 +283,7 @@ class VoiceSocketController {
       const audioChunksReceived = session?.audioChunksReceived || 0;
       const totalBytesReceived = session?.totalBytesReceived || 0;
       const startTime = session?.startTime || new Date();
-      const duration = (new Date().getTime() - startTime.getTime()) / 1000;
+      const duration = (Date.now() - startTime.getTime()) / 1000;
 
       // Stop continuous recognition
       await AzureSpeechService.stopContinuousRecognition(sessionId);
@@ -374,7 +374,7 @@ class VoiceSocketController {
   ): void {
     const session = AzureSpeechService.getActiveSession(sessionId);
     const startTime = session?.startTime || new Date();
-    const duration = (new Date().getTime() - startTime.getTime()) / 1000;
+    const duration = (Date.now() - startTime.getTime()) / 1000;
 
     const event: VoiceFinalEvent = {
       sessionId,
