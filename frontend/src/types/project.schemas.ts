@@ -204,35 +204,3 @@ export function getProjectHealthStatus(project: any): 'healthy' | 'warning' | 'c
 
   return 'healthy';
 }
-
-// Status color helpers
-export function getProjectStatusColor(status: ProjectStatus): string {
-  const colors: Record<ProjectStatus, string> = {
-    active: 'bg-green-100 text-green-800 border-green-300',
-    completed: 'bg-blue-100 text-blue-800 border-blue-300',
-    archived: 'bg-gray-100 text-gray-800 border-gray-300',
-    on_hold: 'bg-yellow-100 text-yellow-800 border-yellow-300'
-  };
-  return colors[status] || colors.active;
-}
-
-export function getTaskStatusColor(status: TaskStatus): string {
-  const colors: Record<TaskStatus, string> = {
-    open: 'bg-gray-100 text-gray-800 border-gray-300',
-    in_progress: 'bg-blue-100 text-blue-800 border-blue-300',
-    completed: 'bg-green-100 text-green-800 border-green-300',
-    blocked: 'bg-red-100 text-red-800 border-red-300',
-    cancelled: 'bg-gray-100 text-gray-600 border-gray-300'
-  };
-  return colors[status] || colors.open;
-}
-
-export function getTaskPriorityColor(priority: string): string {
-  const colors: Record<string, string> = {
-    low: 'bg-gray-100 text-gray-700 border-gray-300',
-    medium: 'bg-blue-100 text-blue-700 border-blue-300',
-    high: 'bg-orange-100 text-orange-700 border-orange-300',
-    urgent: 'bg-red-100 text-red-700 border-red-300'
-  };
-  return colors[priority] || colors.medium;
-}

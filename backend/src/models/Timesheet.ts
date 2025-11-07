@@ -3,6 +3,8 @@ import mongoose, { Document, Model, Schema } from 'mongoose';
 export type TimesheetStatus =
   | 'draft'
   | 'submitted'
+  | 'lead_approved'        // NEW: Lead approved employee timesheet
+  | 'lead_rejected'        // NEW: Lead rejected employee timesheet
   | 'manager_approved'
   | 'manager_rejected'
   | 'management_pending'
@@ -17,6 +19,16 @@ export interface ITimesheet extends Document {
   week_end_date: Date;
   total_hours: number;
   status: TimesheetStatus;
+
+  // Extended week fields (NEW) - for month-end handling
+  is_extended_week: boolean;    // true if month-end extends to Wed of next week
+  actual_days_count: number;    // 7 (normal), 10/11 (extended), 3/4 (partial)
+
+  // Lead approval fields
+  approved_by_lead_id?: mongoose.Types.ObjectId;
+  approved_by_lead_at?: Date;
+  lead_rejection_reason?: string;
+  lead_rejected_at?: Date;
 
   // Manager approval fields
   approved_by_manager_id?: mongoose.Types.ObjectId;
@@ -78,6 +90,8 @@ const TimesheetSchema: Schema = new Schema({
     enum: [
       'draft',
       'submitted',
+      'lead_approved',        // Lead approved employee timesheet
+      'lead_rejected',        // Lead rejected employee timesheet
       'manager_approved',
       'manager_rejected',
       'management_pending',
@@ -86,6 +100,40 @@ const TimesheetSchema: Schema = new Schema({
       'billed'
     ],
     default: 'draft'
+  },
+
+  // Extended week fields (NEW) - for month-end handling
+  is_extended_week: {
+    type: Boolean,
+    default: false,
+    required: true
+  },
+  actual_days_count: {
+    type: Number,
+    default: 7,
+    min: 1,
+    max: 14, // Safety cap
+    required: true
+  },
+
+  // Lead approval fields
+  approved_by_lead_id: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    required: false
+  },
+  approved_by_lead_at: {
+    type: Date,
+    required: false
+  },
+  lead_rejection_reason: {
+    type: String,
+    trim: true,
+    required: false
+  },
+  lead_rejected_at: {
+    type: Date,
+    required: false
   },
 
   // Manager approval fields
@@ -212,8 +260,8 @@ TimesheetSchema.index({
 
 // Virtual for ID as string
 TimesheetSchema.virtual('id').get(function() {
-  // @ts-ignore
-  return this._id.toHexString();
+  // Cast to ObjectId for TypeScript safety
+  return (this._id as mongoose.Types.ObjectId).toHexString();
 });
 
 TimesheetSchema.set('toJSON', {

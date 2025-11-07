@@ -7,6 +7,7 @@ import { forgotPasswordSchema, type ForgotPasswordInput } from '../../schemas/au
 import { AuthCard } from './components';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
+import { BackendAuthService } from '../../services/BackendAuthService';
 
 /**
  * ForgotPasswordPage Component
@@ -32,21 +33,13 @@ export function ForgotPasswordPage() {
     setServerError('');
 
     try {
-      const response = await fetch('http://localhost:3001/api/v1/auth/forgot-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email: data.email }),
-      });
+      const result = await BackendAuthService.forgotPassword({ email: data.email });
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || result.message || 'Failed to send reset email');
+      if (result.success) {
+        setSuccess(true);
+      } else {
+        setServerError(result.error || 'Failed to send reset email');
       }
-
-      setSuccess(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setServerError(message || 'Failed to send reset email');

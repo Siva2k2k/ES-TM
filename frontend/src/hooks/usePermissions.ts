@@ -17,7 +17,7 @@ import {
   canEditUser,
   getAccessibleNavItems,
 } from '../utils/permissions';
-import type { UserRole } from '../utils/constants';
+import type { UserRole } from '../types';
 
 export interface UsePermissionsReturn {
   userRole: UserRole | string;

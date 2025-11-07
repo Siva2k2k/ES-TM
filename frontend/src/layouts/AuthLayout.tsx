@@ -38,6 +38,9 @@ export function AuthLayout({ children }: AuthLayoutProps) {
         <p className="text-sm text-slate-600 dark:text-gray-400">
           &copy; {new Date().getFullYear()} TimeTracker Pro. All rights reserved.
         </p>
+        <p className="text-xs text-slate-500 dark:text-gray-500 mt-2">
+          Current Date: {new Date().toISOString()}
+        </p>
       </div>
     </div>
   );

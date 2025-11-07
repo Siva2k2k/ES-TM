@@ -8,6 +8,7 @@ import { AuthCard, PasswordStrengthIndicator } from './components';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { passwordSchema } from '../../schemas/auth.schema';
+import { BackendAuthService } from '../../services/BackendAuthService';
 
 /**
  * ResetPasswordPage Component
@@ -53,7 +54,6 @@ export function ResetPasswordPage() {
 
     if (tokenParam && tokenParam.length > 10) {
       setToken(tokenParam);
-      console.log('✅ Token extracted from URL');
     } else {
       setServerError('Invalid or missing reset token. Please request a new password reset.');
     }
@@ -65,9 +65,8 @@ export function ResetPasswordPage() {
 
     const validate = async () => {
       try {
-        const resp = await fetch(`http://localhost:3001/api/v1/auth/reset-password/validate?token=${encodeURIComponent(token)}`);
-        const json = await resp.json();
-        if (!json.success) {
+        const result = await BackendAuthService.validateResetToken(token);
+        if (!result.valid) {
           setServerError('This reset link is invalid or has expired. Redirecting to login...');
           setTimeout(() => navigate('/login'), 2000);
         }
@@ -90,18 +89,10 @@ export function ResetPasswordPage() {
     setServerError('');
 
     try {
-      const response = await fetch('http://localhost:3001/api/v1/auth/reset-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token,
-          newPassword: data.password,
-        }),
+      const result = await BackendAuthService.resetPassword({
+        token,
+        password: data.password,
       });
-
-      const result = await response.json();
 
       if (result.success) {
         setSuccess(true);
@@ -110,9 +101,7 @@ export function ResetPasswordPage() {
           navigate('/login');
         }, 3000);
       } else {
-        const raw = result.error ?? result.message ?? 'Failed to reset password';
-        const errorMessage = typeof raw === 'string' ? raw : String(raw?.message ?? JSON.stringify(raw));
-        setServerError(errorMessage);
+        setServerError(result.error || 'Failed to reset password');
       }
     } catch (err) {
       setServerError(err instanceof Error ? err.message : 'Failed to reset password');

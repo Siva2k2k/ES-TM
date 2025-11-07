@@ -1,5 +1,10 @@
-import axiosInstance, { handleApiError } from '../config/axios.config';
-import type { AxiosResponse } from 'axios';
+/**
+ * Dashboard Service using unified backendApi
+ * Provides role-specific dashboard data with charts
+ * Now delegates to backendApi for all HTTP calls
+ */
+
+import { backendApi } from '../lib/backendApi';
 
 interface SuperAdminDashboardData {
   system_overview: {
@@ -59,105 +64,114 @@ interface ManagementDashboardData {
     manager_id: string;
     manager_name: string;
     team_size: number;
-    active_timesheets: number;
-    pending_approvals: number;
+    team_billable_hours: number;
+    team_revenue: number;
   }>;
+  approval_status: {
+    pending_lead: number;
+    pending_manager: number;
+    pending_management: number;
+    frozen: number;
+  };
   // Charts data
-  monthly_revenue_trend?: Array<{ name: string; revenue: number; expenses: number }>;
-  project_completion_trend?: Array<{ name: string; completed: number; ongoing: number }>;
-  team_utilization?: Array<{ name: string; utilization: number }>;
+  monthly_revenue_trend?: Array<{ name: string; revenue: number }>;
+  project_budget_utilization?: Array<{ name: string; value: number }>;
+  approval_pipeline?: Array<{ name: string; value: number }>;
 }
 
 interface ManagerDashboardData {
   team_overview: {
-    team_size: number;
+    total_members: number;
     active_projects: number;
-    pending_timesheets: number;
-    team_utilization: number;
+    pending_approvals: number;
+    this_week_hours: number;
   };
-  project_status: Array<{
+  projects: Array<{
     project_id: string;
     project_name: string;
+    client_name: string;
     status: string;
-    team_members: number;
-    completion_percentage: number;
-    budget_status: 'under' | 'on_track' | 'over';
+    team_size: number;
+    hours_logged_this_week: number;
+    budget_remaining: number;
   }>;
-  team_members: Array<{
+  team_timesheets: Array<{
     user_id: string;
     user_name: string;
-    current_projects: number;
-    pending_timesheets: number;
-    weekly_hours: number;
-    status: 'active' | 'inactive' | 'overdue';
-  }>;
-  timesheet_approvals: Array<{
-    timesheet_id: string;
-    user_name: string;
-    week_start: string;
-    total_hours: number;
     status: string;
-    priority: 'high' | 'medium' | 'low';
+    total_hours: number;
+    week_start_date: string;
+    requires_action: boolean;
   }>;
+  performance_metrics: {
+    team_utilization: number;
+    budget_utilization: number;
+    on_time_delivery: number;
+  };
   // Charts data
   team_hours_trend?: Array<{ name: string; hours: number; billable: number }>;
-  project_progress?: Array<{ name: string; progress: number }>;
+  project_distribution?: Array<{ name: string; value: number }>;
   approval_status?: Array<{ name: string; value: number }>;
 }
 
 interface LeadDashboardData {
-  task_overview: {
-    assigned_tasks: number;
-    completed_tasks: number;
-    overdue_tasks: number;
-    team_tasks: number;
+  team_summary: {
+    team_members: number;
+    pending_reviews: number;
+    hours_this_week: number;
+    projects: number;
   };
-  project_coordination: Array<{
+  my_projects: Array<{
     project_id: string;
     project_name: string;
-    my_role: string;
+    client_name?: string;
     team_size: number;
-    active_tasks: number;
-    completion_percentage: number;
+    pending_approvals: number;
+    hours_this_week: number;
   }>;
-  team_collaboration: Array<{
-    user_id: string;
+  pending_reviews: Array<{
+    timesheet_id: string;
     user_name: string;
-    shared_projects: number;
-    pending_tasks: number;
-    collaboration_score: number;
+    user_email: string;
+    week_start_date: string;
+    total_hours: number;
+    project_name?: string;
+    submitted_at: string;
   }>;
   // Charts data
-  task_completion_trend?: Array<{ name: string; completed: number; pending: number }>;
-  team_workload?: Array<{ name: string; tasks: number }>;
+  weekly_hours_trend?: Array<{ name: string; hours: number; billable: number }>;
+  project_time_distribution?: Array<{ name: string; value: number }>;
 }
 
 interface EmployeeDashboardData {
-  personal_overview: {
-    current_projects: number;
-    assigned_tasks: number;
+  personal_summary: {
+    current_week_hours: number;
+    month_hours: number;
+    pending_timesheets: number;
     completed_tasks: number;
-    weekly_hours: number;
   };
-  timesheet_status: {
-    current_week: string;
+  current_timesheet: {
+    id: string;
+    week_start_date: string;
     status: string;
     total_hours: number;
-    billable_hours: number;
-    can_submit: boolean;
-  };
-  project_assignments: Array<{
+    is_frozen: boolean;
+    can_edit: boolean;
+  } | null;
+  my_projects: Array<{
     project_id: string;
     project_name: string;
+    client_name?: string;
     role: string;
-    active_tasks: number;
-    hours_logged: number;
-    is_billable: boolean;
+    hours_this_week: number;
+    total_tasks: number;
+    completed_tasks: number;
   }>;
   recent_activity: Array<{
-    date: string;
-    activity_type: string;
+    id: string;
+    type: 'timesheet' | 'task' | 'project';
     description: string;
+    date: string;
     project_name?: string;
   }>;
   // Charts data
@@ -171,8 +185,6 @@ interface EmployeeDashboardData {
  * Provides role-specific dashboard data with charts
  */
 export class DashboardService {
-  private static readonly API_PREFIX = '/dashboard';
-
   /**
    * Get role-specific dashboard data
    */
@@ -182,22 +194,16 @@ export class DashboardService {
     error?: string;
   }> {
     try {
-      const response: AxiosResponse<{
-        success: boolean;
-        data: any;
-        role: string;
-        message?: string;
-      }> = await axiosInstance.get(this.API_PREFIX);
+      const response = await backendApi.getRoleSpecificDashboard();
 
-      if (!response.data.success) {
-        return { error: response.data.message || 'Failed to fetch dashboard data' };
+      if (!response.success) {
+        return { error: response.message || 'Failed to fetch dashboard data' };
       }
 
-      return { dashboard: response.data.data, role: response.data.role };
+      return { dashboard: response.data, role: response.role };
     } catch (error) {
       console.error('Error in getRoleSpecificDashboard:', error);
-      const { error: errorMessage } = handleApiError(error);
-      return { error: errorMessage };
+      return { error: error instanceof Error ? error.message : 'Failed to fetch dashboard data' };
     }
   }
 
@@ -206,21 +212,16 @@ export class DashboardService {
    */
   static async getSuperAdminDashboard(): Promise<{ dashboard?: SuperAdminDashboardData; error?: string }> {
     try {
-      const response: AxiosResponse<{
-        success: boolean;
-        data: SuperAdminDashboardData;
-        message?: string;
-      }> = await axiosInstance.get(`${this.API_PREFIX}/super-admin`);
+      const response = await backendApi.getSuperAdminDashboard();
 
-      if (!response.data.success) {
-        return { error: response.data.message || 'Failed to fetch super admin dashboard' };
+      if (!response.success) {
+        return { error: response.message || 'Failed to fetch super admin dashboard' };
       }
 
-      return { dashboard: response.data.data };
+      return { dashboard: response.data };
     } catch (error) {
       console.error('Error in getSuperAdminDashboard:', error);
-      const { error: errorMessage } = handleApiError(error);
-      return { error: errorMessage };
+      return { error: error instanceof Error ? error.message : 'Failed to fetch super admin dashboard' };
     }
   }
 
@@ -229,21 +230,16 @@ export class DashboardService {
    */
   static async getManagementDashboard(): Promise<{ dashboard?: ManagementDashboardData; error?: string }> {
     try {
-      const response: AxiosResponse<{
-        success: boolean;
-        data: ManagementDashboardData;
-        message?: string;
-      }> = await axiosInstance.get(`${this.API_PREFIX}/management`);
+      const response = await backendApi.getManagementDashboard();
 
-      if (!response.data.success) {
-        return { error: response.data.message || 'Failed to fetch management dashboard' };
+      if (!response.success) {
+        return { error: response.message || 'Failed to fetch management dashboard' };
       }
 
-      return { dashboard: response.data.data };
+      return { dashboard: response.data };
     } catch (error) {
       console.error('Error in getManagementDashboard:', error);
-      const { error: errorMessage } = handleApiError(error);
-      return { error: errorMessage };
+      return { error: error instanceof Error ? error.message : 'Failed to fetch management dashboard' };
     }
   }
 
@@ -252,21 +248,16 @@ export class DashboardService {
    */
   static async getManagerDashboard(): Promise<{ dashboard?: ManagerDashboardData; error?: string }> {
     try {
-      const response: AxiosResponse<{
-        success: boolean;
-        data: ManagerDashboardData;
-        message?: string;
-      }> = await axiosInstance.get(`${this.API_PREFIX}/manager`);
+      const response = await backendApi.getManagerDashboard();
 
-      if (!response.data.success) {
-        return { error: response.data.message || 'Failed to fetch manager dashboard' };
+      if (!response.success) {
+        return { error: response.message || 'Failed to fetch manager dashboard' };
       }
 
-      return { dashboard: response.data.data };
+      return { dashboard: response.data };
     } catch (error) {
       console.error('Error in getManagerDashboard:', error);
-      const { error: errorMessage } = handleApiError(error);
-      return { error: errorMessage };
+      return { error: error instanceof Error ? error.message : 'Failed to fetch manager dashboard' };
     }
   }
 
@@ -275,21 +266,16 @@ export class DashboardService {
    */
   static async getLeadDashboard(): Promise<{ dashboard?: LeadDashboardData; error?: string }> {
     try {
-      const response: AxiosResponse<{
-        success: boolean;
-        data: LeadDashboardData;
-        message?: string;
-      }> = await axiosInstance.get(`${this.API_PREFIX}/lead`);
+      const response = await backendApi.getLeadDashboard();
 
-      if (!response.data.success) {
-        return { error: response.data.message || 'Failed to fetch lead dashboard' };
+      if (!response.success) {
+        return { error: response.message || 'Failed to fetch lead dashboard' };
       }
 
-      return { dashboard: response.data.data };
+      return { dashboard: response.data };
     } catch (error) {
       console.error('Error in getLeadDashboard:', error);
-      const { error: errorMessage } = handleApiError(error);
-      return { error: errorMessage };
+      return { error: error instanceof Error ? error.message : 'Failed to fetch lead dashboard' };
     }
   }
 
@@ -298,21 +284,16 @@ export class DashboardService {
    */
   static async getEmployeeDashboard(): Promise<{ dashboard?: EmployeeDashboardData; error?: string }> {
     try {
-      const response: AxiosResponse<{
-        success: boolean;
-        data: EmployeeDashboardData;
-        message?: string;
-      }> = await axiosInstance.get(`${this.API_PREFIX}/employee`);
+      const response = await backendApi.getEmployeeDashboard();
 
-      if (!response.data.success) {
-        return { error: response.data.message || 'Failed to fetch employee dashboard' };
+      if (!response.success) {
+        return { error: response.message || 'Failed to fetch employee dashboard' };
       }
 
-      return { dashboard: response.data.data };
+      return { dashboard: response.data };
     } catch (error) {
       console.error('Error in getEmployeeDashboard:', error);
-      const { error: errorMessage } = handleApiError(error);
-      return { error: errorMessage };
+      return { error: error instanceof Error ? error.message : 'Failed to fetch employee dashboard' };
     }
   }
 }

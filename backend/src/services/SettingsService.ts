@@ -33,7 +33,7 @@ export class SettingsService {
       
       return { settings };
     } catch (error) {
-      console.error('Error getting user settings:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to get user settings' };
     }
   }
@@ -67,7 +67,7 @@ export class SettingsService {
 
       return { settings };
     } catch (error) {
-      console.error('Error updating user settings:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to update user settings' };
     }
   }
@@ -92,7 +92,7 @@ export class SettingsService {
 
       return { settings: defaultSettings };
     } catch (error) {
-      console.error('Error resetting user settings:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to reset user settings' };
     }
   }
@@ -130,7 +130,7 @@ export class SettingsService {
 
       return { templates: templates as IReportTemplate[] };
     } catch (error) {
-      console.error('Error getting report templates:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to get report templates' };
     }
   }
@@ -167,7 +167,7 @@ export class SettingsService {
 
       return { template };
     } catch (error) {
-      console.error('Error creating report template:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to create report template' };
     }
   }
@@ -203,7 +203,7 @@ export class SettingsService {
 
       return { template };
     } catch (error) {
-      console.error('Error updating report template:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to update report template' };
     }
   }
@@ -235,7 +235,7 @@ export class SettingsService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error deleting report template:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to delete report template' };
     }
   }
@@ -273,7 +273,7 @@ export class SettingsService {
 
       return { settings: settings as ISystemSettings[] };
     } catch (error) {
-      console.error('Error getting system settings:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to get system settings' };
     }
   }
@@ -311,8 +311,91 @@ export class SettingsService {
 
       return { setting };
     } catch (error) {
-      console.error('Error updating system setting:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to update system setting' };
+    }
+  }
+
+  // ============================================================================
+  // HOLIDAY SYSTEM SETTINGS
+  // ============================================================================
+
+  /**
+   * Initialize default holiday system settings
+   */
+  static async initializeHolidaySettings(currentUser: AuthUser): Promise<{ success: boolean; error?: string }> {
+    try {
+      if (currentUser.role !== 'super_admin') {
+        throw new AuthorizationError('Only super admins can initialize holiday settings');
+      }
+
+      const defaultSettings = [
+        {
+          setting_key: 'auto_create_holiday_entries',
+          setting_value: true,
+          description: 'Automatically create holiday entries in timesheets when holidays exist in the week',
+          category: 'general',
+          data_type: 'boolean',
+          is_public: true,
+          requires_restart: false,
+          updated_by: currentUser.id
+        },
+        {
+          setting_key: 'default_holiday_hours',
+          setting_value: 8,
+          description: 'Default number of hours for automatically created holiday entries',
+          category: 'general',
+          data_type: 'number',
+          is_public: true,
+          requires_restart: false,
+          validation_rules: { min: 0, max: 24 },
+          updated_by: currentUser.id
+        },
+        {
+          setting_key: 'allow_holiday_hour_adjustment',
+          setting_value: true,
+          description: 'Allow users to adjust hours for auto-generated holiday entries',
+          category: 'general',
+          data_type: 'boolean',
+          is_public: true,
+          requires_restart: false,
+          updated_by: currentUser.id
+        }
+      ];
+
+      for (const settingData of defaultSettings) {
+        await SystemSettings.findOneAndUpdate(
+          { setting_key: settingData.setting_key },
+          settingData,
+          { upsert: true, new: true }
+        );
+      }
+
+      return { success: true };
+    } catch (error) {
+
+      return { success: false, error: error instanceof Error ? error.message : 'Failed to initialize holiday settings' };
+    }
+  }
+
+  /**
+   * Get holiday settings for public access
+   */
+  static async getHolidaySettings(): Promise<{ settings?: any; error?: string }> {
+    try {
+      const settings = await SystemSettings.find({
+        setting_key: { $in: ['auto_create_holiday_entries', 'default_holiday_hours', 'allow_holiday_hour_adjustment'] }
+      }).select('setting_key setting_value description');
+
+      const settingsMap = settings.reduce((acc, setting) => {
+        acc[setting.setting_key] = setting.setting_value;
+        return acc;
+      }, {} as any);
+
+      return { settings: settingsMap };
+    } catch (error) {
+
+      return { error: error instanceof Error ? error.message : 'Failed to get holiday settings' };
     }
   }
 

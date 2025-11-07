@@ -3,9 +3,10 @@ import { useAuth } from '../store/contexts/AuthContext';
 import { UserService } from '../services/UserService';
 import PermissionService from '../services/PermissionService';
 import type { UserRole, Timesheet, User } from '../types';
+import type { ApprovalProjectRole } from '../types/timesheetApprovals';
 
-// Project role types (NO secondary_manager - removed in Phase 6)
-export type ProjectRole = 'lead' | 'employee';
+// Project role type alias for approval workflow context
+export type ProjectRole = ApprovalProjectRole;
 
 // Role hierarchy levels
 export const ROLE_HIERARCHY_LEVELS: Record<UserRole, number> = {
@@ -184,7 +185,6 @@ export const useRoleManager = (): UseRoleManagerReturn => {
       }
 
       // Log the role change for debugging
-      console.log(`Role switched from ${currentUserRole} to ${newRole}`);
 
     } catch (error) {
       console.error('Failed to switch role:', error);
@@ -376,7 +376,6 @@ export const useRoleManager = (): UseRoleManagerReturn => {
   const resetToDefaultSection = useCallback(() => {
     // This would typically trigger navigation reset
     // Implementation depends on your routing/navigation setup
-    console.log('Resetting to default section for role:', currentUserRole);
   }, [currentUserRole]);
 
   return {

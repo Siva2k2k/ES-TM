@@ -225,6 +225,27 @@ export class BackendAuthService {
   }
 
   /**
+   * Validate reset password token
+   */
+  static async validateResetToken(token: string): Promise<{ valid: boolean; error?: string }> {
+    try {
+      const response: AxiosResponse<{ valid: boolean }> = await axiosInstance.get(
+        `${this.API_PREFIX}/reset-password/validate`,
+        { params: { token } }
+      );
+
+      return { valid: response.data.valid };
+    } catch (error) {
+      console.error('Validate reset token error:', error);
+      const { error: errorMessage } = handleApiError(error);
+      return {
+        valid: false,
+        error: errorMessage,
+      };
+    }
+  }
+
+  /**
    * Reset password with token
    */
   static async resetPassword(
@@ -240,6 +261,34 @@ export class BackendAuthService {
       };
     } catch (error) {
       console.error('Reset password error:', error);
+      const { error: errorMessage } = handleApiError(error);
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
+  }
+
+  /**
+   * Force password change (first login after account creation)
+   */
+  static async forcePasswordChange(
+    userId: string,
+    newPassword: string
+  ): Promise<{ success: boolean; message?: string; error?: string }> {
+    try {
+      const response: AxiosResponse<{ success: boolean; message?: string }> =
+        await axiosInstance.post(`${this.API_PREFIX}/change-password`, {
+          userId,
+          newPassword,
+        });
+
+      return {
+        success: response.data.success,
+        message: response.data.message,
+      };
+    } catch (error) {
+      console.error('Force password change error:', error);
       const { error: errorMessage } = handleApiError(error);
       return {
         success: false,
@@ -309,5 +358,78 @@ export class BackendAuthService {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('currentUser');
+  }
+
+  /**
+   * Microsoft SSO - Initiate OAuth flow (redirect to backend)
+   */
+  static microsoftLogin(): void {
+    // Redirect to backend Microsoft OAuth endpoint
+    window.location.href = `/api/v1/auth/microsoft`;
+  }
+
+  /**
+   * Microsoft SSO - Store tokens from callback URL
+   */
+  static handleMicrosoftCallback(params: URLSearchParams): AuthResponse {
+    const accessToken = params.get('accessToken');
+    const refreshToken = params.get('refreshToken');
+    const success = params.get('success') === 'true';
+    const error = params.get('error');
+    const message = params.get('message');
+
+    if (error) {
+      return {
+        success: false,
+        message: message || 'Microsoft login failed',
+        error: error,
+      };
+    }
+
+    if (success && accessToken && refreshToken) {
+      // Store tokens
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('refreshToken', refreshToken);
+
+      return {
+        success: true,
+        message: 'Microsoft login successful',
+        tokens: { accessToken, refreshToken },
+      };
+    }
+
+    return {
+      success: false,
+      message: 'Invalid callback parameters',
+      error: 'invalid_callback',
+    };
+  }
+
+  /**
+   * Link Microsoft account to current user
+   */
+  static async linkMicrosoftAccount(accessToken: string): Promise<{
+    success: boolean;
+    message?: string;
+    error?: string;
+  }> {
+    try {
+      const response: AxiosResponse<{ success: boolean; message: string }> =
+        await axiosInstance.post(`${this.API_PREFIX}/microsoft/link`, {
+          accessToken,
+        });
+
+      return {
+        success: response.data.success,
+        message: response.data.message,
+      };
+    } catch (error) {
+      console.error('Link Microsoft account error:', error);
+      const { error: errorMessage } = handleApiError(error);
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
   }
 }

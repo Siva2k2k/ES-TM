@@ -4,25 +4,135 @@
  */
 
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, CheckCircle, XCircle, Users, Clock, FileText } from 'lucide-react';
+import { ChevronDown, ChevronUp, CheckCircle, XCircle, Users, Clock, FileText, AlertTriangle } from 'lucide-react';
 import { UserTimesheetDetails } from './UserTimesheetDetails';
 import type { ProjectWeekGroup } from '../../../types/timesheetApprovals';
+import { DefaulterList } from '../../../components/team-review/DefaulterList';
 
 interface ProjectWeekCardProps {
   projectWeek: ProjectWeekGroup;
   onApprove: (projectWeek: ProjectWeekGroup) => void;
   onReject: (projectWeek: ProjectWeekGroup) => void;
+  onApproveUser?: (userId: string, projectWeekId: string) => void;
+  onRejectUser?: (userId: string, projectWeekId: string) => void;
+  canApprove?: boolean;
+  approvalRole?: 'lead' | 'manager' | 'management';
   isLoading?: boolean;
 }
+
+// Helper functions extracted to reduce cognitive complexity
+const getStatusColor = (status: string): string => {
+  switch (status) {
+    case 'approved':
+      return 'bg-green-50 border-green-200';
+    case 'rejected':
+      return 'bg-red-50 border-red-200';
+    case 'partially_processed':
+      return 'bg-blue-50 border-blue-200';
+    default:
+      return 'bg-white border-gray-200';
+  }
+};
+
+const getStatusBadge = (status: string, subStatus?: string): JSX.Element => {
+  const baseClasses = 'px-3 py-1 rounded-full text-sm font-medium';
+  switch (status) {
+    case 'approved':
+      return <span className={`${baseClasses} bg-green-100 text-green-800`}>Approved</span>;
+    case 'rejected':
+      return <span className={`${baseClasses} bg-red-100 text-red-800`}>Rejected</span>;
+    case 'partially_processed':
+      return (
+        <span
+          className={`${baseClasses} bg-blue-100 text-blue-800`}
+          title={subStatus || 'Some timesheets approved, some pending'}
+        >
+          Partially Processed
+        </span>
+      );
+    default:
+      return <span className={`${baseClasses} bg-yellow-100 text-yellow-800`}>Pending Approval</span>;
+  }
+};
+
+const getStatusText = (
+  isManagementMode: boolean,
+  allManagerApproved: boolean,
+  teamMembers: ProjectWeekGroup['users'],
+  managerApprovedUsers: ProjectWeekGroup['users'],
+  pendingUsers: ProjectWeekGroup['users']
+): string => {
+  if (isManagementMode) {
+    if (allManagerApproved) {
+      return 'Ready for verification';
+    }
+    const pendingCount = teamMembers.length - managerApprovedUsers.length;
+    return `${pendingCount} ${pendingCount === 1 ? 'user is' : 'users are'} pending`;
+  } else {
+    if (pendingUsers.length === 0) {
+      return 'All approved';
+    }
+    return `${pendingUsers.length} ${pendingUsers.length === 1 ? 'user is' : 'users are'} pending`;
+  }
+};
+
+const calculateAggregatedHours = (
+  users: ProjectWeekGroup['users'],
+  userBillableData: Record<string, { worked_hours: number; billable_hours: number; billable_adjustment: number }>
+) => {
+  const totalWorkedHours = users.reduce((sum, u) => {
+    const localData = userBillableData[u.user_id];
+    return sum + (localData?.worked_hours ?? u.worked_hours ?? 0);
+  }, 0);
+  
+  const totalBillableHours = users.reduce((sum, u) => {
+    const localData = userBillableData[u.user_id];
+    return sum + (localData?.billable_hours ?? u.billable_hours ?? 0);
+  }, 0);
+  
+  const totalAdjustment = users.reduce((sum, u) => {
+    const localData = userBillableData[u.user_id];
+    return sum + (localData?.billable_adjustment ?? u.billable_adjustment ?? 0);
+  }, 0);
+
+  return { totalWorkedHours, totalBillableHours, totalAdjustment };
+};
 
 export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
   projectWeek,
   onApprove,
   onReject,
+  onApproveUser,
+  onRejectUser,
+  canApprove = false,
+  approvalRole = 'manager',
   isLoading = false
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
+  const [userBillableData, setUserBillableData] = useState<Record<string, {
+    worked_hours: number;
+    billable_hours: number;
+    billable_adjustment: number;
+  }>>({});
+  const [canProceedWithApproval, setCanProceedWithApproval] = useState(true);
+  const [defaulterCount, setDefaulterCount] = useState(0);
+
+  const handleBillableUpdate = (userId: string, data: {
+    worked_hours: number;
+    billable_hours: number;
+    billable_adjustment: number;
+  }) => {
+    setUserBillableData(prev => ({
+      ...prev,
+      [userId]: data
+    }));
+  };
+
+  const handleDefaulterValidation = (canProceed: boolean, count: number) => {
+    setCanProceedWithApproval(canProceed);
+    setDefaulterCount(count);
+  };
 
   const toggleUserExpansion = (userId: string) => {
     setExpandedUsers(prev => {
@@ -36,34 +146,64 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
     });
   };
 
-  const getStatusColor = () => {
-    switch (projectWeek.approval_status) {
-      case 'approved':
-        return 'bg-green-50 border-green-200';
-      case 'rejected':
-        return 'bg-red-50 border-red-200';
-      default:
-        return 'bg-white border-gray-200';
-    }
-  };
-
-  const getStatusBadge = () => {
-    const baseClasses = 'px-3 py-1 rounded-full text-sm font-medium';
-    switch (projectWeek.approval_status) {
-      case 'approved':
-        return <span className={`${baseClasses} bg-green-100 text-green-800`}>Approved</span>;
-      case 'rejected':
-        return <span className={`${baseClasses} bg-red-100 text-red-800`}>Rejected</span>;
-      default:
-        return <span className={`${baseClasses} bg-yellow-100 text-yellow-800`}>Pending Approval</span>;
-    }
-  };
-
   const pendingUsers = projectWeek.users.filter(u => u.approval_status === 'pending');
   const hasPendingApprovals = pendingUsers.length > 0;
 
+  const actionRole = approvalRole || 'manager';
+  const isManagementMode = actionRole === 'management';
+  
+  // For management mode, exclude managers from the approval check
+  // Managers have status 'management_pending', not 'manager_approved'
+  const teamMembers = isManagementMode 
+    ? projectWeek.users.filter(u => u.user_role !== 'manager')
+    : projectWeek.users;
+  
+  const managerApprovedUsers = teamMembers.filter(u => u.timesheet_status !== 'management_pending');
+  const allManagerApproved = managerApprovedUsers.length === teamMembers.length && teamMembers.length > 0;
+  const hasManagerApproved = managerApprovedUsers.length > 0;
+
+  const canShowActions = canApprove && (projectWeek.approval_status === 'pending' || projectWeek.approval_status === 'partially_processed');
+  const shouldShowActions = canShowActions && (isManagementMode ? hasManagerApproved : hasPendingApprovals);
+
+  // For training projects, don't check defaulters - always allow approval if other conditions are met
+  const isTrainingProject = projectWeek.project_type === 'training';
+  
+  // Updated: Disable buttons if there are defaulters (for non-training projects) OR other conditions
+  const actionButtonDisabled = isLoading || 
+    (isManagementMode && !allManagerApproved) || 
+    (!isTrainingProject && !canProceedWithApproval);
+  const actionButtonLabel = isManagementMode ? 'Verify All' : 'Approve All';
+
+  const getActionButtonTitle = () => {
+    if (!isTrainingProject && !canProceedWithApproval) {
+      const memberText = defaulterCount === 1 ? 'member' : 'members';
+      return `Cannot proceed. ${defaulterCount} team ${memberText} have not submitted timesheets.`;
+    }
+    if (isManagementMode) {
+      return allManagerApproved
+        ? 'Verify and freeze all manager-approved timesheets'
+        : 'All timesheets must be manager approved before verification.';
+    }
+    return 'Approve all pending timesheets for this project-week.';
+  };
+  
+  const rejectButtonTitle = isManagementMode
+    ? 'Reject timesheets back to managers'
+    : 'Reject all pending timesheets for this project-week.';
+  
+  // Show total_hours if provided, otherwise sum per-user totals as a fallback
+  const displayHours = (typeof projectWeek.total_hours === 'number' && projectWeek.total_hours > 0)
+    ? projectWeek.total_hours
+    : projectWeek.users.reduce((sum, u) => sum + (u.total_hours_for_project || 0), 0);
+
+  // Calculate aggregated worked hours and billable hours with local updates
+  const { totalWorkedHours, totalBillableHours, totalAdjustment } = calculateAggregatedHours(
+    projectWeek.users,
+    userBillableData
+  );
+
   return (
-    <div className={`rounded-lg border-2 overflow-hidden transition-all ${getStatusColor()}`}>
+    <div className={`rounded-lg border-2 overflow-hidden transition-all ${getStatusColor(projectWeek.approval_status)}`}>
       {/* Card Header */}
       <div className="p-6">
         <div className="flex items-start justify-between gap-4 mb-4">
@@ -73,8 +213,26 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
               <h3 className="text-xl font-semibold text-gray-900">
                 {projectWeek.project_name}
               </h3>
-              {getStatusBadge()}
+              {projectWeek.project_type === 'training' && (
+                <span className="px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
+                  Training
+                </span>
+              )}
+              {getStatusBadge(projectWeek.approval_status, projectWeek.sub_status)}
+              {projectWeek.is_reopened && (
+                <span
+                  className="px-3 py-1 rounded-full text-sm font-medium bg-orange-100 text-orange-800"
+                  title={`Reopened: ${projectWeek.original_approval_count} timesheets were approved, then new submissions were added`}
+                >
+                  Reopened
+                </span>
+              )}
             </div>
+            {projectWeek.sub_status && (
+              <div className="text-sm text-gray-600 mb-2">
+                <span className="font-medium">{projectWeek.sub_status}</span>
+              </div>
+            )}
             <div className="flex items-center gap-4 text-sm text-gray-600">
               <span className="font-medium">{projectWeek.week_label}</span>
               <span className="text-gray-400">•</span>
@@ -89,39 +247,74 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
           </div>
 
           {/* Action Buttons (Only for pending) */}
-          {hasPendingApprovals && projectWeek.approval_status === 'pending' && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => onApprove(projectWeek)}
-                disabled={isLoading}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[42px]"
-              >
-                <CheckCircle className="w-4 h-4" />
-                <span>Approve All</span>
-              </button>
-              <button
-                onClick={() => onReject(projectWeek)}
-                disabled={isLoading}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[42px]"
-              >
-                <XCircle className="w-4 h-4" />
-                <span>Reject All</span>
-              </button>
+          {shouldShowActions && (
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => onApprove(projectWeek)}
+                  disabled={actionButtonDisabled}
+                  title={getActionButtonTitle()}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[42px]"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  <span>{actionButtonLabel}</span>
+                </button>
+                <button
+                  onClick={() => onReject(projectWeek)}
+                  disabled={isLoading}
+                  title={rejectButtonTitle}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[42px]"
+                >
+                  <XCircle className="w-4 h-4" />
+                  <span>Reject All</span>
+                </button>
+              </div>
+              {isManagementMode && !allManagerApproved && (
+                <div className="flex items-center gap-2 text-xs text-yellow-700">
+                  <AlertTriangle className="w-4 h-4" />
+                  <span>All project members must be manager approved before final verification.</span>
+                </div>
+              )}
             </div>
           )}
         </div>
 
+        {/* Defaulter Tracking - Skip for training projects */}
+        {projectWeek.week_start && projectWeek.project_type !== 'training' && (
+          <div className="mb-4">
+            <DefaulterList
+              projectId={projectWeek.project_id}
+              weekStart={projectWeek.week_start}
+              onValidationChange={handleDefaulterValidation}
+            />
+          </div>
+        )}
+
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
           <div className="bg-white rounded-lg border border-gray-200 p-3">
             <div className="flex items-center gap-2 mb-1">
               <Users className="w-4 h-4 text-blue-600" />
               <span className="text-sm text-gray-600">Users</span>
             </div>
             <div className="text-2xl font-bold text-gray-900">{projectWeek.total_users}</div>
-            {hasPendingApprovals && (
-              <div className="text-xs text-yellow-600 mt-1">
-                {pendingUsers.length} pending
+            {(projectWeek.pending_count !== undefined || projectWeek.approved_count !== undefined) && (
+              <div className="text-xs mt-1 space-y-0.5">
+                {projectWeek.approved_count !== undefined && projectWeek.approved_count > 0 && (
+                  <div className="text-green-600">
+                    {projectWeek.approved_count} approved
+                  </div>
+                )}
+                {projectWeek.pending_count !== undefined && projectWeek.pending_count > 0 && (
+                  <div className="text-yellow-600">
+                    {projectWeek.pending_count} pending
+                  </div>
+                )}
+                {projectWeek.rejected_count !== undefined && projectWeek.rejected_count > 0 && (
+                  <div className="text-red-600">
+                    {projectWeek.rejected_count} rejected
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -131,9 +324,27 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
               <Clock className="w-4 h-4 text-green-600" />
               <span className="text-sm text-gray-600">Hours</span>
             </div>
-            <div className="text-2xl font-bold text-gray-900">
-              {projectWeek.total_hours.toFixed(1)}
-            </div>
+            {(isManagementMode || approvalRole === 'manager') && projectWeek.project_type !== 'training' ? (
+              <>
+                <div className="text-2xl font-bold text-gray-900">
+                  {totalBillableHours.toFixed(1)}
+                </div>
+                <div className="text-xs mt-1 space-y-0.5">
+                  <div className="text-blue-600">
+                    {totalWorkedHours.toFixed(1)}h worked
+                  </div>
+                  {totalAdjustment !== 0 && (
+                    <div className={totalAdjustment >= 0 ? 'text-green-600' : 'text-red-600'}>
+                      {totalAdjustment >= 0 ? '+' : ''}{totalAdjustment.toFixed(1)}h adjust
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="text-2xl font-bold text-gray-900">
+                {displayHours.toFixed(1)}
+              </div>
+            )}
           </div>
 
           <div className="bg-white rounded-lg border border-gray-200 p-3">
@@ -142,15 +353,6 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
               <span className="text-sm text-gray-600">Entries</span>
             </div>
             <div className="text-2xl font-bold text-gray-900">{projectWeek.total_entries}</div>
-          </div>
-
-          <div className="bg-white rounded-lg border border-gray-200 p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-sm text-gray-600">Status</span>
-            </div>
-            <div className="text-lg font-semibold text-gray-900 capitalize">
-              {projectWeek.approval_status}
-            </div>
           </div>
         </div>
 
@@ -194,16 +396,51 @@ export const ProjectWeekCard: React.FC<ProjectWeekCardProps> = ({
               No users found for this project-week
             </div>
           ) : (
-            <div className="divide-y divide-gray-200">
-              {projectWeek.users.map(user => (
-                <UserTimesheetDetails
-                  key={user.user_id}
-                  user={user}
-                  isExpanded={expandedUsers.has(user.user_id)}
-                  onToggle={() => toggleUserExpansion(user.user_id)}
-                />
-              ))}
-            </div>
+            <>
+              {/* Show approval path groupings for Manager role */}
+              {approvalRole === 'manager' && (
+                <div className="bg-gray-50 px-6 py-3 border-b border-gray-200">
+                  <div className="flex items-center gap-4 text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                      <span className="text-gray-700">
+                        Lead Approved: {projectWeek.users.filter(u => u.timesheet_status === 'lead_approved').length}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+                      <span className="text-gray-700">
+                        Direct Submit: {projectWeek.users.filter(u => u.timesheet_status === 'submitted' && u.user_role === 'employee').length}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                      <span className="text-gray-700">
+                        Team Leads: {projectWeek.users.filter(u => u.user_role === 'lead').length}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="divide-y divide-gray-200">
+                {projectWeek.users.map(user => (
+                  <UserTimesheetDetails
+                    key={user.user_id}
+                    user={user}
+                    projectId={projectWeek.project_id}
+                    isExpanded={expandedUsers.has(user.user_id)}
+                    onToggle={() => toggleUserExpansion(user.user_id)}
+                    onApproveUser={() => onApproveUser?.(user.user_id, projectWeek.project_id)}
+                    onRejectUser={() => onRejectUser?.(user.user_id, projectWeek.project_id)}
+                    onBillableUpdate={(data) => handleBillableUpdate(user.user_id, data)}
+                    canApprove={!!canApprove}
+                    approvalRole={approvalRole}
+                    projectType={projectWeek.project_type}
+                  />
+                ))}
+              </div>
+            </>
           )}
         </div>
       )}

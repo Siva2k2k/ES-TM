@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, Command, ArrowRight, Clock, User, Folder, CheckSquare, CreditCard, BarChart, Settings, Home } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { BackendApiClient } from '../../lib/backendApi';
+import { themeClasses, cn } from '../../contexts/theme';
 
 interface SearchResult {
   id: string;
@@ -26,13 +29,126 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ className = '' }) =>
   
   const searchInputRef = useRef<HTMLInputElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+  const apiClientRef = useRef(new BackendApiClient());
+  const apiClient = apiClientRef.current;
+  const [modifierKey, setModifierKey] = useState<'Ctrl' | 'Cmd'>('Ctrl');
+  const isMountedRef = useRef(true);
+
+  // Define all functions with useCallback to prevent dependency issues
+  const fetchQuickActions = useCallback(async () => {
+    try {
+      const data = await apiClient.get<{ success: boolean; data?: { quick_actions?: SearchResult[] } }>('/search/quick-actions');
+      if (isMountedRef.current) {
+        setQuickActions(data?.data?.quick_actions || []);
+        setSelectedIndex(0);
+      }
+    } catch (error) {
+      console.error('Error fetching quick actions:', error);
+    }
+  }, [apiClient]);
+
+  const performSearch = useCallback(async (searchQuery: string) => {
+    setLoading(true);
+    try {
+      const data = await apiClient.get<{ success: boolean; data?: { results?: SearchResult[] } }>(
+        `/search?q=${encodeURIComponent(searchQuery)}&limit=8`
+      );
+
+      if (isMountedRef.current) {
+        setResults(data?.data?.results || []);
+        setSelectedIndex(0);
+      }
+    } catch (error) {
+      console.error('Error performing search:', error);
+    } finally {
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
+    }
+  }, [apiClient]);
+
+  const resolveSearchNavigation = useCallback((result: SearchResult): string | null => {
+    if (!result.url) {
+      return null;
+    }
+
+    const normalizedUrl = result.url.trim();
+    const searchRouteMap: Record<string, string> = {
+      'dashboard': '/dashboard',
+      'dashboard|': '/dashboard',
+      'timesheet': '/dashboard/timesheets',
+      'timesheets': '/dashboard/timesheets',
+      'project': '/dashboard/projects',
+      'projects': '/dashboard/projects',
+      'user': '/dashboard/users',
+      'users': '/dashboard/users',
+      'report': '/dashboard/reports',
+      'reports': '/dashboard/reports',
+      'setting': '/dashboard/settings',
+      'settings': '/dashboard/settings',
+      'profile': '/dashboard/profile',
+      'profile|': '/dashboard/profile',
+      'notification': '/dashboard/notifications',
+      'notifications': '/dashboard/notifications',
+      'help': '/help',
+      'help|': '/help'
+    };
+
+    // Check for exact route match
+    if (searchRouteMap[normalizedUrl]) {
+      return searchRouteMap[normalizedUrl];
+    }
+
+    // Check for partial matches
+    for (const [key, value] of Object.entries(searchRouteMap)) {
+      if (normalizedUrl.includes(key) || key.includes(normalizedUrl)) {
+        return value;
+      }
+    }
+
+    // Fallback: construct route based on result type and category
+    if (result.type === 'page' && result.category !== 'external') {
+      return `/${normalizedUrl}`;
+    }
+
+    return `/${normalizedUrl}`;
+  }, []);
+
+  const handleResultClick = useCallback((result: SearchResult) => {
+    const targetPath = resolveSearchNavigation(result);
+
+    if (targetPath) {
+      navigate(targetPath);
+    } else if (result.url?.startsWith('http')) {
+      window.open(result.url, '_blank', 'noopener,noreferrer');
+    }
+    
+    setIsOpen(false);
+    setQuery('');
+    setResults([]);
+    setSelectedIndex(0);
+  }, [navigate, resolveSearchNavigation]);
 
   // Handle global keyboard shortcuts
   const handleGlobalKeyDown = useCallback((e: KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
       e.preventDefault();
       setIsOpen(true);
+      setSelectedIndex(0);
     }
+  }, []);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent;
+    if (userAgent && /Mac|iPhone|iPad|iPod/i.test(userAgent)) {
+      setModifierKey('Cmd');
+    }
+
+    return () => {
+      isMountedRef.current = false;
+    };
   }, []);
 
   // Handle modal keyboard navigation
@@ -47,6 +163,9 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ className = '' }) =>
     if (!isOpen) return;
     
     const totalItems = results.length || quickActions.length;
+    if (totalItems === 0) {
+      return;
+    }
     
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -61,7 +180,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ className = '' }) =>
         handleResultClick(items[selectedIndex]);
       }
     }
-  }, [isOpen, results, quickActions, selectedIndex]);
+  }, [isOpen, results, quickActions, selectedIndex, handleResultClick]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -85,7 +204,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ className = '' }) =>
     if (isOpen && quickActions.length === 0) {
       fetchQuickActions();
     }
-  }, [isOpen, quickActions.length]);
+  }, [isOpen, quickActions.length, fetchQuickActions]);
 
   // Search with debouncing
   useEffect(() => {
@@ -95,69 +214,12 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ className = '' }) =>
       } else {
         setResults([]);
         setSelectedIndex(0);
+        setLoading(false);
       }
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [query]);
-
-  const fetchQuickActions = async () => {
-    try {
-      const response = await fetch('/api/v1/search/quick-actions', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setQuickActions(data.data.quick_actions || []);
-      }
-    } catch (error) {
-      console.error('Error fetching quick actions:', error);
-    }
-  };
-
-  const performSearch = async (searchQuery: string) => {
-    setLoading(true);
-    try {
-      const response = await fetch(`/api/v1/search?q=${encodeURIComponent(searchQuery)}&limit=8`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setResults(data.data.results || []);
-        setSelectedIndex(0);
-      }
-    } catch (error) {
-      console.error('Error performing search:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResultClick = (result: SearchResult) => {
-    // Handle state-based navigation instead of URL routing
-    if (result.url.includes('|')) {
-      const [section, subsection] = result.url.split('|');
-      
-      // Dispatch custom events to trigger navigation in App component
-      const navigationEvent = new CustomEvent('search-navigate', {
-        detail: { section, subsection }
-      });
-      window.dispatchEvent(navigationEvent);
-    } else {
-      // Fallback for any remaining URL-based navigation
-      window.location.href = result.url;
-    }
-    
-    setIsOpen(false);
-    setQuery('');
-    setResults([]);
-  };
+  }, [query, performSearch]);
 
   const getIcon = (iconName?: string, category?: string) => {
     const iconProps = { className: "h-4 w-4" };
@@ -229,7 +291,7 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ className = '' }) =>
                 {result.title}
               </p>
               <span className={`text-xs px-2 py-1 rounded-full ${getCategoryColor(result.category)}`}>
-                {result.category.replace(/_/g, ' ')}
+                {result.category.split('_').join(' ')}
               </span>
             </div>
             <p className="text-sm text-gray-500 truncate mt-1">
@@ -300,14 +362,17 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ className = '' }) =>
   if (!isOpen) {
     return (
       <button
-        onClick={() => setIsOpen(true)}
+        onClick={() => {
+          setIsOpen(true);
+          setSelectedIndex(0);
+        }}
         className={`flex items-center space-x-2 px-3 py-2 text-sm text-gray-500 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors ${className}`}
       >
         <Search className="h-4 w-4" />
         <span>Search...</span>
         <div className="flex items-center space-x-1 ml-auto">
           <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-500 bg-gray-200 border border-gray-300 rounded">
-            ⌘
+            {modifierKey}
           </kbd>
           <kbd className="px-1.5 py-0.5 text-xs font-semibold text-gray-500 bg-gray-200 border border-gray-300 rounded">
             K
@@ -330,18 +395,26 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ className = '' }) =>
       {/* Search Modal */}
       <div 
         ref={modalRef}
-        className="fixed top-20 left-1/2 transform -translate-x-1/2 w-full max-w-2xl bg-white rounded-lg shadow-xl border border-gray-200 z-50"
+        className={cn(
+          "fixed top-20 left-1/2 transform -translate-x-1/2 w-full max-w-2xl rounded-lg shadow-xl z-50",
+          themeClasses.modal,
+          themeClasses.border.default
+        )}
       >
         {/* Search Input */}
-        <div className="flex items-center px-4 py-3 border-b border-gray-200">
-          <Search className="h-5 w-5 text-gray-400" />
+        <div className={cn("flex items-center px-4 py-3 border-b", themeClasses.border.default)}>
+          <Search className={cn("h-5 w-5", themeClasses.muted)} />
           <input
             ref={searchInputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search for anything..."
-            className="flex-1 ml-3 text-lg bg-transparent border-none outline-none placeholder-gray-500"
+            className={cn(
+              "flex-1 ml-3 text-lg bg-transparent border-none outline-none",
+              themeClasses.body,
+              "placeholder-gray-500 dark:placeholder-gray-400"
+            )}
           />
           {loading && (
             <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent" />
@@ -354,18 +427,31 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ className = '' }) =>
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-200 px-4 py-3 text-xs text-gray-500 flex items-center justify-between">
+        <div className={cn(
+          "border-t px-4 py-3 text-xs flex items-center justify-between",
+          themeClasses.border.default,
+          themeClasses.muted
+        )}>
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-1">
-              <kbd className="px-1.5 py-0.5 font-semibold bg-gray-100 border border-gray-300 rounded">↑↓</kbd>
+              <kbd className={cn(
+                "px-1.5 py-0.5 font-semibold border rounded",
+                "bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600"
+              )}>Up/Down</kbd>
               <span>Navigate</span>
             </div>
             <div className="flex items-center space-x-1">
-              <kbd className="px-1.5 py-0.5 font-semibold bg-gray-100 border border-gray-300 rounded">↵</kbd>
+              <kbd className={cn(
+                "px-1.5 py-0.5 font-semibold border rounded",
+                "bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600"
+              )}>Enter</kbd>
               <span>Select</span>
             </div>
             <div className="flex items-center space-x-1">
-              <kbd className="px-1.5 py-0.5 font-semibold bg-gray-100 border border-gray-300 rounded">Esc</kbd>
+              <kbd className={cn(
+                "px-1.5 py-0.5 font-semibold border rounded",
+                "bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600"
+              )}>Esc</kbd>
               <span>Close</span>
             </div>
           </div>

@@ -1,12 +1,14 @@
 import { Request, Response } from 'express';
 import { body, param, query, validationResult } from 'express-validator';
 import { ProjectService, NotificationService } from '@/services';
+import Task from '@/models/Task';
 import { UserRole } from '@/models/User';
 import {
   ValidationError,
   AuthorizationError,
   handleAsyncError
 } from '@/utils/errors';
+import { IdUtils } from '@/utils/idUtils';
 
 interface AuthRequest extends Request {
   user?: {
@@ -40,6 +42,37 @@ export class ProjectController {
       });
     }
 
+    const project = result.project;
+    if (project) {
+      try {
+        const projectAny = project as any;
+        const projectId =
+          typeof projectAny.id === 'string'
+            ? projectAny.id
+            : projectAny._id && typeof projectAny._id.toString === 'function'
+              ? projectAny._id.toString()
+              : undefined;
+        const managerRaw = projectAny.primary_manager_id;
+        const managerId = managerRaw && typeof managerRaw.toString === 'function'
+          ? managerRaw.toString()
+          : managerRaw
+            ? String(managerRaw)
+            : undefined;
+
+        if (projectId && managerId && managerId !== req.user.id) {
+          await NotificationService.notifyProjectCreated({
+            recipientIds: [managerId],
+            projectId,
+            projectName: projectAny.name,
+            createdById: req.user.id,
+            createdByName: req.user.full_name
+          });
+        }
+      } catch (notificationError) {
+        console.error('Failed to send project creation notification:', notificationError);
+      }
+    }
+
     res.status(201).json({
       success: true,
       message: 'Project created successfully',
@@ -58,6 +91,17 @@ export class ProjectController {
     }
 
     const { projectId } = req.params;
+    const existingProjectResult = await ProjectService.getProjectById(projectId, req.user);
+
+    if (!existingProjectResult.project || existingProjectResult.error) {
+      const statusCode = existingProjectResult.error === 'You do not have access to this project' ? 403 : 404;
+      return res.status(statusCode).json({
+        success: false,
+        error: existingProjectResult.error || 'Project not found'
+      });
+    }
+
+    const previousProject = existingProjectResult.project;
     const result = await ProjectService.updateProject(projectId, req.body, req.user);
 
     if (!result.success) {
@@ -65,6 +109,101 @@ export class ProjectController {
         success: false,
         error: result.error
       });
+    }
+
+    let updatedProject = previousProject;
+    try {
+      const updatedProjectResult = await ProjectService.getProjectById(projectId, req.user);
+      if (!updatedProjectResult.error && updatedProjectResult.project) {
+        updatedProject = updatedProjectResult.project;
+      }
+    } catch (fetchError) {
+      console.error('Failed to fetch project after update:', fetchError);
+    }
+
+    try {
+      const membersResult = await ProjectService.getProjectMembers(projectId, req.user);
+      const members = !membersResult.error && membersResult.members ? membersResult.members : [];
+
+      const allMemberIds = new Set<string>();
+      const leadershipIds = new Set<string>();
+
+      members.forEach(member => {
+        if (!member?.user_id) {
+          return;
+        }
+
+        allMemberIds.add(member.user_id);
+        if (
+          member.project_role === 'manager' ||
+          member.project_role === 'lead' ||
+          member.is_primary_manager ||
+          member.is_secondary_manager
+        ) {
+          leadershipIds.add(member.user_id);
+        }
+      });
+
+      // Use centralized ID parsing utility
+      const previousPrimaryManagerId = IdUtils.toIdString((previousProject as any)?.primary_manager_id);
+      const updatedPrimaryManagerId = IdUtils.toIdString((updatedProject as any)?.primary_manager_id);
+      const projectName = (updatedProject as any)?.name || (previousProject as any)?.name || 'Project';
+      const previousStatus = (previousProject as any)?.status;
+      const updatedStatus = (updatedProject as any)?.status;
+      const statusChanged = Boolean(previousStatus && updatedStatus && previousStatus !== updatedStatus);
+      const completedNow = statusChanged && updatedStatus === 'completed';
+      const updatedFields = Object.keys(req.body || {});
+
+      const actorId = req.user.id;
+      const actorName = req.user.full_name;
+
+      if (completedNow) {
+        const recipientSet = new Set<string>(allMemberIds);
+        if (previousPrimaryManagerId) {
+          recipientSet.add(previousPrimaryManagerId);
+        }
+        if (updatedPrimaryManagerId) {
+          recipientSet.add(updatedPrimaryManagerId);
+        }
+        recipientSet.delete(actorId);
+
+        if (recipientSet.size > 0) {
+          await NotificationService.notifyProjectCompleted({
+            recipientIds: Array.from(recipientSet),
+            projectId,
+            projectName,
+            completedById: actorId,
+            completedByName: actorName
+          });
+        }
+      } else if (updatedFields.length > 0 || statusChanged) {
+        const recipientSet = new Set<string>(leadershipIds);
+        if (previousPrimaryManagerId) {
+          recipientSet.add(previousPrimaryManagerId);
+        }
+        if (updatedPrimaryManagerId) {
+          recipientSet.add(updatedPrimaryManagerId);
+        }
+        recipientSet.delete(actorId);
+
+        if (recipientSet.size > 0) {
+          const fieldsForNotification =
+            statusChanged && !updatedFields.includes('status')
+              ? [...updatedFields, 'status']
+              : updatedFields;
+
+          await NotificationService.notifyProjectUpdated({
+            recipientIds: Array.from(recipientSet),
+            projectId,
+            projectName,
+            updatedById: actorId,
+            updatedByName: actorName,
+            updatedFields: fieldsForNotification
+          });
+        }
+      }
+    } catch (notificationError) {
+      console.error('Failed to send project update notification:', notificationError);
     }
 
     res.json({
@@ -84,7 +223,16 @@ export class ProjectController {
     }
 
     const { projectId } = req.params;
-    const result = await ProjectService.deleteProject(projectId, req.user);
+    const { reason } = req.body;
+
+    if (!reason || reason.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Delete reason is required'
+      });
+    }
+
+    const result = await ProjectService.deleteProject(projectId, reason, req.user);
 
     if (!result.success) {
       return res.status(400).json({
@@ -139,10 +287,17 @@ export class ProjectController {
       });
     }
 
-    res.json({
+    // Include any non-blocking warnings returned by the service so the frontend can surface them
+    const response: any = {
       success: true,
       project: result.project
-    });
+    };
+
+    if (result.warnings && Array.isArray(result.warnings) && result.warnings.length > 0) {
+      response.warnings = result.warnings;
+    }
+
+    res.json(response);
   });
 
   static getUserProjects = handleAsyncError(async (req: AuthRequest, res: Response) => {
@@ -236,8 +391,7 @@ export class ProjectController {
     const { projectId } = req.params;
     const { userId, projectRole } = req.body;
     const isPrimaryManager = Boolean(req.body.is_primary_manager ?? req.body.isPrimaryManager ?? false);
-    const isSecondaryManager = Boolean(req.body.is_secondary_manager ?? req.body.isSecondaryManager ?? false);
-    const result = await ProjectService.addProjectMember(projectId, userId, projectRole || 'member', isPrimaryManager, isSecondaryManager, req.user);
+    const result = await ProjectService.addProjectMember(projectId, userId, projectRole || 'employee', isPrimaryManager, req.user);
 
     if (!result.success) {
       return res.status(400).json({
@@ -246,7 +400,7 @@ export class ProjectController {
       });
     }
 
-    // 🔔 Trigger automatic project allocation notification
+    // Trigger automatic project allocation notification
     try {
       // Get project name for notification
       const projectResult = await ProjectService.getProjectById(projectId, req.user);
@@ -337,7 +491,7 @@ export class ProjectController {
       });
     }
 
-    // 🔔 Trigger automatic task allocation notification
+    // Trigger automatic task allocation notification
     try {
       const task = result.task;
       if (task && taskData.assigned_to_user_id) {
@@ -346,13 +500,15 @@ export class ProjectController {
         const projectName = projectResult.project?.name || 'Unknown Project';
         const taskName = task.name || taskData.name || 'Unknown Task';
         
-        await NotificationService.notifyTaskAllocation(
-          taskData.assigned_to_user_id, 
-          task._id.toString(), 
-          taskName, 
-          projectName, 
-          req.user.id
-        );
+        await NotificationService.notifyTaskReceived({
+          recipientIds: [taskData.assigned_to_user_id],
+          taskId: task._id.toString(),
+          taskName,
+          projectName,
+          projectId,
+          assignedById: req.user.id,
+          assignedByName: req.user.full_name
+        });
       }
     } catch (notificationError) {
       console.error('Failed to send task allocation notification:', notificationError);
@@ -377,6 +533,7 @@ export class ProjectController {
     }
 
     const { taskId } = req.params;
+  const existingTask = await (Task as any).findById(taskId).lean().exec();
     const result = await ProjectService.updateTask(taskId, req.body, req.user);
 
     if (!result.success) {
@@ -386,27 +543,129 @@ export class ProjectController {
       });
     }
 
-    // 🔔 Trigger automatic task assignment notification (if assigned_to_user_id changed)
+    let updatedTask: any = existingTask;
     try {
-      if (req.body.assigned_to_user_id) {
-        // Get task details from the task name in request body or use default
-        const taskName = req.body.name || 'Task';
-        const projectId = req.body.project_id || 'unknown';
-        
-        // Get project name for notification
-        const projectResult = await ProjectService.getProjectById(projectId, req.user);
-        const projectName = projectResult.project?.name || 'Unknown Project';
-        
-        await NotificationService.notifyTaskAllocation(
-          req.body.assigned_to_user_id, 
-          taskId, 
-          taskName, 
-          projectName, 
-          req.user.id
-        );
+  const freshTask = await (Task as any).findById(taskId).lean().exec();
+      if (freshTask) {
+        updatedTask = freshTask;
+      }
+    } catch (fetchError) {
+      console.error('Failed to fetch task after update:', fetchError);
+    }
+
+    try {
+      // Use centralized ID parsing utility
+      const projectId =
+        req.body.project_id ||
+        IdUtils.toIdString(updatedTask?.project_id) ||
+        IdUtils.toIdString(existingTask?.project_id);
+
+      const taskName =
+        (updatedTask?.name) ||
+        req.body.name ||
+        existingTask?.name ||
+        'Task';
+
+      const previousAssigneeId = IdUtils.toIdString(existingTask?.assigned_to_user_id);
+      const updatedAssigneeId =
+        req.body.assigned_to_user_id || IdUtils.toIdString(updatedTask?.assigned_to_user_id);
+
+      const previousStatus = existingTask?.status;
+      const updatedStatus = req.body.status || updatedTask?.status;
+
+      let projectName = 'Project';
+      let projectPrimaryManagerId: string | undefined;
+      let projectMembers: Array<{
+        user_id: string;
+        project_role: string;
+        is_primary_manager: boolean;
+        is_secondary_manager: boolean;
+      }> = [];
+
+      if (projectId) {
+        try {
+          const projectDetails = await ProjectService.getProjectById(projectId, req.user);
+          if (!projectDetails.error && projectDetails.project) {
+            projectName = (projectDetails.project as any)?.name || projectName;
+            projectPrimaryManagerId = IdUtils.toIdString(
+              (projectDetails.project as any)?.primary_manager_id
+            );
+          }
+        } catch (projectFetchError) {
+          console.error('Failed to fetch project for task notification:', projectFetchError);
+        }
+
+        try {
+          const membersResult = await ProjectService.getProjectMembers(projectId, req.user);
+          if (!membersResult.error && membersResult.members) {
+            projectMembers = membersResult.members;
+          }
+        } catch (memberFetchError) {
+          console.error('Failed to fetch project members for task notification:', memberFetchError);
+        }
+      }
+
+      const assignmentChanged =
+        Boolean(updatedAssigneeId) && updatedAssigneeId !== previousAssigneeId;
+
+      if (
+        assignmentChanged &&
+        updatedAssigneeId &&
+        projectId &&
+        updatedAssigneeId !== req.user.id
+      ) {
+        await NotificationService.notifyTaskReceived({
+          recipientIds: [updatedAssigneeId],
+          taskId,
+          taskName,
+          projectName,
+          projectId,
+          assignedById: req.user.id,
+          assignedByName: req.user.full_name
+        });
+      }
+
+      const completedNow =
+        updatedStatus === 'completed' && previousStatus !== 'completed';
+
+      if (completedNow && projectId) {
+        const recipientSet = new Set<string>();
+
+        projectMembers.forEach(member => {
+          if (
+            member.user_id &&
+            (member.project_role === 'manager' ||
+              member.project_role === 'lead' ||
+              member.is_primary_manager ||
+              member.is_secondary_manager)
+          ) {
+            recipientSet.add(member.user_id);
+          }
+        });
+
+        if (projectPrimaryManagerId) {
+          recipientSet.add(projectPrimaryManagerId);
+        }
+
+        recipientSet.delete(req.user.id);
+        if (updatedAssigneeId) {
+          recipientSet.delete(updatedAssigneeId);
+        }
+
+        if (recipientSet.size > 0) {
+          await NotificationService.notifyTaskCompleted({
+            recipientIds: Array.from(recipientSet),
+            taskId,
+            taskName,
+            projectName,
+            projectId,
+            completedById: req.user.id,
+            completedByName: req.user.full_name
+          });
+        }
       }
     } catch (notificationError) {
-      console.error('Failed to send task assignment notification:', notificationError);
+      console.error('Failed to send task notification:', notificationError);
       // Don't fail the main operation if notification fails
     }
 
@@ -778,6 +1037,233 @@ export class ProjectController {
       members: result.members
     });
   });
+
+  /**
+   * Hard delete project (permanent deletion)
+   */
+  static hardDeleteProject = handleAsyncError(async (req: AuthRequest, res: Response) => {
+    if (!req.user) {
+      throw new AuthorizationError('User not authenticated');
+    }
+
+    const { projectId } = req.params;
+    const result = await ProjectService.hardDeleteProject(projectId, req.user);
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        error: result.error
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Project permanently deleted successfully'
+    });
+  });
+
+  /**
+   * Restore soft-deleted project
+   */
+  static restoreProject = handleAsyncError(async (req: AuthRequest, res: Response) => {
+    if (!req.user) {
+      throw new AuthorizationError('User not authenticated');
+    }
+
+    const { projectId } = req.params;
+    const result = await ProjectService.restoreProject(projectId, req.user);
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        error: result.error
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Project restored successfully'
+    });
+  });
+
+  /**
+   * Get all deleted projects
+   */
+  static getDeletedProjects = handleAsyncError(async (req: AuthRequest, res: Response) => {
+    if (!req.user) {
+      throw new AuthorizationError('User not authenticated');
+    }
+
+    const result = await ProjectService.getDeletedProjects(req.user);
+
+    if (result.error) {
+      return res.status(400).json({
+        success: false,
+        error: result.error
+      });
+    }
+
+    res.json({
+      success: true,
+      data: result.projects
+    });
+  });
+
+  static checkProjectDependencies = handleAsyncError(async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      throw new ValidationError(errors.array().map(err => err.msg).join(', '));
+    }
+
+    if (!req.user) {
+      throw new AuthorizationError('User not authenticated');
+    }
+
+    const { projectId } = req.params;
+    const dependencyCheck = await ProjectService.canHardDeleteProject(projectId);
+
+    res.json({
+      success: true,
+      canDelete: dependencyCheck.canDelete,
+      dependencies: dependencyCheck.dependencies,
+      counts: dependencyCheck.counts
+    });
+  });
+
+  // ========================================================================
+  // TRAINING PROJECT ENDPOINTS
+  // ========================================================================
+
+  /**
+   * Get Training Project with all tasks
+   * Accessible to all authenticated users
+   */
+  static getTrainingProject = handleAsyncError(async (req: AuthRequest, res: Response) => {
+    if (!req.user) {
+      throw new AuthorizationError('User not authenticated');
+    }
+
+    const result = await ProjectService.getTrainingProjectWithTasks();
+
+    if (!result.success || !result.project) {
+      return res.status(404).json({
+        success: false,
+        error: result.error || 'Training project not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      project: result.project,
+      tasks: result.tasks
+    });
+  });
+
+  /**
+   * Add task to Training Project
+   * Only Management, Manager, and Admin can add tasks
+   */
+  static addTrainingTask = handleAsyncError(async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      throw new ValidationError(errors.array().map(err => err.msg).join(', '));
+    }
+
+    if (!req.user) {
+      throw new AuthorizationError('User not authenticated');
+    }
+
+    // Only Management, Manager, and Super Admin can add training tasks
+    if (!['management', 'manager', 'super_admin'].includes(req.user.role)) {
+      throw new AuthorizationError('Only Management, Managers, and Admins can add training tasks');
+    }
+
+    const result = await ProjectService.addTrainingTask(req.body, req.user);
+
+    if (!result.success || !result.task) {
+      return res.status(400).json({
+        success: false,
+        error: result.error || 'Failed to create training task'
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Training task created successfully',
+      task: result.task
+    });
+  });
+
+  /**
+   * Update task in Training Project
+   * Only Management, Manager, and Admin can update tasks
+   */
+  static updateTrainingTask = handleAsyncError(async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      throw new ValidationError(errors.array().map(err => err.msg).join(', '));
+    }
+
+    if (!req.user) {
+      throw new AuthorizationError('User not authenticated');
+    }
+
+    // Only Management, Manager, and Super Admin can update training tasks
+    if (!['management', 'manager', 'super_admin'].includes(req.user.role)) {
+      throw new AuthorizationError('Only Management, Managers, and Admins can update training tasks');
+    }
+
+    const { taskId } = req.params;
+    const result = await ProjectService.updateTrainingTask(taskId, req.body, req.user);
+
+    if (!result.success || !result.task) {
+      return res.status(400).json({
+        success: false,
+        error: result.error || 'Failed to update training task'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Training task updated successfully',
+      task: result.task
+    });
+  });
+
+  /**
+   * Delete task from Training Project
+   * Only Management, Manager, and Admin can delete tasks
+   */
+  static deleteTrainingTask = handleAsyncError(async (req: AuthRequest, res: Response) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      throw new ValidationError(errors.array().map(err => err.msg).join(', '));
+    }
+
+    if (!req.user) {
+      throw new AuthorizationError('User not authenticated');
+    }
+
+    // Only Management, Manager, and Super Admin can delete training tasks
+    if (!['management', 'manager', 'super_admin'].includes(req.user.role)) {
+      throw new AuthorizationError('Only Management, Managers, and Admins can delete training tasks');
+    }
+
+    const { taskId } = req.params;
+    const result = await ProjectService.deleteTrainingTask(taskId, req.user);
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        error: result.error || 'Failed to delete training task'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Training task deleted successfully'
+    });
+  });
 }
 
 // Validation middleware
@@ -837,7 +1323,7 @@ export const createProjectValidation = [
     .withMessage('End date must be a valid date'),
   body('status')
     .optional()
-    .isIn(['planning', 'active', 'on_hold', 'completed', 'cancelled'])
+    .isIn(['planning', 'active', 'on_hold', 'completed', 'archived'])
     .withMessage('Invalid project status'),
   body('priority')
     .optional()
@@ -888,7 +1374,7 @@ export const addProjectMemberValidation = [
 
 export const projectStatusValidation = [
   query('status')
-    .isIn(['planning', 'active', 'on_hold', 'completed', 'cancelled'])
+    .isIn(['planning', 'active', 'on_hold', 'completed', 'archived'])
     .withMessage('Invalid project status')
 ];
 
@@ -994,12 +1480,89 @@ export const createClientValidation = [
   body('name')
     .trim()
     .isLength({ min: 2, max: 200 })
-    .withMessage('Client name must be between 2 and 200 characters'),
+    .withMessage('Client name must be between 2 and 200 characters')
+    .custom(async (value) => {
+      const Client = (await import('@/models/Client')).default;
+      const existingClient = await (Client.findOne as any)({
+        name: { $regex: new RegExp(`^${value.trim()}$`, 'i') },
+        deleted_at: { $exists: false }
+      });
+      if (existingClient) {
+        throw new Error('A client with this name already exists');
+      }
+      return true;
+    }),
   body('email')
     .optional()
     .isEmail()
     .normalizeEmail()
-    .withMessage('Valid email is required'),
+    .withMessage('Valid email is required')
+    .custom(async (value) => {
+      if (!value) return true; // Skip if email is not provided
+      const Client = (await import('@/models/Client')).default;
+      const existingClient = await (Client.findOne as any)({
+        contact_email: value.toLowerCase(),
+        deleted_at: { $exists: false }
+      });
+      if (existingClient) {
+        throw new Error('A client with this email already exists');
+      }
+      return true;
+    }),
+  body('phone')
+    .optional()
+    .trim()
+    .isLength({ min: 10, max: 20 })
+    .withMessage('Phone must be between 10 and 20 characters'),
+  body('company')
+    .optional()
+    .trim()
+    .isLength({ max: 200 })
+    .withMessage('Company name must be less than 200 characters'),
+  body('address')
+    .optional()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('Address must be less than 500 characters')
+];
+
+export const updateClientValidation = [
+  body('name')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 200 })
+    .withMessage('Client name must be between 2 and 200 characters')
+    .custom(async (value, { req }) => {
+      if (!value) return true; // Skip if name is not being updated
+      const Client = (await import('@/models/Client')).default;
+      const existingClient = await (Client.findOne as any)({
+        name: { $regex: new RegExp(`^${value.trim()}$`, 'i') },
+        _id: { $ne: req.params.clientId },
+        deleted_at: { $exists: false }
+      });
+      if (existingClient) {
+        throw new Error('A client with this name already exists');
+      }
+      return true;
+    }),
+  body('email')
+    .optional()
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Valid email is required')
+    .custom(async (value, { req }) => {
+      if (!value) return true; // Skip if email is not being updated
+      const Client = (await import('@/models/Client')).default;
+      const existingClient = await (Client.findOne as any)({
+        contact_email: value.toLowerCase(),
+        _id: { $ne: req.params.clientId },
+        deleted_at: { $exists: false }
+      });
+      if (existingClient) {
+        throw new Error('A client with this email already exists');
+      }
+      return true;
+    }),
   body('phone')
     .optional()
     .trim()
@@ -1063,4 +1626,38 @@ export const updateProjectMemberRoleValidation = [
     .optional()
     .isBoolean()
     .withMessage('hasManagerAccess must be a boolean')
+];
+
+// ========================================================================
+// TRAINING PROJECT VALIDATIONS
+// ========================================================================
+
+export const createTrainingTaskValidation = [
+  body('name')
+    .trim()
+    .isLength({ min: 2, max: 200 })
+    .withMessage('Task name must be between 2 and 200 characters'),
+  body('description')
+    .optional()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('Description must be less than 500 characters')
+];
+
+export const updateTrainingTaskValidation = [
+  ...taskIdValidation,
+  body('name')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 200 })
+    .withMessage('Task name must be between 2 and 200 characters'),
+  body('description')
+    .optional()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('Description must be less than 500 characters'),
+  body('is_active')
+    .optional()
+    .isBoolean()
+    .withMessage('is_active must be a boolean')
 ];

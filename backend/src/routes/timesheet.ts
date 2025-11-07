@@ -1,12 +1,15 @@
 import { Router } from 'express';
-import { TimesheetController } from '@/controllers/TimesheetController';
-import { TeamReviewController } from '@/controllers/TeamReviewController';
+import TimesheetController from '@/controllers/TimesheetController';
+import TeamReviewController from '@/controllers/TeamReviewController';
 import { body, param, query } from 'express-validator';
 import { validate } from '@/middleware/validation';
 import { requireAuth } from '@/middleware/auth';
 import mongoose from 'mongoose';
 
 const router = Router();
+
+// Debug: Check if method exists
+console.log('synchronizeHolidayEntries method:', TimesheetController.synchronizeHolidayEntries);
 
 // Apply authentication middleware to all routes
 router.use(requireAuth);
@@ -38,6 +41,18 @@ router.get('/user', [
   query('offset').optional().isInt({ min: 0 }).withMessage('Offset must be non-negative'),
   validate
 ], TimesheetController.getUserTimesheets);
+
+/**
+ * @route GET /api/v1/timesheets/:timesheetId/history
+ * @desc Get timesheet with full approval history
+ * @access Private
+ */
+router.get('/:timesheetId/history', [
+  param('timesheetId').isMongoId().withMessage('Invalid timesheet ID'),
+  validate
+], TeamReviewController.getTimesheetHistory);
+
+
 
 /**
  * @route POST /api/v1/timesheets
@@ -114,6 +129,30 @@ router.post('/project-week/reject', [
 ], TeamReviewController.rejectProjectWeek);
 
 /**
+ * @route POST /api/v1/timesheets/project-week/freeze
+ * @desc Bulk freeze all timesheets for a project-week (Management only)
+ * @access Private (Management/Super Admin)
+ */
+router.post('/project-week/freeze', [
+  body('project_id').isMongoId().withMessage('Valid project ID is required'),
+  body('week_start').isISO8601().withMessage('Valid week start date is required'),
+  body('week_end').isISO8601().withMessage('Valid week end date is required'),
+  validate
+], TeamReviewController.freezeProjectWeek);
+
+/**
+ * @route PUT /api/v1/timesheets/billable-adjustment
+ * @desc Update billable adjustment for a project approval (Manager only)
+ * @access Private (Manager/Super Admin)
+ */
+router.put('/billable-adjustment', [
+  body('timesheet_id').isMongoId().withMessage('Valid timesheet ID is required'),
+  body('project_id').isMongoId().withMessage('Valid project ID is required'),
+  body('adjustment').isNumeric().withMessage('Adjustment must be a number'),
+  validate
+], TeamReviewController.updateBillableAdjustment);
+
+/**
  * @route GET /api/v1/timesheets/:userId/:weekStartDate
  * @desc Get timesheet by user and week
  * @access Private
@@ -123,6 +162,16 @@ router.get('/:userId/:weekStartDate', [
   param('weekStartDate').isISO8601().withMessage('Invalid week start date'),
   validate
 ], TimesheetController.getTimesheetByUserAndWeek);
+
+/**
+ * @route GET /api/v1/timesheets/:timesheetId/can-submit
+ * @desc Check if timesheet can be submitted (Lead validation)
+ * @access Private
+ */
+router.get('/:timesheetId/can-submit', [
+  param('timesheetId').isMongoId().withMessage('Invalid timesheet ID'),
+  validate
+], TimesheetController.checkCanSubmit);
 
 /**
  * @route POST /api/v1/timesheets/:timesheetId/submit
@@ -215,6 +264,16 @@ router.get('/:timesheetId/entries', [
   param('timesheetId').isMongoId().withMessage('Invalid timesheet ID'),
   validate
 ], TimesheetController.getTimeEntries);
+
+/**
+ * @route POST /api/v1/timesheets/:timesheetId/sync-holidays
+ * @desc Synchronize holiday entries for timesheet based on current week
+ * @access Private
+ */
+router.post('/:timesheetId/sync-holidays', [
+  param('timesheetId').isMongoId().withMessage('Invalid timesheet ID'),
+  validate
+], TimesheetController.synchronizeHolidayEntries);
 
 /**
  * @route DELETE /api/v1/timesheets/:timesheetId
@@ -358,14 +417,6 @@ router.post('/bulk/bill', [
   validate
 ], TeamReviewController.bulkBill);
 
-/**
- * @route GET /api/v1/timesheets/:timesheetId/history
- * @desc Get timesheet with full approval history
- * @access Private
- */
-router.get('/:timesheetId/history', [
-  param('timesheetId').isMongoId().withMessage('Invalid timesheet ID'),
-  validate
-], TeamReviewController.getTimesheetHistory);
+ 
 
 export default router;

@@ -21,17 +21,24 @@ const notificationIdValidation = [
 // Get user notifications
 router.get('/', requireAuth, getNotificationsValidation, NotificationController.getNotifications);
 
-// Mark notification as read
-router.patch('/:notification_id/read', requireAuth, notificationIdValidation, NotificationController.markAsRead);
-
-// Mark all notifications as read
-router.patch('/mark-all-read', requireAuth, NotificationController.markAllAsRead);
-
-// Get unread count
+// Get unread count (specific route before parameterized routes)
 router.get('/unread-count', requireAuth, NotificationController.getUnreadCount);
+
+// Mark all notifications as read (specific route before parameterized routes)
+router.patch('/mark-all-read', requireAuth, NotificationController.markAllAsRead);
+router.put('/mark-all-read', requireAuth, NotificationController.markAllAsRead);
+
+// Mark notification as read (parameterized route)
+router.patch('/:notification_id/read', requireAuth, notificationIdValidation, NotificationController.markAsRead);
 
 // Mark notification as clicked (for analytics)
 router.patch('/:notification_id/clicked', requireAuth, notificationIdValidation, NotificationController.markAsClicked);
+
+// Delete notification
+router.delete('/:notification_id', requireAuth, notificationIdValidation, NotificationController.deleteNotification);
+
+// Delete multiple notifications
+router.delete('/', requireAuth, NotificationController.deleteNotifications);
 
 // Create notification (admin/system use)
 router.post('/', requireAuth, NotificationController.createNotification);

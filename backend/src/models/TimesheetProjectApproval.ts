@@ -26,9 +26,22 @@ export interface ITimesheetProjectApproval extends Document {
   manager_approved_at?: Date;
   manager_rejection_reason?: string;
 
+  // Management verification (Tier 3) - NEW
+  management_status: ApprovalStatus;
+  management_approved_at?: Date;
+  management_rejection_reason?: string;
+
   // Time tracking for this project
   entries_count: number;
   total_hours: number;
+  
+  // Worked hours vs Billable hours (Manager can adjust)
+  worked_hours: number; // Sum of hours from billable entries
+  billable_hours: number; // worked_hours + billable_adjustment
+  billable_adjustment: number; // Manager adjustment (+/-)
+
+  // Edge case: User submitted timesheet but is not a project member
+  user_not_in_project?: boolean;
 
   created_at: Date;
   updated_at: Date;
@@ -92,6 +105,23 @@ const TimesheetProjectApprovalSchema: Schema = new Schema({
     required: false
   },
 
+  // Management verification fields (Tier 3) - NEW
+  management_status: {
+    type: String,
+    enum: ['approved', 'rejected', 'pending', 'not_required'],
+    default: 'pending'
+  },
+  management_approved_at: {
+    type: Date,
+    required: false
+  },
+  management_rejection_reason: {
+    type: String,
+    trim: true,
+    maxlength: 500,
+    required: false
+  },
+
   // Project time tracking
   entries_count: {
     type: Number,
@@ -102,6 +132,32 @@ const TimesheetProjectApprovalSchema: Schema = new Schema({
     type: Number,
     default: 0,
     min: 0
+  },
+
+  // Worked hours vs Billable hours with adjustment
+  worked_hours: {
+    type: Number,
+    default: 0,
+    min: 0,
+    required: false
+  },
+  billable_hours: {
+    type: Number,
+    default: 0,
+    min: 0,
+    required: false
+  },
+  billable_adjustment: {
+    type: Number,
+    default: 0,
+    required: false
+  },
+
+  // Edge case flag
+  user_not_in_project: {
+    type: Boolean,
+    default: false,
+    required: false
   }
 }, {
   timestamps: {
@@ -127,7 +183,7 @@ TimesheetProjectApprovalSchema.index({
 
 // Virtual for ID as string
 TimesheetProjectApprovalSchema.virtual('id').get(function() {
-  return this._id.toHexString();
+  return (this._id as mongoose.Types.ObjectId).toHexString();
 });
 
 TimesheetProjectApprovalSchema.set('toJSON', {

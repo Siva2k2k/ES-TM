@@ -4,6 +4,8 @@ import { Project, ProjectMember } from '@/models/Project';
 import { UserRole } from '@/models/User';
 import { ValidationError, AuthorizationError, ConflictError } from '@/utils/errors';
 import { AuditLogService } from '@/services/AuditLogService';
+import { NotificationService } from '@/services/NotificationService';
+import { NotificationRecipientResolver } from '@/services/NotificationRecipientResolver';
 
 interface AuthUser {
   id: string;
@@ -100,6 +102,18 @@ export class ClientService {
         throw new ConflictError('A client with this name already exists');
       }
 
+      // Check for duplicate email addresses (case-insensitive) if email is provided
+      if (clientData.contact_email && clientData.contact_email.trim()) {
+        const existingEmailClient = await Client.findOne({
+          contact_email: { $regex: new RegExp(`^${clientData.contact_email.trim()}$`, 'i') },
+          deleted_at: null
+        });
+
+        if (existingEmailClient) {
+          throw new ConflictError('A client with this email address already exists');
+        }
+      }
+
       const client = new Client({
         name: clientData.name?.trim(),
         contact_person: clientData.contact_person?.trim() || undefined,
@@ -126,10 +140,27 @@ export class ClientService {
         client.toJSON()
       );
 
+      // Notify management about new client
+      try {
+        const managementUsers = await NotificationRecipientResolver.getManagementUsers();
+        const recipientIds = managementUsers.filter(id => id !== currentUser.id);
+        if (recipientIds.length > 0) {
+          await NotificationService.notifyClientCreated({
+            recipientIds,
+            clientId: client._id.toString(),
+            clientName: client.name,
+            createdById: currentUser.id,
+            createdByName: currentUser.full_name
+          });
+        }
+      } catch (notifError) {
+
+      }
+
       return { client: client as IClient };
     } catch (error: any) {
-      console.error('Error creating client:', error);
-      if (error instanceof AuthorizationError || error instanceof ValidationError) {
+
+      if (error instanceof AuthorizationError || error instanceof ValidationError || error instanceof ConflictError) {
         return { error: error.message };
       }
       return { error: 'Failed to create client' };
@@ -204,7 +235,7 @@ export class ClientService {
 
       return { clients: clientsWithProjects };
     } catch (error: any) {
-      console.error('Error fetching clients:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -272,7 +303,7 @@ export class ClientService {
 
       return { client: clientWithProjects };
     } catch (error: any) {
-      console.error('Error fetching client:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -311,6 +342,19 @@ export class ClientService {
         }
       }
 
+      // Check for duplicate email addresses (excluding current client) if email is provided
+      if (updates.contact_email && updates.contact_email.trim() !== existingClient.contact_email) {
+        const duplicateEmailClient = await Client.findOne({
+          _id: { $ne: clientId },
+          contact_email: { $regex: new RegExp(`^${updates.contact_email.trim()}$`, 'i') },
+          deleted_at: null
+        });
+
+        if (duplicateEmailClient) {
+          return { success: false, error: 'A client with this email address already exists' };
+        }
+      }
+
       const oldData = existingClient.toJSON();
 
       // Update client
@@ -345,9 +389,27 @@ export class ClientService {
         updatedClient?.toJSON()
       );
 
+      // Notify management about client update
+      try {
+        const managementUsers = await NotificationRecipientResolver.getManagementUsers();
+        const recipientIds = managementUsers.filter(id => id !== currentUser.id);
+        if (recipientIds.length > 0) {
+          await NotificationService.notifyClientUpdated({
+            recipientIds,
+            clientId,
+            clientName: updatedClient?.name || 'Client',
+            updatedById: currentUser.id,
+            updatedByName: currentUser.full_name,
+            updatedFields: Object.keys(updates)
+          });
+        }
+      } catch (notifError) {
+
+      }
+
       return { success: true, client: updatedClient as IClient };
     } catch (error: any) {
-      console.error('Error updating client:', error);
+
       if (error instanceof AuthorizationError || error instanceof ValidationError) {
         return { success: false, error: error.message };
       }
@@ -402,7 +464,7 @@ export class ClientService {
 
       return { success: true };
     } catch (error: any) {
-      console.error('Error deactivating client:', error);
+
       if (error instanceof AuthorizationError) {
         return { success: false, error: error.message };
       }
@@ -447,7 +509,7 @@ export class ClientService {
 
       return { success: true };
     } catch (error: any) {
-      console.error('Error reactivating client:', error);
+
       if (error instanceof AuthorizationError) {
         return { success: false, error: error.message };
       }
@@ -455,8 +517,12 @@ export class ClientService {
     }
   }
 
+  /**
+   * Soft delete client with reason
+   */
   static async deleteClient(
     clientId: string,
+    reason: string,
     currentUser: AuthUser
   ): Promise<{ success: boolean; error?: string }> {
     try {
@@ -483,6 +549,8 @@ export class ClientService {
       // Soft delete the client
       await Client.findByIdAndUpdate(clientId, {
         deleted_at: new Date(),
+        deleted_by: currentUser.id,
+        deleted_reason: reason,
         is_active: false,
         updated_at: new Date()
       });
@@ -495,18 +563,184 @@ export class ClientService {
         currentUser.id,
         currentUser.full_name,
         {
-          operation: 'client_deleted',
-          client_name: client.name
+          operation: 'client_soft_deleted',
+          client_name: client.name,
+          reason: reason
+        }
+      );
+
+      // Notify management about client deletion
+      try {
+        const managementUsers = await NotificationRecipientResolver.getManagementUsers();
+        const recipientIds = managementUsers.filter(id => id !== currentUser.id);
+        if (recipientIds.length > 0) {
+          await NotificationService.notifyClientDeleted({
+            recipientIds,
+            clientId,
+            clientName: client.name,
+            deletedById: currentUser.id,
+            deletedByName: currentUser.full_name,
+            reason
+          });
+        }
+      } catch (notifError) {
+
+      }
+
+      return { success: true };
+    } catch (error: any) {
+
+      if (error instanceof AuthorizationError) {
+        return { success: false, error: error.message };
+      }
+      return { success: false, error: 'Failed to delete client' };
+    }
+  }
+
+  /**
+   * Hard delete client - permanent deletion
+   */
+  static async hardDeleteClient(
+    clientId: string,
+    currentUser: AuthUser
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      if (currentUser.role !== 'super_admin') {
+        throw new AuthorizationError('Only super admins can permanently delete clients');
+      }
+
+      const client = await Client.findById(clientId);
+      if (!client) {
+        return { success: false, error: 'Client not found' };
+      }
+
+      // Must be soft deleted first
+      if (!client.deleted_at) {
+        return {
+          success: false,
+          error: 'Client must be soft deleted first before permanent deletion'
+        };
+      }
+
+      // Check if client has any projects (even deleted ones)
+      const projectCount = await Project.countDocuments({
+        client_id: clientId
+      });
+
+      if (projectCount > 0) {
+        return {
+          success: false,
+          error: `Cannot permanently delete client with ${projectCount} project(s) in database.`
+        };
+      }
+
+      // Log audit event BEFORE deleting
+      await AuditLogService.logEvent(
+        'clients',
+        clientId,
+        'DELETE',
+        currentUser.id,
+        currentUser.full_name,
+        {
+          operation: 'client_hard_deleted',
+          client_name: client.name,
+          original_deleted_at: client.deleted_at,
+          original_deleted_by: client.deleted_by,
+          original_deleted_reason: client.deleted_reason,
+          permanent: true
+        }
+      );
+
+      // Permanently delete from database
+      await Client.deleteOne({ _id: clientId });
+
+      return { success: true };
+    } catch (error: any) {
+
+      if (error instanceof AuthorizationError) {
+        return { success: false, error: error.message };
+      }
+      return { success: false, error: 'Failed to permanently delete client' };
+    }
+  }
+
+  /**
+   * Restore soft deleted client
+   */
+  static async restoreClient(
+    clientId: string,
+    currentUser: AuthUser
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      if (currentUser.role !== 'super_admin') {
+        throw new AuthorizationError('Only super admins can restore clients');
+      }
+
+      const client = await Client.findOne({
+        _id: clientId,
+        deleted_at: { $exists: true }
+      });
+
+      if (!client) {
+        return { success: false, error: 'Client not found or not deleted' };
+      }
+
+      // Restore client
+      await Client.findByIdAndUpdate(clientId, {
+        $unset: { deleted_at: '', deleted_by: '', deleted_reason: '' },
+        is_active: true,
+        updated_at: new Date()
+      });
+
+      // Log the restoration
+      await AuditLogService.logEvent(
+        'clients',
+        clientId,
+        'UPDATE',
+        currentUser.id,
+        currentUser.full_name,
+        {
+          operation: 'client_restored',
+          client_name: client.name,
+          was_deleted_at: client.deleted_at,
+          was_deleted_by: client.deleted_by,
+          was_deleted_reason: client.deleted_reason
         }
       );
 
       return { success: true };
     } catch (error: any) {
-      console.error('Error deleting client:', error);
+
       if (error instanceof AuthorizationError) {
         return { success: false, error: error.message };
       }
-      return { success: false, error: 'Failed to delete client' };
+      return { success: false, error: 'Failed to restore client' };
+    }
+  }
+
+  /**
+   * Get deleted clients (for admin view)
+   */
+  static async getDeletedClients(
+    currentUser: AuthUser
+  ): Promise<{ clients?: IClient[]; error?: string }> {
+    try {
+      if (currentUser.role !== 'super_admin') {
+        throw new AuthorizationError('Only super admins can view deleted clients');
+      }
+
+      const clients = await Client.find({
+        deleted_at: { $exists: true },
+        is_hard_deleted: false
+      }).sort({ deleted_at: -1 });
+
+      return { clients: clients as IClient[] };
+    } catch (error: any) {
+
+      if (error instanceof AuthorizationError) {
+        return { error: error.message };
+      }
+      return { error: 'Failed to fetch deleted clients' };
     }
   }
 
@@ -577,7 +811,7 @@ export class ClientService {
 
       return { stats };
     } catch (error: any) {
-      console.error('Error fetching client stats:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }

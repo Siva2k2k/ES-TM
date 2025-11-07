@@ -1,7 +1,8 @@
 import 'module-alias/register';
 import dotenv from 'dotenv';
 import { connectDB } from '../config/database';
-import { User, Client, Project, Task } from '../models';
+import { User, Client, Project, Task, CompanyHoliday } from '../models';
+import Calendar from '../models/Calendar';
 import { PasswordSecurity } from '../utils/passwordSecurity';
 import logger from '../config/logger';
 
@@ -15,12 +16,12 @@ const seedData = async (): Promise<void> => {
     logger.info('🌱 Starting database seeding...');
 
     // Clear existing data (optional - remove in production)
-    await (User.deleteMany as any)({}).exec();
-    await (Client.deleteMany as any)({}).exec();
-    await (Project.deleteMany as any)({}).exec();
-    await (Task.deleteMany as any)({}).exec();
+    // await (User.deleteMany as any)({}).exec();
+    // await (Client.deleteMany as any)({}).exec();
+    // await (Project.deleteMany as any)({}).exec();
+    // await (Task.deleteMany as any)({}).exec();
     
-    logger.info('🧹 Cleared existing data');
+    // logger.info('🧹 Cleared existing data');
 
     // Create users
     const hashedPassword = await PasswordSecurity.hashPassword('admin123');
@@ -66,6 +67,94 @@ const seedData = async (): Promise<void> => {
 
     logger.info(`👥 Created ${users.length} users`);
 
+    // Create default calendar
+    const defaultCalendar = await (Calendar.create as any)({
+      name: 'Company Standard Calendar',
+      description: 'Default company calendar with standard working days and holidays',
+      type: 'company',
+      timezone: 'UTC',
+      is_default: true,
+      is_active: true,
+      include_public_holidays: true,
+      include_company_holidays: true,
+      working_days: [1, 2, 3, 4, 5], // Monday to Friday
+      business_hours_start: '09:00',
+      business_hours_end: '17:00',
+      working_hours_per_day: 8,
+      created_by: users[0]._id // Created by super admin
+    });
+
+    logger.info(`📅 Created default calendar: ${defaultCalendar.name}`);
+
+    // Create sample holidays for the default calendar
+    const holidays = await (CompanyHoliday.create as any)([
+      {
+        name: 'New Year\'s Day',
+        date: new Date('2025-01-01'),
+        holiday_type: 'public',
+        description: 'New Year holiday',
+        is_active: true,
+        calendar_id: defaultCalendar._id,
+        created_by: users[0]._id
+      },
+      {
+        name: 'Republic Day',
+        date: new Date('2025-01-26'),
+        holiday_type: 'public',
+        description: 'National holiday',
+        is_active: true,
+        calendar_id: defaultCalendar._id,
+        created_by: users[0]._id
+      },
+      {
+        name: 'Good Friday',
+        date: new Date('2025-04-18'),
+        holiday_type: 'public',
+        description: 'Religious holiday',
+        is_active: true,
+        calendar_id: defaultCalendar._id,
+        created_by: users[0]._id
+      },
+      {
+        name: 'Independence Day',
+        date: new Date('2025-08-15'),
+        holiday_type: 'public',
+        description: 'National holiday',
+        is_active: true,
+        calendar_id: defaultCalendar._id,
+        created_by: users[0]._id
+      },
+      {
+        name: 'Gandhi Jayanti',
+        date: new Date('2025-10-02'),
+        holiday_type: 'public',
+        description: 'National holiday',
+        is_active: true,
+        calendar_id: defaultCalendar._id,
+        created_by: users[0]._id
+      },
+      {
+        name: 'Christmas Day',
+        date: new Date('2025-12-25'),
+        holiday_type: 'public',
+        description: 'Religious holiday',
+        is_active: true,
+        calendar_id: defaultCalendar._id,
+        created_by: users[0]._id
+      },
+      {
+        name: 'Company Annual Day',
+        date: new Date('2025-12-31'),
+        holiday_type: 'company',
+        description: 'Company annual celebration',
+        is_active: true,
+        calendar_id: defaultCalendar._id,
+        created_by: users[0]._id
+      }
+    ]);
+
+    logger.info(`🎄 Created ${holidays.length} sample holidays`);
+
     // Create clients
     const clients = await (Client.create as any)([
       {
@@ -79,6 +168,12 @@ const seedData = async (): Promise<void> => {
         description: 'Digital marketing and advertising agency',
         is_active: true,
         contact_email: 'hello@digitalmarketing.com'
+      },
+      {
+        name: 'Internal',
+        description: 'Internal company projects and training',
+        is_active: true,
+        contact_email: 'internal@company.com'
       }
     ]);
 
@@ -118,6 +213,17 @@ const seedData = async (): Promise<void> => {
         end_date: new Date('2024-12-31'),
         budget: 25000,
         is_billable: true
+      },
+      {
+        name: 'Training Program',
+        description: 'Company-wide training and professional development program',
+        client_id: clients[2]._id, // Internal client
+        primary_manager_id: users[0]._id, // Assign to super admin (no specific manager)
+        project_type: 'training',
+        status: 'active',
+        start_date: new Date('2024-01-01'),
+        // No end date - training is ongoing
+        is_billable: false
       }
     ]);
 
@@ -169,6 +275,17 @@ const seedData = async (): Promise<void> => {
         estimated_hours: 100,
         hourly_rate: 45,
         is_active: true
+      },
+      // Training Project Default Tasks
+      {
+        name: 'General Training',
+        description: 'General training activities and learning',
+        project_id: projects[3]._id, // Training Program project
+        created_by_user_id: users[0]._id, // Created by super admin
+        estimated_hours: 0, // No estimation for training
+        hourly_rate: 0, // Non-billable
+        is_active: true,
+        is_billable: false
       }
     ]);
 
@@ -177,9 +294,15 @@ const seedData = async (): Promise<void> => {
     logger.info('✅ Database seeding completed successfully!');
     logger.info('\n📊 Summary:');
     logger.info(`   Users: ${users.length}`);
+    logger.info(`   Calendars: 1 (Default Company Calendar)`);
+    logger.info(`   Holidays: ${holidays.length} (Sample holidays for 2025)`);
     logger.info(`   Clients: ${clients.length}`);
-    logger.info(`   Projects: ${projects.length}`);
+    logger.info(`   Projects: ${projects.length} (including Training Program)`);
     logger.info(`   Tasks: ${tasks.length}`);
+    logger.info('\n📚 Training Program:');
+    logger.info('   Project: Training Program (globally accessible)');
+    logger.info('   Default Task: General Training');
+    logger.info('   Note: All employees can select training entries');
     logger.info('\n🔑 Login Credentials:');
     logger.info('   Email: admin@company.com');
     logger.info('   Password: admin123');

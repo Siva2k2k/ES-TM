@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../..
 import { Button } from '../../components/ui/Button';
 import { StatusBadge } from '../../components/shared/StatusBadge';
 import { Progress } from '../../components/ui/Progress';
+import { PageLayout } from '../../components/Layout';
 import { Clock, TrendingUp, CheckCircle, AlertCircle } from 'lucide-react';
 import { formatDate, formatDuration } from '../../utils/formatting';
 

@@ -32,7 +32,6 @@ export class ProjectService {
         return { error: response.message || 'Failed to create project' };
       }
 
-      console.log('Project created:', response.data);
       return { project: response.data };
     } catch (error) {
       console.error('Error in createProject:', error);
@@ -77,7 +76,6 @@ export class ProjectService {
         return { success: false, error: response.message || 'Failed to update project' };
       }
 
-      console.log(`Updated project ${projectId}`);
       return { success: true };
     } catch (error) {
       console.error('Error in updateProject:', error);
@@ -147,7 +145,6 @@ export class ProjectService {
    */
   static async getProjectTasks(projectId: string): Promise<{ tasks: Task[]; error?: string }> {
     try {
-      console.log(`🔍 getProjectTasks: Querying tasks for project ${projectId}`);
 
       const response = await backendApi.get<{ success: boolean; tasks: Task[]; message?: string }>(
         `/projects/${projectId}/tasks`
@@ -157,7 +154,6 @@ export class ProjectService {
         return { tasks: [], error: response.message || 'Failed to fetch project tasks' };
       }
 
-      console.log(`🔍 getProjectTasks: Found ${(response.tasks || []).length} tasks for project ${projectId}`);
       return { tasks: response.tasks || [] };
     } catch (error) {
       console.error('Error in getProjectTasks:', error);
@@ -212,7 +208,6 @@ export class ProjectService {
         return { success: false, error: response.message || 'Failed to update project status' };
       }
 
-      console.log(`Updated project ${projectId} status to: ${status}`);
       return { success: true };
     } catch (error) {
       console.error('Error in updateProjectStatus:', error);
@@ -267,10 +262,23 @@ export class ProjectService {
           completedTasks = tasksResult.tasks.filter(task => task.status === 'completed').length;
         }
       } else {
-        // For all projects, we'd need to aggregate - simplified for now
-        // This could be optimized with a dedicated backend endpoint
-        totalTasks = 0;
-        completedTasks = 0;
+        // Aggregate across all projects by fetching all tasks client-side.
+        // This could be optimized with a dedicated backend analytics endpoint.
+        try {
+          const allTasksResult = await this.getAllTasks();
+          if (!allTasksResult.error && Array.isArray(allTasksResult.tasks)) {
+            totalTasks = allTasksResult.tasks.length;
+            completedTasks = allTasksResult.tasks.filter(task => task.status === 'completed').length;
+          } else {
+            totalTasks = 0;
+            completedTasks = 0;
+          }
+        } catch (err) {
+          // Log the failure to help debugging and fall back to zeros
+          console.warn('Error aggregating tasks in getProjectAnalytics:', err);
+          totalTasks = 0;
+          completedTasks = 0;
+        }
       }
 
       return {
@@ -310,7 +318,6 @@ export class ProjectService {
       }
 
   // Log raw client payload to help debug id vs _id differences
-  console.debug('ProjectService.getAllClients: raw clients payload:', response.data);
   return { clients: response.data };
     } catch (error) {
       console.error('Error in getAllClients:', error);
@@ -340,7 +347,6 @@ export class ProjectService {
         return { error: response.message || 'Failed to create client' };
       }
 
-      console.log('Client created:', response.data);
       return { client: response.data };
     } catch (error) {
       console.error('Error in createClient:', error);
@@ -352,9 +358,9 @@ export class ProjectService {
   /**
    * Get project by ID
    */
-  static async getProjectById(projectId: string): Promise<{ project?: Project; error?: string }> {
+  static async getProjectById(projectId: string): Promise<{ project?: Project; warnings?: string[]; error?: string }> {
     try {
-      const response = await backendApi.get<{ success: boolean; data: Project; message?: string }>(
+      const response = await backendApi.get<{ success: boolean; data: Project; warnings?: string[]; message?: string }>(
         `/projects/${projectId}`
       );
 
@@ -362,7 +368,10 @@ export class ProjectService {
         return { error: response.message || 'Project not found' };
       }
 
-      return { project: response.data };
+      return { 
+        project: response.data,
+        warnings: response.warnings
+      };
     } catch (error) {
       console.error('Error in getProjectById:', error);
       const errorMessage = error instanceof BackendApiError ? error.message : 'Failed to fetch project';
@@ -371,23 +380,44 @@ export class ProjectService {
   }
 
   /**
-   * Soft delete project
+   * Soft delete project (requires reason)
    */
-  static async deleteProject(projectId: string): Promise<{ success: boolean; error?: string }> {
+  static async deleteProject(projectId: string, reason: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await backendApi.delete<{ success: boolean; message?: string }>(
-        `/projects/${projectId}`
+      const response = await backendApi.deleteWithBody<{ success: boolean; message?: string }>(
+        `/projects/${projectId}`,
+        { reason }
       );
 
       if (!response.success) {
         return { success: false, error: response.message || 'Failed to delete project' };
       }
 
-      console.log(`Soft deleted project: ${projectId}`);
       return { success: true };
     } catch (error) {
       console.error('Error in deleteProject:', error);
       const errorMessage = error instanceof BackendApiError ? error.message : 'Failed to delete project';
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  /**
+   * Hard delete project (permanent deletion)
+   */
+  static async hardDeleteProject(projectId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await backendApi.delete<{ success: boolean; message?: string }>(
+        `/projects/${projectId}/hard-delete`
+      );
+
+      if (!response.success) {
+        return { success: false, error: response.message || 'Failed to permanently delete project' };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error in hardDeleteProject:', error);
+      const errorMessage = error instanceof BackendApiError ? error.message : 'Failed to permanently delete project';
       return { success: false, error: errorMessage };
     }
   }
@@ -405,7 +435,6 @@ export class ProjectService {
         return { success: false, error: response.message || 'Failed to delete task' };
       }
 
-      console.log(`Soft deleted task: ${taskId}`);
       return { success: true };
     } catch (error) {
       console.error('Error in deleteTask:', error);
@@ -454,10 +483,8 @@ export class ProjectService {
   static async getUserProjects(userId?: string): Promise<{ projects: Project[]; error?: string }> {
     try {
       const targetUserId = userId;
-      console.log('🔍 ProjectService.getUserProjects called with userId:', targetUserId);
 
       if (!targetUserId) {
-        console.warn('🔍 No userId provided, returning empty projects');
         return { projects: [] };
       }
 
@@ -469,7 +496,6 @@ export class ProjectService {
         return { projects: [], error: response.message || 'Failed to fetch user projects' };
       }
 
-      console.log('🔍 ProjectService final projects:', response.projects);
       // Normalize projects: ensure each project has an `id` string and
       // that embedded tasks (if any) have `assigned_to_user_id` as string
       const projectsRaw = response.projects as unknown as Array<Record<string, unknown>>;
@@ -539,7 +565,6 @@ export class ProjectService {
         `/projects/${projectId}/members`
       );
 
-      console.log("Data", response);
 
       if (!response.success) {
         return { members: [], error: response.message || 'Failed to fetch project members' };
@@ -619,7 +644,6 @@ export class ProjectService {
         is_primary_manager: isPrimaryManager
       };
 
-      console.log("Payload being sent:", payload);
 
       const response = await backendApi.post<{ success: boolean; message?: string }>(
         `/projects/${projectId}/members`,
@@ -665,7 +689,6 @@ export class ProjectService {
       }
 
       if (clientsResult.error) {
-        console.warn('Failed to fetch clients for project enrichment:', clientsResult.error);
         // Return projects without client data if clients fetch fails
         return { projects: projectsResult.projects || [], error: undefined };
       }
@@ -690,7 +713,6 @@ export class ProjectService {
         };
       });
 
-      console.log(`🔍 getProjectsWithClientData: Enriched ${enrichedProjects.length} projects with client data`);
       return { projects: enrichedProjects };
     } catch (error) {
       console.error('Error in getProjectsWithClientData:', error);
@@ -729,16 +751,30 @@ export class ProjectService {
         is_billable: taskData.is_billable ?? true
       };
 
-      const response = await backendApi.post<{ success: boolean; data: Task; message?: string }>(
-        `/projects/${taskData.project_id}/tasks`,
-        payload
-      );
+      const response: any = await backendApi.post(`/projects/${taskData.project_id}/tasks`, payload);
 
-      if (!response.success) {
-        return { error: response.message || 'Failed to create task' };
+      // Backend historically returned different shapes. Accept several patterns:
+      // 1) { success: true, data: Task }
+      // 2) { task: Task }
+      // 3) direct Task object
+
+      if (response && typeof response === 'object') {
+        if (response.success && response.data) {
+          return { task: response.data };
+        }
+
+        if (response.task) {
+          return { task: response.task };
+        }
+
+        // If the response looks like a Task (has _id or id and project_id), return it
+        if (response._id || response.id) {
+          return { task: response as Task };
+        }
       }
 
-      return { task: response.data };
+      // If we reach here, treat as failure with best-effort message
+      return { error: (response && response.message) || 'Failed to create task' };
     } catch (error) {
       console.error('Error in createTask:', error);
       const errorMessage = error instanceof BackendApiError ? error.message : 'Failed to create task';
@@ -751,9 +787,38 @@ export class ProjectService {
    */
   static async updateTask(taskId: string, updates: Partial<Task>): Promise<{ success: boolean; error?: string }> {
     try {
+      // Sanitize updates to ensure backend receives valid ID formats
+      const payload: any = { ...updates } as any;
+      if ('assigned_to_user_id' in payload) {
+        const at = payload.assigned_to_user_id;
+        if (!at) {
+          payload.assigned_to_user_id = null;
+        } else if (typeof at === 'string') {
+          payload.assigned_to_user_id = at.trim() || null;
+        } else if (typeof at === 'object') {
+          // try to extract id fields
+          const candidate = (at as any)._id || (at as any).id || (at as any).user_id || null;
+          payload.assigned_to_user_id = candidate ? String(candidate) : null;
+        } else {
+          payload.assigned_to_user_id = String(at);
+        }
+      }
+
+      // Ensure estimated_hours is a number or null
+      if ('estimated_hours' in payload) {
+        const eh = payload.estimated_hours;
+        payload.estimated_hours = eh === undefined || eh === null || eh === '' ? null : Number(eh);
+      }
+
+      // Ensure is_billable is a boolean if present
+      if ('is_billable' in payload) {
+        payload.is_billable = !!payload.is_billable;
+      }
+
+
       const response = await backendApi.put<{ success: boolean; message?: string }>(
         `/projects/tasks/${taskId}`,
-        updates
+        payload
       );
 
       if (!response.success) {
@@ -784,18 +849,15 @@ export class ProjectService {
       const allTasks: Task[] = [];
       const projects = projectsResult.projects as Project[];
       
-      console.log(`🔍 getUserTasks: Processing ${projects.length} projects for user ${userId}`);
       
       for (const project of projects) {
         const projectWithTasks = project as unknown as { tasks?: Task[] };
         if (Array.isArray(projectWithTasks.tasks) && projectWithTasks.tasks?.length > 0) {
           const projectTasks = (project as unknown as { tasks?: Task[] }).tasks || [];
-          console.log(`🔍 Found ${projectTasks.length} embedded tasks in project ${project.name || project.id}`);
           
           // Filter tasks assigned to this user
           const userTasks = projectTasks.filter(task => {
             const isAssigned = task.assigned_to_user_id === userId;
-            console.log(`🔍 Task "${task.name}": assigned_to="${task.assigned_to_user_id}", userId="${userId}", matches=${isAssigned}`);
             return isAssigned;
           });
           
@@ -806,7 +868,6 @@ export class ProjectService {
         // Fallback: only attempt to fetch if we have a valid project id
         const projId = project.id || (project as unknown as { _id?: string })._id;
         if (!projId) {
-          console.warn('Skipping tasks fetch for project with missing id:', project);
           continue;
         }
 
@@ -821,15 +882,51 @@ export class ProjectService {
             allTasks.push(...userTasks);
           }
         } catch (error) {
-          console.warn(`Failed to fetch tasks for project ${projId}:`, error);
         }
       }
 
-      console.log(`🔍 Final filtered tasks for user ${userId}:`, allTasks);
       return { tasks: allTasks };
     } catch (error) {
       console.error('Error in getUserTasks:', error);
       const errorMessage = error instanceof BackendApiError ? error.message : 'Failed to fetch user tasks';
+      return { tasks: [], error: errorMessage };
+    }
+  }
+
+  /**
+   * Get all tasks across all projects
+   * Convenience wrapper used by UI pages that need a flat task list
+   */
+  static async getAllTasks(): Promise<{ tasks: Task[]; error?: string }> {
+    try {
+      // Fetch all projects first
+      const projectsResult = await this.getAllProjects();
+      if (projectsResult.error) {
+        return { tasks: [], error: projectsResult.error };
+      }
+
+      const allTasks: Task[] = [];
+      const projects = projectsResult.projects || [];
+
+      for (const project of projects) {
+        const projRecord = project as unknown as Record<string, unknown>;
+        const projId = (projRecord['id'] as string) || (projRecord['_id'] as string) || undefined;
+        if (!projId) continue;
+
+        try {
+          const tasksResult = await this.getProjectTasks(projId);
+          if (!tasksResult.error && Array.isArray(tasksResult.tasks)) {
+            allTasks.push(...tasksResult.tasks);
+          }
+        } catch (err) {
+          // ignore per-project task fetch failures, continue with others
+        }
+      }
+
+      return { tasks: allTasks };
+    } catch (error) {
+      console.error('Error in getAllTasks:', error);
+      const errorMessage = error instanceof BackendApiError ? error.message : 'Failed to fetch tasks';
       return { tasks: [], error: errorMessage };
     }
   }

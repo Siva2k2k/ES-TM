@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
+import { useMsal } from '@azure/msal-react';
 import { BackendAuthService } from '../../services/BackendAuthService';
+import { silentRequest, isMsalConfigured } from '../../config/msalConfig';
 import type { UserRole, User } from '../../types';
 
 interface AuthContextType {
@@ -26,6 +28,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [currentUserRole, setCurrentUserRole] = useState<UserRole>('employee');
   const [isLoading, setIsLoading] = useState(true);
   const [requirePasswordChange, setRequirePasswordChange] = useState(false);
+  const { instance: msalInstance } = useMsal();
 
   const isAuthenticated = !!currentUser;
 
@@ -36,7 +39,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       const result = await BackendAuthService.login({ email, password });
 
-      if (!result.success) {
+    if (!result.success) {
         return { error: result.error || result.message };
       }
 
@@ -61,7 +64,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Sign out function
   const signOut = useCallback(async (): Promise<void> => {
     try {
-      console.log('🚪 === SIGN OUT PROCESS START ===');
       setIsLoading(true);
 
       // Clear local state immediately to ensure UI updates
@@ -72,7 +74,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Sign out from backend (clears tokens)
       await BackendAuthService.logout();
 
-      console.log('🚪 === SIGN OUT PROCESS END ===');
     } catch (error) {
       console.error('Sign out error:', error);
     } finally {
@@ -108,6 +109,48 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, []);
 
+  // Attempt silent Microsoft SSO authentication (for SharePoint seamless login)
+  const attemptSilentMicrosoftAuth = useCallback(async (): Promise<boolean> => {
+    // Only attempt if MSAL is configured and no existing auth
+    if (!isMsalConfigured() || BackendAuthService.isAuthenticated()) {
+      return false;
+    }
+
+    try {
+      console.log('Attempting silent Microsoft authentication...');
+
+      const accounts = msalInstance.getAllAccounts();
+      if (accounts.length === 0) {
+        // No Microsoft account in cache
+        return false;
+      }
+
+      // Set active account
+      msalInstance.setActiveAccount(accounts[0]);
+
+      // Try to acquire token silently
+      const response = await msalInstance.acquireTokenSilent({
+        ...silentRequest,
+        account: accounts[0],
+      });
+
+      if (response && response.accessToken) {
+        console.log('Silent Microsoft authentication successful');
+
+        // We got a Microsoft token, but we need to redirect through backend
+        // to get our JWT tokens and create/merge user account
+        // For now, just log success - user will need to click "Sign in with Microsoft"
+        // In production, you could auto-redirect here
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.log('Silent Microsoft authentication not available:', error);
+      return false;
+    }
+  }, [msalInstance]);
+
   // Initialize auth state
   useEffect(() => {
     let mounted = true;
@@ -120,7 +163,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           if (BackendAuthService.shouldRefreshToken()) {
             const refreshResult = await BackendAuthService.refreshToken();
             if (!refreshResult.success) {
-              console.log('Token refresh failed, user needs to log in again');
               setIsLoading(false);
               return;
             }
@@ -128,6 +170,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
           // Load user profile
           await loadUserProfile();
+        } else {
+          // No local auth - attempt silent Microsoft SSO
+          await attemptSilentMicrosoftAuth();
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
@@ -136,8 +181,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setIsLoading(false);
         }
       }
-
-      console.log('🔍 === BACKEND AUTH INITIALIZED ===');
     };
 
     // Initialize
@@ -146,7 +189,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return () => {
       mounted = false;
     };
-  }, [loadUserProfile]);
+  }, [loadUserProfile, attemptSilentMicrosoftAuth]);
 
   const value: AuthContextType = useMemo(() => ({
     currentUser,

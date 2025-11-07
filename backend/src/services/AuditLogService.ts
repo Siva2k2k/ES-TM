@@ -18,6 +18,7 @@ interface AuditLogFilters {
   actions?: AuditAction[];
   actorId?: string;
   tableName?: string;
+  recordId?: string;
   limit?: number;
   offset?: number;
 }
@@ -66,16 +67,9 @@ export class AuditLogService {
 
       await auditLog.save();
 
-      console.log('Audit Event Logged:', {
-        tableName,
-        recordId,
-        action,
-        actor: actorName
-      });
-
       return { success: true };
     } catch (error: any) {
-      console.error('Error logging audit event:', error);
+
       return { success: false, error: 'Failed to log audit event' };
     }
   }
@@ -115,6 +109,10 @@ export class AuditLogService {
         query.table_name = filters.tableName;
       }
 
+      if (filters.recordId) {
+        query.record_id = filters.recordId;
+      }
+
       const limit = filters.limit || 50;
       const offset = filters.offset || 0;
 
@@ -136,7 +134,7 @@ export class AuditLogService {
         hasMore
       };
     } catch (error: any) {
-      console.error('Error fetching audit logs:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -174,7 +172,7 @@ export class AuditLogService {
 
       return { events: result.logs };
     } catch (error: any) {
-      console.error('Error fetching security events:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -211,7 +209,7 @@ export class AuditLogService {
 
       return { activities: result.logs };
     } catch (error: any) {
-      console.error('Error fetching user activity:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -274,7 +272,7 @@ export class AuditLogService {
         topUsers
       };
     } catch (error: any) {
-      console.error('Error fetching activity summary:', error);
+
       if (error instanceof AuthorizationError) {
         return {
           totalEvents: 0,
@@ -327,14 +325,12 @@ export class AuditLogService {
       const timestamp = Date.now();
       const downloadUrl = `/api/v1/audit/export/${timestamp}.${format}`;
 
-      console.log(`Would export ${result.logs.length} audit log entries in ${format} format`);
-
       return {
         success: true,
         downloadUrl
       };
     } catch (error: any) {
-      console.error('Error exporting audit logs:', error);
+
       if (error instanceof AuthorizationError) {
         return { success: false, error: error.message };
       }
@@ -372,7 +368,7 @@ export class AuditLogService {
 
       return { logs };
     } catch (error: any) {
-      console.error('Error searching audit logs:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -404,11 +400,10 @@ export class AuditLogService {
       );
 
       const deletedCount = result.modifiedCount;
-      console.log(`Cleared ${deletedCount} old audit logs older than ${retentionDays} days`);
 
       return { deletedCount };
     } catch (error: any) {
-      console.error('Error clearing old logs:', error);
+
       if (error instanceof AuthorizationError) {
         return { deletedCount: 0, error: error.message };
       }
@@ -432,7 +427,7 @@ export class AuditLogService {
 
       return { log };
     } catch (error: any) {
-      console.error('Error fetching audit log:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }

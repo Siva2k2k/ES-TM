@@ -1,17 +1,17 @@
 import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { cn } from '../../utils/cn';
+import { themeClasses, cn } from '../../contexts/theme';
 
 const buttonVariants = cva(
   'inline-flex items-center justify-center rounded-lg text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800 disabled:opacity-50 disabled:pointer-events-none',
   {
     variants: {
       variant: {
-        default: 'bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-500 dark:to-purple-500 text-white hover:from-blue-700 hover:to-purple-700 dark:hover:from-blue-600 dark:hover:to-purple-600 focus:ring-blue-500 dark:focus:ring-blue-400 shadow-md',
-        destructive: 'bg-red-600 dark:bg-red-500 text-white hover:bg-red-700 dark:hover:bg-red-600 focus:ring-red-500 dark:focus:ring-red-400 shadow-md',
-        outline: 'border border-slate-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-slate-700 dark:text-gray-200 hover:bg-slate-50 dark:hover:bg-gray-600 focus:ring-slate-500 dark:focus:ring-slate-400',
-        secondary: 'bg-slate-200 dark:bg-gray-700 text-slate-900 dark:text-gray-100 hover:bg-slate-300 dark:hover:bg-gray-600 focus:ring-slate-500 dark:focus:ring-slate-400',
-        ghost: 'text-slate-700 dark:text-gray-200 hover:bg-slate-100 dark:hover:bg-gray-700 focus:ring-slate-500 dark:focus:ring-slate-400',
+        default: themeClasses.button.primary,
+        destructive: themeClasses.button.danger,
+        outline: 'border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900',
+        secondary: themeClasses.button.secondary,
+        ghost: themeClasses.button.ghost,
         link: 'text-blue-600 dark:text-blue-400 underline-offset-4 hover:underline',
       },
       size: {

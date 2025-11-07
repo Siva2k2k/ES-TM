@@ -1,9 +1,16 @@
 /**
  * Backend API Client for Timesheet Service
- * Handles communication with the Node.js/MongoDB backend with optional Supabase auth
+ * Axios-based HTTP client with centralized error handling and interceptors
+ * Handles communication with the Node.js/MongoDB backend
  */
 
-const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+import axios, { AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
+import axiosInstance from '../config/axios.config';
+
+// In production (when VITE_API_URL is not set or empty), use relative URLs (same domain)
+// In development, use localhost:3001
+const BACKEND_URL = import.meta.env.VITE_API_URL || 
+  (import.meta.env.MODE === 'production' ? '' : 'http://localhost:3001');
 
 export class BackendApiError extends Error {
   constructor(
@@ -18,6 +25,7 @@ export class BackendApiError extends Error {
 
 /**
  * API Client for backend timesheet operations
+ * Now using Axios with interceptors for production-ready error handling and token management
  */
 export class BackendApiClient {
   private baseURL: string;
@@ -27,140 +35,173 @@ export class BackendApiClient {
   }
 
   /**
-   * Get authorization token from local storage (MongoDB backend)
+   * Handle Axios errors consistently
    */
-  private async getAuthToken(): Promise<string | null> {
-    // Get token from local storage (our MongoDB backend auth system)
-    const token = localStorage.getItem('accessToken');
-    console.log('Retrieved token from localStorage:', token ? `${token.substring(0, 20)}...` : 'null');
-    return token;
+  private handleAxiosError(error: unknown): never {
+    if (axios.isAxiosError(error)) {
+      const axiosError = error as AxiosError<{
+        error?: string | Record<string, unknown>;
+        message?: string;
+        code?: string;
+      }>;
+
+      let errorMessage = 'An unexpected error occurred';
+
+      // Extract error message from response
+      if (axiosError.response?.data) {
+        const data = axiosError.response.data;
+
+        if (typeof data.error === 'string' && data.error) {
+          errorMessage = data.error;
+        } else if (data.error && typeof data.error === 'object') {
+          errorMessage = JSON.stringify(data.error);
+        } else if (typeof data.message === 'string' && data.message) {
+          errorMessage = data.message;
+        }
+      } else if (axiosError.message) {
+        errorMessage = axiosError.message;
+      }
+
+      throw new BackendApiError(
+        errorMessage,
+        axiosError.response?.status,
+        axiosError.response?.data?.code
+      );
+    }
+
+    // Network or other errors
+    throw new BackendApiError(
+      error instanceof Error ? error.message : 'Network error occurred'
+    );
   }
 
   /**
-   * Make authenticated request to backend
+   * Make authenticated request to backend using Axios
    */
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
-    const token = await this.getAuthToken();
-    const url = `${this.baseURL}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...((options.headers as Record<string, string>) || {})
-    };
-
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
-    }
-
-    const config: RequestInit = {
-      ...options,
-      headers
-    };
-
+  private async request<T>(config: AxiosRequestConfig): Promise<T> {
     try {
-      const response = await fetch(url, config);
-
-      if (!response.ok) {
-        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-        let errorData;
-
-        try {
-          errorData = await response.json();
-          console.log('Error response data:', errorData);
-          
-          if (errorData && errorData.error) {
-            errorMessage = typeof errorData.error === 'string' && errorData.error ? 
-              errorData.error : 
-              (errorData.error ? JSON.stringify(errorData.error) : 'Unknown error');
-          } else if (errorData && errorData.message) {
-            errorMessage = typeof errorData.message === 'string' && errorData.message ? 
-              errorData.message : 
-              (errorData.message ? JSON.stringify(errorData.message) : 'Unknown error');
-          }
-        } catch {
-          // Response is not JSON, keep the HTTP error message
-        }
-
-        throw new BackendApiError(
-          errorMessage,
-          response.status,
-          errorData?.code
-        );
-      }
-
-      // Handle empty responses (204 No Content, etc.)
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        return {} as T;
-      }
-
-      return await response.json() as T;
+      // Only override baseURL if BACKEND_URL is explicitly set (not empty string)
+      const requestConfig: AxiosRequestConfig = this.baseURL 
+        ? { baseURL: this.baseURL, ...config }
+        : config;
+      
+      const response: AxiosResponse<T> = await axiosInstance.request(requestConfig);
+      return response.data;
     } catch (error) {
-      if (error instanceof BackendApiError) {
-        throw error;
-      }
-
-      // Network or other errors
-      throw new BackendApiError(
-        error instanceof Error && error.message ? error.message : 'Network error occurred'
-      );
+      return this.handleAxiosError(error);
     }
   }
 
   /**
    * Generic HTTP methods
    */
-  async get<T>(endpoint: string): Promise<T> {
-    return this.request(endpoint, { method: 'GET' });
+  async get<T>(endpoint: string, config?: AxiosRequestConfig): Promise<T> {
+    return this.request<T>({
+      method: 'GET',
+      url: endpoint,
+      ...config
+    });
   }
 
-  async post<T>(endpoint: string, data?: any): Promise<T> {
-    return this.request(endpoint, {
+  async post<T>(endpoint: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    return this.request<T>({
       method: 'POST',
-      body: data ? JSON.stringify(data) : undefined
+      url: endpoint,
+      data,
+      ...config
     });
   }
 
-  async put<T>(endpoint: string, data?: any): Promise<T> {
-    return this.request(endpoint, {
+  async put<T>(endpoint: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    return this.request<T>({
       method: 'PUT',
-      body: data ? JSON.stringify(data) : undefined
+      url: endpoint,
+      data,
+      ...config
     });
   }
 
-  async delete<T>(endpoint: string): Promise<T> {
-    return this.request(endpoint, { method: 'DELETE' });
-  }
-
-  async deleteWithBody<T>(endpoint: string, data?: any): Promise<T> {
-    return this.request(endpoint, {
+  async delete<T>(endpoint: string, config?: AxiosRequestConfig): Promise<T> {
+    return this.request<T>({
       method: 'DELETE',
-      body: data ? JSON.stringify(data) : undefined
+      url: endpoint,
+      ...config
     });
   }
 
-  async patch<T>(endpoint: string, data?: any): Promise<T> {
-    return this.request(endpoint, {
-      method: 'PATCH',
-      body: data ? JSON.stringify(data) : undefined
+  async deleteWithBody<T>(endpoint: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    return this.request<T>({
+      method: 'DELETE',
+      url: endpoint,
+      data,
+      ...config
     });
+  }
+
+  async patch<T>(endpoint: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+    return this.request<T>({
+      method: 'PATCH',
+      url: endpoint,
+      data,
+      ...config
+    });
+  }
+
+  /**
+   * Upload file(s) with multipart/form-data
+   */
+  async upload<T>(
+    endpoint: string,
+    formData: FormData,
+    onUploadProgress?: (progressEvent: unknown) => void
+  ): Promise<T> {
+    return this.request<T>({
+      method: 'POST',
+      url: endpoint,
+      data: formData,
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      },
+      onUploadProgress
+    });
+  }
+
+  /**
+   * Download file
+   */
+  async download(endpoint: string, filename: string): Promise<void> {
+    try {
+      const response = await axiosInstance.get(endpoint, {
+        baseURL: this.baseURL,
+        responseType: 'blob'
+      });
+
+      // Create blob link to download
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      this.handleAxiosError(error);
+    }
   }
 
   /**
    * Health check
    */
   async healthCheck(): Promise<{ status: string; timestamp: string; uptime: number }> {
-    return this.request('/health');
+    return this.get('/health');
   }
 
   /**
    * Get all timesheets (Super Admin and Management only)
    */
-  async getAllTimesheets(): Promise<{ success: boolean; data: any[] }> {
-    return this.request('/timesheets');
+  async getAllTimesheets(): Promise<{ success: boolean; data: unknown[] }> {
+    return this.get('/timesheets');
   }
 
   /**
@@ -172,21 +213,8 @@ export class BackendApiClient {
     weekStartDate?: string;
     limit?: number;
     offset?: number;
-  }): Promise<{ success: boolean; data: any[]; total: number }> {
-    const searchParams = new URLSearchParams();
-
-    if (params.userId) searchParams.append('userId', params.userId);
-    if (params.status && params.status.length > 0) {
-      params.status.forEach(s => searchParams.append('status', s));
-    }
-    if (params.weekStartDate) searchParams.append('weekStartDate', params.weekStartDate);
-    if (params.limit) searchParams.append('limit', params.limit.toString());
-    if (params.offset) searchParams.append('offset', params.offset.toString());
-
-    const queryString = searchParams.toString();
-    const endpoint = `/timesheets/user${queryString ? '?' + queryString : ''}`;
-
-    return this.request(endpoint);
+  }): Promise<{ success: boolean; data: unknown[]; total: number }> {
+    return this.get('/timesheets/user', { params });
   }
 
   /**
@@ -195,11 +223,8 @@ export class BackendApiClient {
   async createTimesheet(data: {
     userId: string;
     weekStartDate: string;
-  }): Promise<{ success: boolean; data: any }> {
-    return this.request('/timesheets', {
-      method: 'POST',
-      body: JSON.stringify(data)
-    });
+  }): Promise<{ success: boolean; data: unknown }> {
+    return this.post('/timesheets', data);
   }
 
   /**
@@ -208,17 +233,31 @@ export class BackendApiClient {
   async getTimesheetByUserAndWeek(
     userId: string,
     weekStartDate: string
-  ): Promise<{ success: boolean; data: any }> {
-    return this.request(`/timesheets/${userId}/${weekStartDate}`);
+  ): Promise<{ success: boolean; data: unknown }> {
+    return this.get(`/timesheets/${userId}/${weekStartDate}`);
+  }
+
+  /**
+   * Check if timesheet can be submitted (Lead validation)
+   */
+  async checkCanSubmit(timesheetId: string): Promise<{
+    success: boolean;
+    canSubmit: boolean;
+    message: string;
+    pendingReviews: Array<{
+      projectName: string;
+      employeeName: string;
+      employeeId: string;
+    }>;
+  }> {
+    return this.get(`/timesheets/${timesheetId}/can-submit`);
   }
 
   /**
    * Submit timesheet for approval
    */
   async submitTimesheet(timesheetId: string): Promise<{ success: boolean; message?: string }> {
-    return this.request(`/timesheets/${timesheetId}/submit`, {
-      method: 'POST'
-    });
+    return this.post(`/timesheets/${timesheetId}/submit`);
   }
 
   /**
@@ -227,11 +266,19 @@ export class BackendApiClient {
   async managerApproveRejectTimesheet(
     timesheetId: string,
     action: 'approve' | 'reject',
-    reason?: string
+    options: {
+      reason?: string;
+      approverRole?: 'lead' | 'manager';
+      finalize?: boolean;
+      notify?: boolean;
+    } = {}
   ): Promise<{ success: boolean; message?: string }> {
-    return this.request(`/timesheets/${timesheetId}/manager-action`, {
-      method: 'POST',
-      body: JSON.stringify({ action, reason })
+    return this.post(`/timesheets/${timesheetId}/manager-action`, {
+      action,
+      reason: options.reason,
+      approverRole: options.approverRole,
+      finalize: options.finalize,
+      notify: options.notify
     });
   }
 
@@ -241,11 +288,19 @@ export class BackendApiClient {
   async managementApproveRejectTimesheet(
     timesheetId: string,
     action: 'approve' | 'reject',
-    reason?: string
+    options: {
+      reason?: string;
+      approverRole?: 'management' | 'manager';
+      finalize?: boolean;
+      notify?: boolean;
+    } = {}
   ): Promise<{ success: boolean; message?: string }> {
-    return this.request(`/timesheets/${timesheetId}/management-action`, {
-      method: 'POST',
-      body: JSON.stringify({ action, reason })
+    return this.post(`/timesheets/${timesheetId}/management-action`, {
+      action,
+      reason: options.reason,
+      approverRole: options.approverRole,
+      finalize: options.finalize,
+      notify: options.notify
     });
   }
 
@@ -257,18 +312,19 @@ export class BackendApiClient {
     entryData: {
       date: string;
       hours: number;
-      entry_type: 'project_task' | 'custom_task';
+      entry_type: 'project_task' | 'custom_task' | 'non_project' | 'leave' | 'holiday';
       is_billable: boolean;
       project_id?: string;
       task_id?: string;
       description?: string;
       custom_task_description?: string;
+      entry_category?: 'project' | 'leave' | 'training' | 'miscellaneous' | 'holiday';
+      leave_session?: 'morning' | 'afternoon' | 'full_day';
+      miscellaneous_activity?: string;
+      project_name?: string;
     }
-  ): Promise<{ success: boolean; data: any }> {
-    return this.request(`/timesheets/${timesheetId}/entries`, {
-      method: 'POST',
-      body: JSON.stringify(entryData)
-    });
+  ): Promise<{ success: boolean; data: unknown }> {
+    return this.post(`/timesheets/${timesheetId}/entries`, entryData);
   }
 
   /**
@@ -288,7 +344,7 @@ export class BackendApiClient {
       completionRate: number;
     };
   }> {
-    return this.request('/timesheets/dashboard');
+    return this.get('/timesheets/dashboard');
   }
 
   // === BILLING SERVICE METHODS ===
@@ -296,14 +352,14 @@ export class BackendApiClient {
   /**
    * Generate weekly billing snapshot
    */
-  async generateWeeklyBillingSnapshot(weekStartDate: string): Promise<any> {
+  async generateWeeklyBillingSnapshot(weekStartDate: string): Promise<unknown> {
     return this.post('/billing/snapshots/generate', { weekStartDate });
   }
 
   /**
    * Get all billing snapshots
    */
-  async getAllBillingSnapshots(): Promise<any> {
+  async getAllBillingSnapshots(): Promise<unknown> {
     return this.get('/billing/snapshots');
   }
 
@@ -315,11 +371,26 @@ export class BackendApiClient {
   async getProjectBillingView(params: {
     startDate: string;
     endDate: string;
-    view?: 'weekly' | 'monthly';
+    view?: 'weekly' | 'monthly' | 'custom';
     projectIds?: string;
-  }): Promise<any> {
-    const queryParams = new URLSearchParams(params as any);
-    return this.get(`/project-billing/projects?${queryParams}`);
+    clientIds?: string;
+  }): Promise<unknown> {
+    return this.get('/project-billing/projects', { params });
+  }
+
+  /**
+   * Get user-based billing view
+   */
+  async getUserBillingView(params: {
+    startDate: string;
+    endDate: string;
+    view?: 'weekly' | 'monthly' | 'custom';
+    projectIds?: string;
+    clientIds?: string;
+    roles?: string;
+    search?: string;
+  }): Promise<unknown> {
+    return this.get('/project-billing/users', { params });
   }
 
   /**
@@ -330,9 +401,8 @@ export class BackendApiClient {
     endDate: string;
     projectIds?: string;
     taskIds?: string;
-  }): Promise<any> {
-    const queryParams = new URLSearchParams(params as any);
-    return this.get(`/project-billing/tasks?${queryParams}`);
+  }): Promise<unknown> {
+    return this.get('/project-billing/tasks', { params });
   }
 
   /**
@@ -343,41 +413,70 @@ export class BackendApiClient {
     project_id?: string;
     task_id?: string;
     date: string;
+    start_date?: string;
+    end_date?: string;
     billable_hours: number;
+    total_hours?: number;
     reason?: string;
-  }): Promise<any> {
-    return this.request('/project-billing/billable-hours', {
-      method: 'PUT',
-      body: JSON.stringify(data)
-    });
+  }): Promise<unknown> {
+    return this.put('/project-billing/billable-hours', data);
   }
 
   /**
    * Get billing dashboard
    */
-  async getBillingDashboard(): Promise<any> {
+  async getBillingDashboard(): Promise<unknown> {
     return this.get('/billing/dashboard');
   }
 
   /**
    * Approve monthly billing
    */
-  async approveMonthlyBilling(year: number, month: number): Promise<any> {
+  async approveMonthlyBilling(year: number, month: number): Promise<unknown> {
     return this.post('/billing/approve-monthly', { year, month });
   }
 
   /**
    * Get revenue by project
    */
-  async getRevenueByProject(): Promise<any> {
+  async getRevenueByProject(): Promise<unknown> {
     return this.get('/billing/revenue-by-project');
   }
 
   /**
    * Export billing report
    */
-  async exportBillingReport(startDate: string, endDate: string, format: string): Promise<any> {
-    return this.post('/billing/export', { startDate, endDate, format });
+  async exportBillingReport(
+    startDate: string,
+    endDate: string,
+    format: string,
+    options: {
+      projectIds?: string[];
+      clientIds?: string[];
+      view?: string;
+      roles?: string[];
+      search?: string;
+    } = {}
+  ): Promise<unknown> {
+    const payload: Record<string, unknown> = { startDate, endDate, format };
+
+    if (options.view) {
+      payload.view = options.view;
+    }
+    if (options.projectIds && options.projectIds.length > 0) {
+      payload.projectIds = options.projectIds;
+    }
+    if (options.clientIds && options.clientIds.length > 0) {
+      payload.clientIds = options.clientIds;
+    }
+    if (options.roles && options.roles.length > 0) {
+      payload.roles = options.roles;
+    }
+    if (options.search && options.search.trim().length > 0) {
+      payload.search = options.search.trim();
+    }
+
+    return this.post('/billing/export', payload);
   }
 
   // === TIMESHEET SERVICE METHODS ===
@@ -385,70 +484,70 @@ export class BackendApiClient {
   /**
    * Get timesheets by status
    */
-  async getTimesheetsByStatus(status: string): Promise<any> {
+  async getTimesheetsByStatus(status: string): Promise<unknown> {
     return this.get(`/timesheets/status/${status}`);
   }
 
   /**
    * Escalate timesheet to management
    */
-  async escalateTimesheet(timesheetId: string): Promise<any> {
+  async escalateTimesheet(timesheetId: string): Promise<unknown> {
     return this.post(`/timesheets/${timesheetId}/escalate`);
   }
 
   /**
    * Mark timesheet as billed
    */
-  async markTimesheetBilled(timesheetId: string): Promise<any> {
+  async markTimesheetBilled(timesheetId: string): Promise<unknown> {
     return this.post(`/timesheets/${timesheetId}/mark-billed`);
   }
 
   /**
    * Get time entries for timesheet
    */
-  async getTimesheetEntries(timesheetId: string): Promise<any> {
+  async getTimesheetEntries(timesheetId: string): Promise<unknown> {
     return this.get(`/timesheets/${timesheetId}/entries`);
   }
 
   /**
    * Delete timesheet entries
    */
-  async deleteTimesheetEntries(timesheetId: string): Promise<any> {
+  async deleteTimesheetEntries(timesheetId: string): Promise<unknown> {
     return this.delete(`/timesheets/${timesheetId}/entries`);
   }
 
   /**
    * Update timesheet entries
    */
-  async updateTimesheetEntries(timesheetId: string, entries: any[]): Promise<any> {
+  async updateTimesheetEntries(timesheetId: string, entries: unknown[]): Promise<unknown> {
     return this.put(`/timesheets/${timesheetId}/entries`, { entries });
   }
 
   /**
    * Get timesheet details by ID
    */
-  async getTimesheetDetails(timesheetId: string): Promise<any> {
+  async getTimesheetDetails(timesheetId: string): Promise<unknown> {
     return this.get(`/timesheets/details/${timesheetId}`);
   }
 
   /**
    * Get calendar data for user
    */
-  async getCalendarData(userId: string, year: number, month: number): Promise<any> {
+  async getCalendarData(userId: string, year: number, month: number): Promise<unknown> {
     return this.get(`/timesheets/calendar/${userId}/${year}/${month}`);
   }
 
   /**
    * Get timesheets for approval
    */
-  async getTimesheetsForApproval(queryParams: string): Promise<any> {
+  async getTimesheetsForApproval(queryParams: string): Promise<unknown> {
     return this.get(`/timesheets/for-approval?${queryParams}`);
   }
 
   /**
    * Create weekly billing snapshot
    */
-  async createWeeklyBillingSnapshot(weekStartDate: string): Promise<any> {
+  async createWeeklyBillingSnapshot(weekStartDate: string): Promise<unknown> {
     return this.post('/billing/snapshots/weekly', { weekStartDate });
   }
 
@@ -457,57 +556,57 @@ export class BackendApiClient {
   /**
    * Create client
    */
-  async createClient(clientData: any): Promise<any> {
+  async createClient(clientData: unknown): Promise<unknown> {
     return this.post('/clients', clientData);
   }
 
   /**
    * Get all clients
    */
-  async getAllClients(includeInactive?: boolean): Promise<any> {
-    const queryParams = includeInactive ? '?includeInactive=true' : '';
-    return this.get(`/clients${queryParams}`);
+  async getAllClients(includeInactive?: boolean): Promise<unknown> {
+    const params = includeInactive ? { includeInactive: true } : {};
+    return this.get('/clients', { params });
   }
 
   /**
    * Get client by ID
    */
-  async getClientById(clientId: string): Promise<any> {
+  async getClientById(clientId: string): Promise<unknown> {
     return this.get(`/clients/${clientId}`);
   }
 
   /**
    * Update client
    */
-  async updateClient(clientId: string, updates: any): Promise<any> {
+  async updateClient(clientId: string, updates: unknown): Promise<unknown> {
     return this.put(`/clients/${clientId}`, updates);
   }
 
   /**
    * Delete client
    */
-  async deleteClient(clientId: string): Promise<any> {
+  async deleteClient(clientId: string): Promise<unknown> {
     return this.delete(`/clients/${clientId}`);
   }
 
   /**
    * Deactivate client
    */
-  async deactivateClient(clientId: string): Promise<any> {
+  async deactivateClient(clientId: string): Promise<unknown> {
     return this.patch(`/clients/${clientId}/deactivate`);
   }
 
   /**
    * Reactivate client
    */
-  async reactivateClient(clientId: string): Promise<any> {
+  async reactivateClient(clientId: string): Promise<unknown> {
     return this.patch(`/clients/${clientId}/reactivate`);
   }
 
   /**
    * Get client statistics
    */
-  async getClientStats(): Promise<any> {
+  async getClientStats(): Promise<unknown> {
     return this.get('/clients/stats');
   }
 
@@ -516,42 +615,42 @@ export class BackendApiClient {
   /**
    * Get role-specific dashboard
    */
-  async getRoleSpecificDashboard(): Promise<any> {
+  async getRoleSpecificDashboard(): Promise<unknown> {
     return this.get('/dashboard');
   }
 
   /**
    * Get Super Admin dashboard
    */
-  async getSuperAdminDashboard(): Promise<any> {
+  async getSuperAdminDashboard(): Promise<unknown> {
     return this.get('/dashboard/super-admin');
   }
 
   /**
    * Get Management dashboard
    */
-  async getManagementDashboard(): Promise<any> {
+  async getManagementDashboard(): Promise<unknown> {
     return this.get('/dashboard/management');
   }
 
   /**
    * Get Manager dashboard
    */
-  async getManagerDashboard(): Promise<any> {
+  async getManagerDashboard(): Promise<unknown> {
     return this.get('/dashboard/manager');
   }
 
   /**
    * Get Lead dashboard
    */
-  async getLeadDashboard(): Promise<any> {
+  async getLeadDashboard(): Promise<unknown> {
     return this.get('/dashboard/lead');
   }
 
   /**
    * Get Employee dashboard
    */
-  async getEmployeeDashboard(): Promise<any> {
+  async getEmployeeDashboard(): Promise<unknown> {
     return this.get('/dashboard/employee');
   }
 
@@ -566,9 +665,8 @@ export class BackendApiClient {
     filterId?: string;
     startDate?: string;
     endDate?: string;
-  }): Promise<any> {
-    const searchParams = new URLSearchParams(params as any);
-    return this.get(`/billing/summary?${searchParams}`);
+  }): Promise<unknown> {
+    return this.get('/billing/summary', { params });
   }
 }
 
@@ -576,4 +674,4 @@ export class BackendApiClient {
 export const backendApi = new BackendApiClient();
 
 // Export error class for use in services
-// export { BackendApiError };
+export { BackendApiError as default };

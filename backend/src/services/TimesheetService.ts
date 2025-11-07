@@ -27,6 +27,39 @@ import {
 } from '@/utils/auth';
 import { AuditLogService } from '@/services/AuditLogService';
 import { ValidationUtils } from '@/utils/validation';
+import { NotificationService } from '@/services/NotificationService';
+import { parseLocalDate, getMondayOfWeek, toISODateString, isWeekend } from '@/utils/dateUtils';
+
+const WEEKDAY_MIN_HOURS = 8;
+const WEEKDAY_MAX_HOURS = 10;
+const WEEKLY_MAX_HOURS = 56;
+
+function normalizeWeekStartDateInput(dateInput: string | Date): Date {
+  // Use the utility function to parse dates correctly in local timezone
+  const date = parseLocalDate(dateInput);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new ValidationError('Invalid week start date');
+  }
+
+  // Get Monday of the week
+  const normalized = getMondayOfWeek(date);
+  return normalized;
+}
+export interface TimesheetProjectApprovalSummary {
+  project_id?: string;
+  project_name?: string;
+  lead_id?: string;
+  lead_name?: string;
+  lead_status?: string;
+  lead_rejection_reason?: string;
+  manager_id?: string;
+  manager_name?: string;
+  manager_status?: string;
+  manager_rejection_reason?: string;
+  management_status?: string;
+  management_rejection_reason?: string;
+}
 
 export interface TimesheetWithDetails extends ITimesheet {
   user_name: string;
@@ -40,6 +73,8 @@ export interface TimesheetWithDetails extends ITimesheet {
   user?: IUser;
   billableHours?: number;
   nonBillableHours?: number;
+  project_approvals?: TimesheetProjectApprovalSummary[];
+  editable_project_ids?: string[];
 }
 
 export interface TimeEntryForm {
@@ -51,6 +86,54 @@ export interface TimeEntryForm {
   is_billable: boolean;
   custom_task_description?: string;
   entry_type: EntryType;
+
+  // New entry category fields
+  entry_category?: EntryCategory;
+  leave_session?: LeaveSession;
+  holiday_name?: string; // For holiday entries
+  holiday_type?: string; // For holiday entries
+  is_auto_generated?: boolean; // For auto-generated holiday entries
+  miscellaneous_activity?: string;
+  task_type?: TaskType; // For backward compatibility with entry_type
+}
+
+function sanitizeTimeEntryForm(entry: TimeEntryForm): TimeEntryForm {
+  const sanitized: TimeEntryForm = { ...entry };
+  const entryDate = new Date(entry.date);
+  if (!Number.isNaN(entryDate.getTime()) && isWeekend(entryDate)) {
+    sanitized.is_billable = false;
+  }
+
+  // Ensure backward compatibility: if entry_type is set but task_type is not, copy it
+  if (entry.entry_type && !entry.task_type) {
+    sanitized.task_type = entry.entry_type;
+  }
+
+  // Set default entry_category if not provided - infer from entry fields
+  if (!entry.entry_category) {
+    // Infer category from entry structure
+    if (entry.leave_session) {
+      sanitized.entry_category = 'leave';
+    } else if (entry.holiday_name) {
+      sanitized.entry_category = 'holiday';
+    } else if (entry.miscellaneous_activity) {
+      sanitized.entry_category = 'miscellaneous';
+    } else if (entry.project_id) {
+      // Check if it's a training project by name/ID pattern or default to project
+      // For now, we'll need to rely on explicit entry_category for training
+      // since we can't query the database here
+      sanitized.entry_category = 'project';
+    } else {
+      sanitized.entry_category = 'project'; // Default fallback
+    }
+  }
+
+  // For holiday entries, ensure they are non-billable
+  if (sanitized.entry_category === 'holiday') {
+    sanitized.is_billable = false;
+  }
+
+  return sanitized;
 }
 
 export interface CalendarData {
@@ -85,7 +168,7 @@ export class TimesheetService {
 
       return { timesheets };
     } catch (error) {
-      console.error('Error fetching all timesheets:', error);
+
       return {
         timesheets: [],
         error: error instanceof Error ? error.message : 'Failed to fetch timesheets'
@@ -117,7 +200,7 @@ export class TimesheetService {
 
       return { timesheets };
     } catch (error) {
-      console.error('Error fetching timesheets by status:', error);
+
       return {
         timesheets: [],
         error: error instanceof Error ? error.message : 'Failed to fetch timesheets by status'
@@ -188,6 +271,44 @@ export class TimesheetService {
             ]
           }
         },
+        // Lookup project-specific approvals for this timesheet
+        {
+          $lookup: {
+            from: 'timesheetprojectapprovals',
+            localField: '_id',
+            foreignField: 'timesheet_id',
+            as: 'project_approvals',
+            pipeline: [
+              {
+                $lookup: {
+                  from: 'projects',
+                  localField: 'project_id',
+                  foreignField: '_id',
+                  as: 'project',
+                  pipeline: [{ $project: { name: 1 } }]
+                }
+              },
+              {
+                $lookup: {
+                  from: 'users',
+                  localField: 'manager_id',
+                  foreignField: '_id',
+                  as: 'manager',
+                  pipeline: [{ $project: { full_name: 1 } }]
+                }
+              },
+              {
+                $lookup: {
+                  from: 'users',
+                  localField: 'lead_id',
+                  foreignField: '_id',
+                  as: 'lead',
+                  pipeline: [{ $project: { full_name: 1 } }]
+                }
+              }
+            ]
+          }
+        },
         {
           $lookup: {
             from: 'users',
@@ -216,21 +337,113 @@ export class TimesheetService {
 
         const user = ts.user[0];
 
+        // Map project approvals (if any) to a simple shape
+        const projectApprovalsRaw = ts.project_approvals || [];
+        const projectApprovals: TimesheetProjectApprovalSummary[] = projectApprovalsRaw.map((pa: any) => ({
+          project_id: pa.project_id?.toString(),
+          project_name: pa.project?.[0]?.name || undefined,
+          lead_id: pa.lead?.[0]?._id?.toString() || pa.lead_id?.toString(),
+          lead_name: pa.lead?.[0]?.full_name || undefined,
+          lead_status: pa.lead_status,
+          lead_rejection_reason: pa.lead_rejection_reason,
+          manager_id: pa.manager?.[0]?._id?.toString() || pa.manager_id?.toString(),
+          manager_name: pa.manager?.[0]?.full_name || undefined,
+          manager_status: pa.manager_status,
+          manager_rejection_reason: pa.manager_rejection_reason,
+          management_status: pa.management_status,
+          management_rejection_reason: pa.management_rejection_reason
+        }));
+
+        // Determine editable status based on rejections
+        const baseEditable = ['draft', 'manager_rejected', 'management_rejected'].includes(ts.status);
+        
+        // Collect rejected project IDs from project approvals
+        // Check BOTH lead_status and manager_status for rejections
+        const leadRejectedProjectIds = new Set(
+          projectApprovals
+            .filter(pa => pa.lead_status === 'rejected' && pa.project_id)
+            .map(pa => pa.project_id as string)
+        );
+        
+        const managerRejectedProjectIds = new Set(
+          projectApprovals
+            .filter(pa => pa.manager_status === 'rejected' && pa.project_id)
+            .map(pa => pa.project_id as string)
+        );
+        
+        // Combined set of all rejected projects (from Lead OR Manager)
+        const allRejectedProjectIds = new Set([
+          ...leadRejectedProjectIds,
+          ...managerRejectedProjectIds
+        ]);
+
+        // Handle partial rejections: if timesheet is 'submitted'/'lead_approved' but has rejected projects
+        const hasPartialLeadRejection = ts.status === 'submitted' && leadRejectedProjectIds.size > 0;
+        const hasPartialManagerRejection = ts.status === 'lead_approved' && managerRejectedProjectIds.size > 0;
+        const hasPartialRejection = hasPartialLeadRejection || hasPartialManagerRejection;
+        
+        // Allow editing if:
+        // 1. Timesheet is in baseEditable states (draft, manager_rejected, management_rejected)
+        // 2. Entire timesheet rejected by lead (status = 'lead_rejected')
+        // 3. Entire timesheet rejected by manager (status = 'manager_rejected')
+        // 4. Partial rejection (some projects rejected while others approved/pending)
+        const allowRejectionEdit = (
+          ts.status === 'lead_rejected' || 
+          ts.status === 'manager_rejected' || 
+          hasPartialRejection
+        ) && allRejectedProjectIds.size > 0;
+
+        // Determine effective display status for frontend
+        // If has partial rejections, use appropriate rejected status for UI
+        let effectiveStatus = ts.status;
+        if (hasPartialLeadRejection) {
+          effectiveStatus = 'lead_rejected';
+        } else if (hasPartialManagerRejection) {
+          effectiveStatus = 'manager_rejected';
+        }
+
+        const enhancedEntries = entries.map((entry: any) => {
+          const projectId =
+            entry.project_id && typeof entry.project_id.toString === 'function'
+              ? entry.project_id.toString()
+              : entry.project_id
+                ? String(entry.project_id)
+                : undefined;
+
+          // Entry is editable if:
+          // - Timesheet is in base editable state (draft, fully rejected), OR
+          // - Rejection edit allowed AND this entry belongs to a rejected project
+          const entryEditable = baseEditable
+            ? true
+            : allowRejectionEdit && projectId ? allRejectedProjectIds.has(projectId) : false;
+
+          return {
+            ...entry,
+            is_editable: entryEditable
+          };
+        });
+
+        const timesheetCanEdit = baseEditable || (allowRejectionEdit && enhancedEntries.some((entry: any) => entry.is_editable));
+        const editableProjectIds = allowRejectionEdit ? Array.from(allRejectedProjectIds) : undefined;
+
         return {
           ...ts,
           id: ts._id.toString(),
           user_id: ts.user_id.toString(),
           user_name: user?.full_name || 'Unknown User',
           user_email: user?.email,
-          time_entries: entries,
+          time_entries: enhancedEntries,
           user: user,
           billableHours,
           nonBillableHours,
-          can_edit: ['draft', 'manager_rejected', 'management_rejected'].includes(ts.status),
+          project_approvals: projectApprovals,
+          status: effectiveStatus, // Use effective status for display
+          can_edit: timesheetCanEdit,
           can_submit: ts.status === 'draft' && ts.total_hours > 0,
           can_approve: false, // Determined by role in component
           can_reject: false, // Determined by role in component
-          next_action: this.getNextAction(ts.status, currentUser, ts.user_id.toString())
+          next_action: this.getNextAction(effectiveStatus, currentUser, ts.user_id.toString()),
+          editable_project_ids: editableProjectIds
         };
       });
 
@@ -239,7 +452,7 @@ export class TimesheetService {
         total: enhancedTimesheets.length
       };
     } catch (error) {
-      console.error('Error in getUserTimesheets:', error);
+
       return {
         timesheets: [],
         total: 0,
@@ -257,8 +470,6 @@ export class TimesheetService {
     currentUser: AuthUser
   ): Promise<{ timesheet?: ITimesheet; error?: string }> {
     try {
-      console.log('TimesheetService.createTimesheet called with:', { userId, weekStartDate });
-
       // Validate inputs
       const userIdError = ValidationUtils.validateObjectId(userId, 'User ID', true);
       if (userIdError) {
@@ -270,26 +481,30 @@ export class TimesheetService {
         throw new ValidationError(dateError);
       }
 
+      const normalizedWeekStart = normalizeWeekStartDateInput(weekStartDate);
+      const normalizedWeekStartIso = toISODateString(normalizedWeekStart);
+
       // Validate access permissions
       validateTimesheetAccess(currentUser, userId, 'create');
 
       // Check if timesheet already exists for this user and week
       const existingTimesheet = await (Timesheet.findOne as any)({
         user_id: new mongoose.Types.ObjectId(userId),
-        week_start_date: new Date(weekStartDate),
+        week_start_date: normalizedWeekStart,
         deleted_at: null
       }).exec();
 
       if (existingTimesheet) {
         throw new ConflictError(
-          `A timesheet already exists for the week starting ${weekStartDate}. Status: ${existingTimesheet.status}`
+          `A timesheet already exists for the week starting ${normalizedWeekStartIso}. Status: ${existingTimesheet.status}`
         );
       }
 
       // Calculate week end date
-      const weekStart = new Date(weekStartDate);
-      const weekEnd = new Date(weekStart);
+      const weekStart = new Date(normalizedWeekStart);
+      const weekEnd = new Date(normalizedWeekStart);
       weekEnd.setDate(weekEnd.getDate() + 6);
+      weekEnd.setHours(0, 0, 0, 0);
 
       // Create new timesheet
       const timesheetData = {
@@ -304,6 +519,31 @@ export class TimesheetService {
 
       const timesheet = await (Timesheet.create as any)(timesheetData);
 
+      // Auto-create holiday entries if enabled
+      try {
+        const { Calendar } = require('@/models/Calendar');
+        const CompanyHolidayService = require('@/services/CompanyHolidayService').default;
+        
+        // Get company calendar settings
+        const calendar = await Calendar.getCompanyCalendar();
+        if (calendar && calendar.auto_create_holiday_entries) {
+          const holidayEntries = await CompanyHolidayService.createHolidayTimeEntries(
+            timesheet._id.toString(),
+            weekStart,
+            weekEnd,
+            calendar.default_holiday_hours || 8
+          );
+
+          if (holidayEntries.length > 0) {
+            // Update timesheet total hours to include holiday hours
+            await this.updateTimesheetTotalHours(timesheet._id.toString());
+          }
+        }
+      } catch (holidayError) {
+        // Log holiday creation error but don't fail timesheet creation
+
+      }
+
       // Audit log: Timesheet created
       await AuditLogService.logEvent(
         'timesheets',
@@ -311,16 +551,15 @@ export class TimesheetService {
         'INSERT',
         currentUser.id,
         currentUser.full_name,
-        { week_start_date: weekStartDate, user_id: userId },
+        { week_start_date: normalizedWeekStartIso, user_id: userId },
         { created_by: currentUser.id },
         null,
         timesheetData
       );
 
-      console.log('Timesheet created successfully:', timesheet);
       return { timesheet };
     } catch (error) {
-      console.error('Error in createTimesheet:', error);
+
 
       if (error instanceof ConflictError) {
         return { error: error.message };
@@ -342,11 +581,14 @@ export class TimesheetService {
       // Validate access permissions
       validateTimesheetAccess(currentUser, userId, 'view');
 
+      // Parse the date correctly to avoid timezone issues
+      const parsedWeekStart = normalizeWeekStartDateInput(weekStartDate);
+
       const pipeline = [
         {
           $match: {
             user_id: new mongoose.Types.ObjectId(userId),
-            week_start_date: new Date(weekStartDate),
+            week_start_date: parsedWeekStart,
             deleted_at: null
           }
         },
@@ -359,6 +601,43 @@ export class TimesheetService {
             pipeline: [
               { $match: { deleted_at: null } },
               { $sort: { date: 1 } }
+            ]
+          }
+        },
+        {
+          $lookup: {
+            from: 'timesheetprojectapprovals',
+            localField: '_id',
+            foreignField: 'timesheet_id',
+            as: 'project_approvals',
+            pipeline: [
+              {
+                $lookup: {
+                  from: 'projects',
+                  localField: 'project_id',
+                  foreignField: '_id',
+                  as: 'project',
+                  pipeline: [{ $project: { name: 1 } }]
+                }
+              },
+              {
+                $lookup: {
+                  from: 'users',
+                  localField: 'manager_id',
+                  foreignField: '_id',
+                  as: 'manager',
+                  pipeline: [{ $project: { full_name: 1 } }]
+                }
+              },
+              {
+                $lookup: {
+                  from: 'users',
+                  localField: 'lead_id',
+                  foreignField: '_id',
+                  as: 'lead',
+                  pipeline: [{ $project: { full_name: 1 } }]
+                }
+              }
             ]
           }
         },
@@ -389,6 +668,94 @@ export class TimesheetService {
         .filter((e: ITimeEntry) => !e.is_billable)
         .reduce((sum: number, e: ITimeEntry) => sum + e.hours, 0);
 
+      const projectApprovalsRaw = timesheet.project_approvals || [];
+      const projectApprovals: TimesheetProjectApprovalSummary[] = projectApprovalsRaw.map((pa: any) => ({
+        project_id: pa.project_id?.toString(),
+        project_name: pa.project?.[0]?.name || undefined,
+        lead_id: pa.lead?.[0]?._id?.toString() || pa.lead_id?.toString(),
+        lead_name: pa.lead?.[0]?.full_name || undefined,
+        lead_status: pa.lead_status,
+        lead_rejection_reason: pa.lead_rejection_reason,
+        manager_id: pa.manager?.[0]?._id?.toString() || pa.manager_id?.toString(),
+        manager_name: pa.manager?.[0]?.full_name || undefined,
+        manager_status: pa.manager_status,
+        manager_rejection_reason: pa.manager_rejection_reason,
+        management_status: pa.management_status,
+        management_rejection_reason: pa.management_rejection_reason
+      }));
+
+      // Determine editable status based on rejections
+      const baseEditable = ['draft', 'manager_rejected', 'management_rejected'].includes(timesheet.status);
+      
+      // Collect rejected project IDs from project approvals
+      // Check BOTH lead_status and manager_status for rejections
+      const leadRejectedProjectIds = new Set(
+        projectApprovals
+          .filter(pa => pa.lead_status === 'rejected' && pa.project_id)
+          .map(pa => pa.project_id as string)
+      );
+      
+      const managerRejectedProjectIds = new Set(
+        projectApprovals
+          .filter(pa => pa.manager_status === 'rejected' && pa.project_id)
+          .map(pa => pa.project_id as string)
+      );
+      
+      // Combined set of all rejected projects (from Lead OR Manager)
+      const allRejectedProjectIds = new Set([
+        ...leadRejectedProjectIds,
+        ...managerRejectedProjectIds
+      ]);
+
+      // Handle partial rejections: if timesheet is 'submitted'/'lead_approved' but has rejected projects
+      const hasPartialLeadRejection = timesheet.status === 'submitted' && leadRejectedProjectIds.size > 0;
+      const hasPartialManagerRejection = timesheet.status === 'lead_approved' && managerRejectedProjectIds.size > 0;
+      const hasPartialRejection = hasPartialLeadRejection || hasPartialManagerRejection;
+      
+      // Allow editing if:
+      // 1. Timesheet is in baseEditable states (draft, manager_rejected, management_rejected)
+      // 2. Entire timesheet rejected by lead (status = 'lead_rejected')
+      // 3. Entire timesheet rejected by manager (status = 'manager_rejected')
+      // 4. Partial rejection (some projects rejected while others approved/pending)
+      const allowRejectionEdit = (
+        timesheet.status === 'lead_rejected' || 
+        timesheet.status === 'manager_rejected' || 
+        hasPartialRejection
+      ) && allRejectedProjectIds.size > 0;
+
+      // Determine effective display status for frontend
+      // If has partial rejections, use appropriate rejected status for UI
+      let effectiveStatus = timesheet.status;
+      if (hasPartialLeadRejection) {
+        effectiveStatus = 'lead_rejected';
+      } else if (hasPartialManagerRejection) {
+        effectiveStatus = 'manager_rejected';
+      }
+
+      const enhancedEntries = entries.map((entry: any) => {
+        const projectId =
+          entry.project_id && typeof entry.project_id.toString === 'function'
+            ? entry.project_id.toString()
+            : entry.project_id
+              ? String(entry.project_id)
+              : undefined;
+
+        // Entry is editable if:
+        // - Timesheet is in base editable state (draft, fully rejected), OR
+        // - Rejection edit allowed AND this entry belongs to a rejected project
+        const entryEditable = baseEditable
+          ? true
+          : allowRejectionEdit && projectId ? allRejectedProjectIds.has(projectId) : false;
+
+        return {
+          ...entry,
+          is_editable: entryEditable
+        };
+      });
+
+      const timesheetCanEdit = baseEditable || (allowRejectionEdit && enhancedEntries.some((entry: any) => entry.is_editable));
+      const editableProjectIds = allowRejectionEdit ? Array.from(allRejectedProjectIds) : undefined;
+
       const user = timesheet.user[0];
       const enhancedTimesheet: TimesheetWithDetails = {
         ...timesheet,
@@ -396,21 +763,172 @@ export class TimesheetService {
         user_id: timesheet.user_id.toString(),
         user_name: user?.full_name || 'Unknown User',
         user_email: user?.email,
-        time_entries: entries,
+        time_entries: enhancedEntries,
         user: user,
         billableHours,
         nonBillableHours,
-        can_edit: ['draft', 'manager_rejected', 'management_rejected'].includes(timesheet.status),
+        project_approvals: projectApprovals,
+        status: effectiveStatus, // Use effective status for display
+        can_edit: timesheetCanEdit,
         can_submit: timesheet.status === 'draft' && timesheet.total_hours > 0,
         can_approve: false,
         can_reject: false,
-        next_action: this.getNextAction(timesheet.status, currentUser, timesheet.user_id.toString())
+        next_action: this.getNextAction(effectiveStatus, currentUser, timesheet.user_id.toString()),
+        editable_project_ids: editableProjectIds
       };
 
       return { timesheet: enhancedTimesheet };
     } catch (error) {
-      console.error('Error in getTimesheetByUserAndWeek:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to fetch timesheet' };
+    }
+  }
+
+  /**
+   * Validate if a Lead can submit their timesheet
+   * Checks if Lead has completed all employee reviews for projects they're submitting time for
+   */
+  static async validateLeadCanSubmit(
+    timesheetId: string,
+    userId: string
+  ): Promise<{
+    canSubmit: boolean;
+    pendingReviews: Array<{
+      projectName: string;
+      employeeName: string;
+      employeeId: string;
+    }>;
+    message: string;
+  }> {
+    try {
+      // 1. Get timesheet and its time entries
+      const timesheet = await (Timesheet.findById as any)(timesheetId).exec();
+      if (!timesheet) {
+        throw new Error('Timesheet not found');
+      }
+
+      const entries = await (TimeEntry.find as any)({
+        timesheet_id: new mongoose.Types.ObjectId(timesheetId),
+        deleted_at: null
+      }).lean().exec();
+
+      // 2. Get unique project IDs from time entries
+      const projectIds = [...new Set(entries.map((e: any) => e.project_id?.toString()).filter(Boolean))];
+
+      if (projectIds.length === 0) {
+        return { canSubmit: true, pendingReviews: [], message: '' };
+      }
+
+      // 3. Check if user is a Lead on any of these projects
+      const { ProjectMember } = require('@/models/Project');
+      const leadRoles = await ProjectMember.find({
+        project_id: { $in: projectIds.map(id => new mongoose.Types.ObjectId(id)) },
+        user_id: new mongoose.Types.ObjectId(userId),
+        project_role: 'lead',
+        deleted_at: null,
+        removed_at: null
+      }).lean().exec();
+
+      if (leadRoles.length === 0) {
+        // User is not a Lead on any project they're submitting for
+        return { canSubmit: true, pendingReviews: [], message: '' };
+      }
+
+      // 4. For each project where user is Lead, check ALL employees have submitted AND been approved
+      const pendingReviews: Array<{ projectName: string; employeeName: string; employeeId: string }> = [];
+
+      for (const leadRole of leadRoles) {
+        const projectId = leadRole.project_id.toString();
+        const { Project } = require('@/models/Project');
+        const { User } = require('@/models/User');
+        const project = await (Project.findById as any)(projectId).lean().exec();
+
+        // Get all employees for this project
+        const employeeMembers = await ProjectMember.find({
+          project_id: leadRole.project_id,
+          user_id: { $ne: new mongoose.Types.ObjectId(userId) }, // Exclude lead
+          project_role: 'employee',
+          deleted_at: null,
+          removed_at: null
+        }).populate('user_id').lean().exec();
+
+        if (employeeMembers.length === 0) {
+          continue; // No employees to check for this project
+        }
+
+        // Check each employee individually
+        for (const empMember of employeeMembers) {
+          const empUserId = empMember.user_id._id || empMember.user_id;
+
+          // Find employee's timesheet for this week
+          const empTimesheet = await (Timesheet.findOne as any)({
+            user_id: empUserId,
+            week_start_date: timesheet.week_start_date,
+            week_end_date: timesheet.week_end_date,
+            deleted_at: null
+          }).lean().exec();
+
+          // Case 1: Employee hasn't submitted a timesheet yet
+          if (!empTimesheet || empTimesheet.status === 'draft') {
+            pendingReviews.push({
+              projectName: project?.name || 'Unknown Project',
+              employeeName: empMember.user_id.full_name || 'Unknown Employee',
+              employeeId: empUserId.toString()
+            });
+            continue;
+          }
+
+          // Case 2: Check if employee has entries for THIS specific project
+          const empProjectEntries = await (TimeEntry.find as any)({
+            timesheet_id: empTimesheet._id,
+            project_id: new mongoose.Types.ObjectId(projectId),
+            deleted_at: null
+          }).lean().exec();
+
+          // Employee submitted timesheet but has NO entries for this project
+          if (empProjectEntries.length === 0) {
+            pendingReviews.push({
+              projectName: project?.name || 'Unknown Project',
+              employeeName: empMember.user_id.full_name || 'Unknown Employee',
+              employeeId: empUserId.toString()
+            });
+            continue;
+          }
+
+          // Case 3: Employee has entries for this project - check project-specific approval status
+          // CRITICAL: Check approval status regardless of overall timesheet status
+          // Employee might have 'lead_approved' status overall but still have pending projects
+          const approval = await (TimesheetProjectApproval.findOne as any)({
+            timesheet_id: empTimesheet._id,
+            project_id: new mongoose.Types.ObjectId(projectId)
+          }).lean().exec();
+
+          // If no approval record exists OR lead_status is pending/rejected, block Lead submission
+          if (!approval || approval.lead_status === 'pending' || approval.lead_status === 'rejected') {
+            pendingReviews.push({
+              projectName: project?.name || 'Unknown Project',
+              employeeName: empMember.user_id.full_name || 'Unknown Employee',
+              employeeId: empUserId.toString()
+            });
+          }
+        }
+      }
+
+      // 5. Return validation result
+      if (pendingReviews.length > 0) {
+        const projectNames = [...new Set(pendingReviews.map(r => r.projectName))];
+        return {
+          canSubmit: false,
+          pendingReviews,
+          message: `You have ${pendingReviews.length} employee(s) who haven't submitted time entries for ${projectNames.join(', ')} or haven't been reviewed yet. All employees must submit entries for this project and be approved before you can submit your own timesheet.`
+        };
+      }
+
+      return { canSubmit: true, pendingReviews: [], message: '' };
+    } catch (error) {
+
+      // On error, allow submission (validation will happen on backend anyway)
+      return { canSubmit: true, pendingReviews: [], message: '' };
     }
   }
 
@@ -422,7 +940,6 @@ export class TimesheetService {
     currentUser: AuthUser
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      console.log('TimesheetService.submitTimesheet called for ID:', timesheetId);
 
       // Get timesheet
       const timesheet = await (Timesheet.findOne as any)({
@@ -434,17 +951,29 @@ export class TimesheetService {
         throw new NotFoundError('Timesheet not found');
       }
 
+      const timesheetOwnerId = timesheet.user_id?.toString?.() ?? String(timesheet.user_id);
+
       // Validate access permissions
       validateTimesheetAccess(currentUser, timesheet.user_id.toString(), 'edit');
 
-      // Check status
-      if (!['draft', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
+      // Check status - allow submission from draft and rejected states
+      if (!['draft', 'lead_rejected', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
         throw new TimesheetError(`Timesheet cannot be submitted from current status: ${timesheet.status}`);
       }
 
       // Check if timesheet has entries
       if (timesheet.total_hours === 0) {
         throw new TimesheetError('Cannot submit timesheet with zero hours');
+      }
+
+      // Check if Lead has pending employee reviews for projects they're submitting for
+      const validationResult = await this.validateLeadCanSubmit(
+        timesheetId,
+        currentUser.id
+      );
+
+      if (!validationResult.canSubmit) {
+        throw new TimesheetError(validationResult.message);
       }
 
       let nextStatus: TimesheetStatus = 'submitted';
@@ -469,10 +998,22 @@ export class TimesheetService {
 
       // Group entries by project
       const projectIds = [...new Set(entries.map((e: any) => e.project_id?.toString()).filter(Boolean))];
+      const submissionRecipientIds = new Set<string>();
 
       if (projectIds.length > 0) {
         const { Project, ProjectMember } = require('@/models/Project');
         const { TimesheetProjectApproval } = require('@/models/TimesheetProjectApproval');
+
+        // If the submitter is a manager, pre-fetch management users so we can notify them
+        let managementUserIds: string[] | undefined;
+        if (currentUser.role === 'manager') {
+          const { User } = require('@/models/User');
+          const managementUsers = await (User.find as any)({ role: 'management', deleted_at: null })
+            .select('_id')
+            .lean()
+            .exec();
+          managementUserIds = managementUsers.map((m: any) => (m._id && typeof m._id.toString === 'function' ? m._id.toString() : String(m._id)));
+        }
 
         for (const projectId of projectIds) {
           // Check if approval record already exists
@@ -481,15 +1022,31 @@ export class TimesheetService {
             project_id: new mongoose.Types.ObjectId(projectId)
           }).exec();
 
+          // If resubmitting after rejection, reset the approval status
+          if (existingApproval && (timesheet.status === 'lead_rejected' || timesheet.status === 'manager_rejected')) {
+            // Reset rejection fields based on who rejected
+            if (timesheet.status === 'lead_rejected' && existingApproval.lead_status === 'rejected') {
+              existingApproval.lead_status = 'pending';
+              existingApproval.lead_rejection_reason = undefined;
+              existingApproval.lead_approved_at = undefined;
+              await existingApproval.save();
+            } else if (timesheet.status === 'manager_rejected' && existingApproval.manager_status === 'rejected') {
+              existingApproval.manager_status = 'pending';
+              existingApproval.manager_rejection_reason = undefined;
+              existingApproval.manager_approved_at = undefined;
+              await existingApproval.save();
+            }
+            continue;
+          }
+
+          // If approval record exists and not a resubmission, skip creation
           if (existingApproval) {
-            console.log(`Approval record already exists for timesheet ${timesheetId} project ${projectId}`);
             continue;
           }
 
           // Get project to find manager
           const project = await Project.findById(projectId).lean().exec();
           if (!project) {
-            console.warn(`Project not found: ${projectId}`);
             continue;
           }
 
@@ -501,23 +1058,120 @@ export class TimesheetService {
             removed_at: null
           }).lean().exec();
 
+          const managerId =
+            project?.primary_manager_id && typeof project.primary_manager_id.toString === 'function'
+              ? project.primary_manager_id.toString()
+              : project?.primary_manager_id
+                ? String(project.primary_manager_id)
+                : undefined;
+
+          const leadId = leadMember?.user_id
+            ? typeof leadMember.user_id.toString === 'function'
+              ? leadMember.user_id.toString()
+              : String(leadMember.user_id)
+            : undefined;
+
+          // Add recipients based on who is submitting the timesheet:
+          // - For training projects: Employees notify Manager directly (skip Lead)
+          // - For regular projects: Employees notify Lead, Leads notify Manager
+          // - If a Manager submits, notify all Management users
+          if (currentUser.role === 'employee') {
+            // Training projects skip lead approval - notify manager directly
+            if (project.project_type === 'training') {
+              if (managerId && managerId !== timesheetOwnerId) {
+                submissionRecipientIds.add(managerId);
+              }
+            } else {
+              // Regular projects - notify lead
+              if (leadId && leadId !== timesheetOwnerId) {
+                submissionRecipientIds.add(leadId);
+              }
+            }
+          } else if (currentUser.role === 'lead') {
+            if (managerId && managerId !== timesheetOwnerId) {
+              submissionRecipientIds.add(managerId);
+            }
+          } else if (currentUser.role === 'manager') {
+            if (managementUserIds && managementUserIds.length > 0) {
+              for (const mgmtId of managementUserIds) {
+                if (mgmtId !== timesheetOwnerId) {
+                  submissionRecipientIds.add(mgmtId);
+                }
+              }
+            }
+          }
+
+          // Check if user is a project member
+          const userIsMember = await ProjectMember.findOne({
+            project_id: new mongoose.Types.ObjectId(projectId),
+            user_id: timesheet.user_id,
+            deleted_at: null,
+            removed_at: null
+          }).lean().exec();
+
+          if (!userIsMember) {
+          }
+
           // Calculate hours and entries for this project
           const projectEntries = entries.filter((e: any) => e.project_id?.toString() === projectId);
           const totalHours = projectEntries.reduce((sum: number, e: any) => sum + (e.hours || 0), 0);
+          
+          // Calculate worked hours (sum of billable entries only)
+          const workedHours = projectEntries
+            .filter((e: any) => e.is_billable)
+            .reduce((sum: number, e: any) => sum + (e.hours || 0), 0);
+
+          // Determine approval statuses based on submitter role
+          let leadStatus = 'pending';
+          let managerStatus = 'pending';
+          let managementStatus = 'pending';
+
+          // Training projects skip lead approval - go directly to manager
+          if (project.project_type === 'training') {
+            leadStatus = 'not_required';
+          } else if (currentUser.role === 'lead') {
+            leadStatus = 'not_required';
+          }
+
+          // If submitter is a manager, skip lead and manager approval, go straight to management
+          if (currentUser.role === 'manager') {
+            leadStatus = 'not_required';
+            managerStatus = 'not_required'; // Manager doesn't approve their own timesheet
+            managementStatus = 'pending'; // Goes to Management for verification
+          }
 
           // Create approval record
           await TimesheetProjectApproval.create({
             timesheet_id: new mongoose.Types.ObjectId(timesheetId),
             project_id: new mongoose.Types.ObjectId(projectId),
             lead_id: leadMember ? leadMember.user_id : null,
-            lead_status: leadMember ? 'pending' : 'not_required',
+            lead_status: leadStatus,
             manager_id: project.primary_manager_id,
-            manager_status: 'pending',
+            manager_status: managerStatus,
+            management_status: managementStatus,
             entries_count: projectEntries.length,
-            total_hours: totalHours
+            total_hours: totalHours,
+            worked_hours: workedHours,
+            billable_hours: workedHours, // Initially same as worked hours
+            billable_adjustment: 0, // No adjustment initially
+            user_not_in_project: !userIsMember
           });
 
-          console.log(`Created approval record: timesheet ${timesheetId}, project ${projectId}`);
+        }
+      }
+
+      if (submissionRecipientIds.size > 0) {
+        try {
+          await NotificationService.notifyTimesheetSubmission({
+            recipientIds: Array.from(submissionRecipientIds),
+            timesheetId,
+            submittedById: currentUser.id,
+            submittedByName: currentUser.full_name,
+            weekStartDate: timesheet.week_start_date,
+            totalHours: timesheet.total_hours
+          });
+        } catch (notificationError) {
+
         }
       }
 
@@ -534,10 +1188,9 @@ export class TimesheetService {
         { status: nextStatus, submitted_at: new Date() }
       );
 
-      console.log('Timesheet submitted successfully:', timesheetId);
       return { success: true };
     } catch (error) {
-      console.error('Error in submitTimesheet:', error);
+
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to submit timesheet'
@@ -564,6 +1217,10 @@ export class TimesheetService {
 
       if (!timesheet) {
         throw new NotFoundError('Timesheet not found');
+      }
+
+      if (timesheet.user_id?.toString?.() === currentUser.id && action === 'approve') {
+        throw new TimesheetError('Managers cannot approve their own timesheets');
       }
 
       // Check status
@@ -610,10 +1267,9 @@ export class TimesheetService {
         updateData
       );
 
-      console.log(`Manager ${action}ed timesheet: ${timesheetId}`);
       return { success: true };
     } catch (error) {
-      console.error('Error in managerApproveRejectTimesheet:', error);
+
       return {
         success: false,
         error: error instanceof Error ? error.message : `Failed to ${action} timesheet`
@@ -691,10 +1347,9 @@ export class TimesheetService {
         updateData
       );
 
-      console.log(`Management ${action}ed timesheet: ${timesheetId}`);
       return { success: true };
     } catch (error) {
-      console.error('Error in managementApproveRejectTimesheet:', error);
+
       return {
         success: false,
         error: error instanceof Error ? error.message : `Failed to ${action} timesheet`
@@ -713,7 +1368,6 @@ export class TimesheetService {
     currentUser: AuthUser
   ): Promise<{ entry?: ITimeEntry; error?: string }> {
     try {
-      console.log('TimesheetService.addTimeEntry called with:', { timesheetId, entryData });
 
       // Get timesheet to validate permissions
       const timesheet = await (Timesheet.findOne as any)({
@@ -728,8 +1382,8 @@ export class TimesheetService {
       // Validate access permissions
       validateTimesheetAccess(currentUser, timesheet.user_id.toString(), 'edit');
 
-      // Validate timesheet status
-      if (!['draft', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
+      // Validate timesheet status - allow editing in draft and rejected states
+      if (!['draft', 'lead_rejected', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
         throw new TimesheetError('Cannot add entries to timesheet in current status');
       }
 
@@ -737,6 +1391,15 @@ export class TimesheetService {
       const validation = await this.validateTimeEntry(timesheetId, entryData);
       if (!validation.valid) {
         throw new ValidationError(validation.error!);
+      }
+
+      // Check if entry is for training project - training entries must be non-billable
+      let isBillable = entryData.is_billable;
+      if (entryData.project_id) {
+        const project = await Project.findById(entryData.project_id).lean();
+        if (project && project.project_type === 'training') {
+          isBillable = false; // Force non-billable for training projects
+        }
       }
 
       // Create time entry
@@ -747,7 +1410,7 @@ export class TimesheetService {
         date: new Date(entryData.date),
         hours: entryData.hours,
         description: entryData.description,
-        is_billable: entryData.is_billable,
+        is_billable: isBillable,
         custom_task_description: entryData.custom_task_description,
         entry_type: entryData.entry_type
       };
@@ -775,10 +1438,9 @@ export class TimesheetService {
       // Update timesheet total hours
       await this.updateTimesheetTotalHours(timesheetId);
 
-      console.log('Time entry created successfully:', entry);
       return { entry };
     } catch (error) {
-      console.error('Error in addTimeEntry:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to add time entry' };
     }
   }
@@ -804,6 +1466,11 @@ export class TimesheetService {
       }
 
       const existingEntries = await (TimeEntry.find as any)(query).exec();
+
+      const entryDateObject = new Date(entryData.date);
+      if (!Number.isNaN(entryDateObject.getTime()) && isWeekend(entryDateObject)) {
+        entryData.is_billable = false;
+      }
 
       // Check for duplicate project/task combinations
       if (entryData.entry_type === 'project_task' && entryData.project_id && entryData.task_id) {
@@ -856,8 +1523,67 @@ export class TimesheetService {
 
       return { valid: true };
     } catch (error) {
-      console.error('Error in validateTimeEntry:', error);
+
       return { valid: false, error: 'Failed to validate time entry' };
+    }
+  }
+
+  /**
+   * Synchronize holiday entries for a timesheet
+   * This is called when timesheet dates are modified or when navigating timesheet form
+   */
+  static async synchronizeHolidayEntries(
+    timesheetId: string,
+    currentUser: AuthUser
+  ): Promise<{ success: boolean; changes?: any; error?: string }> {
+    try {
+      // Get timesheet to validate permissions and get date range
+      const timesheet = await (Timesheet.findOne as any)({
+        _id: new mongoose.Types.ObjectId(timesheetId),
+        deleted_at: null
+      }).exec();
+
+      if (!timesheet) {
+        throw new NotFoundError('Timesheet not found');
+      }
+
+      // Validate access permissions
+      validateTimesheetAccess(currentUser, timesheet.user_id.toString(), 'edit');
+
+      // Only sync holidays for editable timesheets
+      if (!['draft', 'lead_rejected', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
+        return { success: true, changes: { added: [], removed: [], existing: [] } };
+      }
+
+      // Get company calendar settings
+      const { Calendar } = require('@/models/Calendar');
+      const calendar = await Calendar.getCompanyCalendar();
+      
+      if (!calendar || !calendar.auto_create_holiday_entries) {
+        return { success: true, changes: { added: [], removed: [], existing: [] } };
+      }
+
+      // Synchronize holiday entries
+      const CompanyHolidayService = require('@/services/CompanyHolidayService').default;
+      const changes = await CompanyHolidayService.synchronizeHolidayEntries(
+        timesheetId,
+        timesheet.week_start_date,
+        timesheet.week_end_date,
+        calendar.default_holiday_hours || 8
+      );
+
+      // Update timesheet total hours if changes were made
+      if (changes.added.length > 0 || changes.removed.length > 0) {
+        await this.updateTimesheetTotalHours(timesheetId);
+      }
+
+      return { success: true, changes };
+    } catch (error) {
+
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to synchronize holiday entries' 
+      };
     }
   }
 
@@ -866,7 +1592,6 @@ export class TimesheetService {
    */
   private static async updateTimesheetTotalHours(timesheetId: string): Promise<void> {
     try {
-      console.log('Updating total hours for timesheet:', timesheetId);
 
       // Calculate total hours from time entries
       const entries = await (TimeEntry.find as any)({
@@ -875,7 +1600,6 @@ export class TimesheetService {
       }).exec();
 
       const totalHours = entries.reduce((sum, entry) => sum + entry.hours, 0);
-      console.log('Calculated total hours:', totalHours);
 
       // Update timesheet
       await (Timesheet.findByIdAndUpdate as any)(timesheetId, {
@@ -883,9 +1607,8 @@ export class TimesheetService {
         updated_at: new Date()
       }).exec();
 
-      console.log('Timesheet total hours updated successfully');
     } catch (error) {
-      console.error('Error in updateTimesheetTotalHours:', error);
+
     }
   }
 
@@ -893,7 +1616,7 @@ export class TimesheetService {
    * Check if timesheet can be modified
    */
   static canModifyTimesheet(timesheet: ITimesheet): boolean {
-    return ['draft', 'manager_rejected', 'management_rejected'].includes(timesheet.status) &&
+    return ['draft', 'lead_rejected', 'manager_rejected', 'management_rejected'].includes(timesheet.status) &&
       !timesheet.is_frozen;
   }
 
@@ -974,7 +1697,7 @@ export class TimesheetService {
         completionRate: (verified / Math.max(totalTimesheets, 1)) * 100
       };
     } catch (error) {
-      console.error('Error in getTimesheetDashboard:', error);
+
       return {
         totalTimesheets: 0,
         pendingApproval: 0,
@@ -999,7 +1722,6 @@ export class TimesheetService {
     currentUser: AuthUser
   ): Promise<{ updatedEntries?: ITimeEntry[]; error?: string }> {
     try {
-      console.log('TimesheetService.updateTimesheetEntries called with:', { timesheetId, entryCount: entries.length });
 
       // Get timesheet to validate permissions
       const timesheet = await (Timesheet.findOne as any)({
@@ -1014,60 +1736,197 @@ export class TimesheetService {
       // Validate access permissions
       validateTimesheetAccess(currentUser, timesheet.user_id.toString(), 'edit');
 
-      // Validate timesheet status
-      if (!['draft', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
+      // Validate timesheet status - allow editing in draft and rejected states
+      if (!['draft', 'lead_rejected', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
         throw new TimesheetError('Cannot update entries for timesheet in current status');
       }
 
-      // Validate each time entry
-      for (const entryData of entries) {
-        const validation = await this.validateTimeEntry(timesheetId, entryData);
-        if (!validation.valid) {
-          throw new ValidationError(`Entry validation failed: ${validation.error}`);
-        }
-      }
-
-      // Get existing entries for audit logging
+      // Fetch existing entries for this timesheet
+      // We will preserve auto-generated holiday entries and only replace manual entries
       const existingEntries = await (TimeEntry.find as any)({
         timesheet_id: new mongoose.Types.ObjectId(timesheetId),
         deleted_at: null
       }).lean().exec();
 
-      // Delete all existing entries for this timesheet (soft delete)
-      await (TimeEntry.updateMany as any)(
-        { timesheet_id: new mongoose.Types.ObjectId(timesheetId), deleted_at: null },
-        { deleted_at: new Date(), updated_at: new Date() }
+      // Separate auto-generated holiday entries from manual entries
+      const autoHolidayEntries = existingEntries.filter((e: any) => 
+        e.entry_category === 'holiday' && e.is_auto_generated === true
+      );
+      
+      const manualEntries = existingEntries.filter((e: any) => 
+        !(e.entry_category === 'holiday' && e.is_auto_generated === true)
       );
 
-      // Audit log: Time entries deleted (bulk update)
-      if (existingEntries.length > 0) {
+      const sanitizedEntries = entries.map(sanitizeTimeEntryForm);
+
+      // We will validate the incoming batch against itself (to detect duplicates in the payload)
+      // and against any other existing entries that are NOT being replaced (none in this flow since we soft-delete all),
+      // so build an in-memory list representing final state: start with entries that would remain (none) then
+      // validate the new entries among themselves.
+
+      // Helper: convert an entry to a comparable shape for duplicate checks
+      const normalize = (e: any) => ({
+        date: new Date(e.date).toISOString().split('T')[0],
+        entry_category: e.entry_category || 'project', // Default to project for backward compatibility
+        entry_type: e.entry_type,
+        project_id: e.project_id ? (e.project_id.toString ? e.project_id.toString() : e.project_id) : undefined,
+        task_id: e.task_id ? (e.task_id.toString ? e.task_id.toString() : e.task_id) : undefined,
+        custom_task_description: e.custom_task_description ? String(e.custom_task_description).trim() : undefined,
+        leave_session: e.leave_session,
+        miscellaneous_activity: e.miscellaneous_activity ? String(e.miscellaneous_activity).trim() : undefined,
+        hours: Number(e.hours) || 0
+      });
+
+      const payloadNormalized = sanitizedEntries.map(normalize);
+
+      // Check duplicates within payload
+      for (let i = 0; i < payloadNormalized.length; i++) {
+        const a = payloadNormalized[i];
+        // Business rule: hours must be > 0
+        if (a.hours <= 0) {
+          throw new ValidationError(`Entry validation failed: Hours must be greater than zero`);
+        }
+
+        // Check duplicates based on entry category
+        if (a.entry_category === 'project' || a.entry_category === 'training') {
+          // For project/training entries, check duplicates for project_task
+          if (a.entry_type === 'project_task' && a.project_id && a.task_id) {
+            for (let j = 0; j < payloadNormalized.length; j++) {
+              if (i === j) continue;
+              const b = payloadNormalized[j];
+              if (b.date === a.date && b.entry_category === a.entry_category && b.entry_type === 'project_task' && b.project_id === a.project_id && b.task_id === a.task_id) {
+                throw new ValidationError('Entry validation failed: A time entry for this project and task already exists on this date. Please update the existing entry instead.');
+              }
+            }
+          }
+
+          // Check duplicates for custom_task
+          if (a.entry_type === 'custom_task' && a.custom_task_description) {
+            for (let j = 0; j < payloadNormalized.length; j++) {
+              if (i === j) continue;
+              const b = payloadNormalized[j];
+              if (b.date === a.date && b.entry_category === a.entry_category && b.entry_type === 'custom_task' && b.custom_task_description === a.custom_task_description) {
+                throw new ValidationError('Entry validation failed: A custom task with this description already exists on this date. Please update the existing entry instead.');
+              }
+            }
+          }
+        } else if (a.entry_category === 'leave') {
+          // Check duplicates for leave entries (same date and session)
+          for (let j = 0; j < payloadNormalized.length; j++) {
+            if (i === j) continue;
+            const b = payloadNormalized[j];
+            if (b.date === a.date && b.entry_category === 'leave' && b.leave_session === a.leave_session) {
+              throw new ValidationError('Entry validation failed: A leave entry for this date and session already exists. Please update the existing entry instead.');
+            }
+          }
+        } else if (a.entry_category === 'miscellaneous') {
+          // Check duplicates for miscellaneous entries (same date and activity)
+          for (let j = 0; j < payloadNormalized.length; j++) {
+            if (i === j) continue;
+            const b = payloadNormalized[j];
+            if (b.date === a.date && b.entry_category === 'miscellaneous' && b.miscellaneous_activity === a.miscellaneous_activity) {
+              throw new ValidationError('Entry validation failed: A miscellaneous entry with this activity already exists on this date. Please update the existing entry instead.');
+            }
+          }
+        }
+
+        // Check daily hours limit across payload + existingEntries (existingEntries will be deleted, so we only consider payload)
+      }
+
+      // Validate daily hours limits for payload grouped by date
+      const hoursByDate: Record<string, number> = {};
+      payloadNormalized.forEach((p) => {
+        hoursByDate[p.date] = (hoursByDate[p.date] || 0) + (p.hours || 0);
+      });
+
+      for (const [date, total] of Object.entries(hoursByDate)) {
+        if (total > 10) {
+          throw new ValidationError(`Entry validation failed: Total hours for ${date} would exceed the maximum limit of 10 hours (${total}h)`);
+        }
+      }
+
+      // existingEntries already fetched above for validation/audit logging
+
+      // Delete only manual entries (preserve auto-generated holiday entries)
+      await (TimeEntry.updateMany as any)(
+        { 
+          timesheet_id: new mongoose.Types.ObjectId(timesheetId), 
+          deleted_at: null,
+          $or: [
+            { entry_category: { $ne: 'holiday' } },
+            { is_auto_generated: { $ne: true } }
+          ]
+        },
+        { deleted_at: new Date(), updated_at: new Date() }
+      ).exec();
+
+      // Audit log: Manual time entries deleted (bulk update)
+      if (manualEntries.length > 0) {
         await AuditLogService.logEvent(
           'time_entries',
           timesheetId,
           'DELETE',
           currentUser.id,
           currentUser.full_name,
-          { timesheet_id: timesheetId, entries_deleted: existingEntries.length },
-          { bulk_update: true },
-          existingEntries,
+          { timesheet_id: timesheetId, entries_deleted: manualEntries.length },
+          { bulk_update: true, preserved_auto_holidays: autoHolidayEntries.length },
+          manualEntries,
           null
         );
       }
 
       // Create new entries
-      const entryInsertData = entries.map(entryData => ({
-        timesheet_id: new mongoose.Types.ObjectId(timesheetId),
-        project_id: entryData.project_id ? new mongoose.Types.ObjectId(entryData.project_id) : undefined,
-        task_id: entryData.task_id ? new mongoose.Types.ObjectId(entryData.task_id) : undefined,
-        date: new Date(entryData.date),
-        hours: entryData.hours,
-        description: entryData.description,
-        is_billable: entryData.is_billable,
-        custom_task_description: entryData.custom_task_description,
-        entry_type: entryData.entry_type,
-        created_at: new Date(),
-        updated_at: new Date()
-      }));
+      const entryInsertData = sanitizedEntries.map(entryData => {
+        const baseData: any = {
+          timesheet_id: new mongoose.Types.ObjectId(timesheetId),
+          date: new Date(entryData.date),
+          hours: entryData.hours,
+          description: entryData.description,
+          is_billable: entryData.is_billable,
+          created_at: new Date(),
+          updated_at: new Date()
+        };
+
+        // Set entry category and related fields
+        if (entryData.entry_category) {
+          baseData.entry_category = entryData.entry_category;
+
+          switch (entryData.entry_category) {
+            case 'project':
+            case 'training':
+              baseData.project_id = entryData.project_id ? new mongoose.Types.ObjectId(entryData.project_id) : undefined;
+              baseData.task_type = entryData.task_type || entryData.entry_type; // Use task_type if available, fallback to entry_type
+              if (entryData.task_id) {
+                baseData.task_id = new mongoose.Types.ObjectId(entryData.task_id);
+              }
+              if (entryData.custom_task_description) {
+                baseData.custom_task_description = entryData.custom_task_description;
+              }
+              // Backward compatibility
+              baseData.entry_type = baseData.task_type;
+              break;
+
+            case 'leave':
+              baseData.leave_session = entryData.leave_session;
+              baseData.is_billable = false; // Leave is always non-billable
+              break;
+
+            case 'miscellaneous':
+              baseData.miscellaneous_activity = entryData.miscellaneous_activity;
+              baseData.is_billable = false; // Miscellaneous is always non-billable
+              break;
+          }
+        } else {
+          // Backward compatibility: if no entry_category, infer from entry_type
+          baseData.entry_category = 'project'; // Default
+          baseData.project_id = entryData.project_id ? new mongoose.Types.ObjectId(entryData.project_id) : undefined;
+          baseData.task_id = entryData.task_id ? new mongoose.Types.ObjectId(entryData.task_id) : undefined;
+          baseData.custom_task_description = entryData.custom_task_description;
+          baseData.entry_type = entryData.entry_type;
+        }
+
+        return baseData;
+      });
 
       const updatedEntries = await (TimeEntry.insertMany as any)(entryInsertData);
 
@@ -1089,10 +1948,17 @@ export class TimesheetService {
       // Update timesheet total hours
       await this.updateTimesheetTotalHours(timesheetId);
 
-      console.log('Timesheet entries updated successfully:', { count: updatedEntries.length });
+      // Synchronize holiday entries after manual entry updates
+      try {
+        await this.synchronizeHolidayEntries(timesheetId, currentUser);
+      } catch (holidayError) {
+        // Log holiday sync error but don't fail the main operation
+
+      }
+
       return { updatedEntries };
     } catch (error) {
-      console.error('Error in updateTimesheetEntries:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to update timesheet entries' };
     }
   }
@@ -1105,7 +1971,6 @@ export class TimesheetService {
     currentUser: AuthUser
   ): Promise<{ entries?: ITimeEntry[]; error?: string }> {
     try {
-      console.log('TimesheetService.getTimeEntries called with:', { timesheetId });
 
       // Get timesheet to validate permissions
       const timesheet = await (Timesheet.findOne as any)({
@@ -1129,10 +1994,9 @@ export class TimesheetService {
         .sort({ date: 1, created_at: 1 })
         .exec();
 
-      console.log('Time entries retrieved successfully:', { count: entries.length });
       return { entries };
     } catch (error) {
-      console.error('Error in getTimeEntries:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to get time entries' };
     }
   }
@@ -1146,7 +2010,6 @@ export class TimesheetService {
     currentUser: AuthUser
   ): Promise<{ updatedEntries?: ITimeEntry[]; error?: string }> {
     try {
-      console.log('TimesheetService.addMultipleEntries called with:', { timesheetId, entryCount: entries.length });
 
       // Get timesheet to validate permissions
       const timesheet = await (Timesheet.findOne as any)({
@@ -1161,13 +2024,15 @@ export class TimesheetService {
       // Validate access permissions
       validateTimesheetAccess(currentUser, timesheet.user_id.toString(), 'edit');
 
-      // Validate timesheet status
-      if (!['draft', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
+      // Validate timesheet status - allow editing in draft and rejected states
+      if (!['draft', 'lead_rejected', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
         throw new TimesheetError('Cannot add entries to timesheet in current status');
       }
 
+      const sanitizedEntries = entries.map(sanitizeTimeEntryForm);
+
       // Validate each time entry
-      for (const entryData of entries) {
+      for (const entryData of sanitizedEntries) {
         const validation = await this.validateTimeEntry(timesheetId, entryData);
         if (!validation.valid) {
           throw new ValidationError(`Entry validation failed: ${validation.error}`);
@@ -1175,7 +2040,7 @@ export class TimesheetService {
       }
 
       // Create new entries (append to existing ones)
-      const entryInsertData = entries.map(entryData => ({
+      const entryInsertData = sanitizedEntries.map(entryData => ({
         timesheet_id: new mongoose.Types.ObjectId(timesheetId),
         project_id: entryData.project_id ? new mongoose.Types.ObjectId(entryData.project_id) : undefined,
         task_id: entryData.task_id ? new mongoose.Types.ObjectId(entryData.task_id) : undefined,
@@ -1194,10 +2059,9 @@ export class TimesheetService {
       // Update timesheet total hours
       await this.updateTimesheetTotalHours(timesheetId);
 
-      console.log('Multiple entries added successfully:', { count: addedEntries.length });
       return { updatedEntries: addedEntries };
     } catch (error) {
-      console.error('Error in addMultipleEntries:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to add multiple entries' };
     }
   }
@@ -1212,7 +2076,6 @@ export class TimesheetService {
     currentUser: AuthUser
   ): Promise<{ calendarData?: CalendarData; error?: string }> {
     try {
-      console.log(`getCalendarData called for user ${userId}, year ${year}, month ${month}`);
 
       // Validate access permissions
       validateTimesheetAccess(currentUser, userId, 'view');
@@ -1221,7 +2084,6 @@ export class TimesheetService {
       const startDate = new Date(year, month - 1, 1); // month is 0-indexed in Date constructor
       const endDate = new Date(year, month, 0); // Last day of the month
 
-      console.log(`Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
       // Aggregation pipeline to get time entries grouped by date
       const pipeline = [
@@ -1308,10 +2170,9 @@ export class TimesheetService {
         });
       });
 
-      console.log(`Calendar data processed: ${Object.keys(calendarData).length} days with data`);
       return { calendarData };
     } catch (error) {
-      console.error('Error in getCalendarData:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to fetch calendar data' };
     }
   }
@@ -1423,7 +2284,7 @@ export class TimesheetService {
 
       return { timesheets: enhancedTimesheets };
     } catch (error) {
-      console.error('Error in getTimesheetsForApproval:', error);
+
       return {
         timesheets: [],
         error: error instanceof Error ? error.message : 'Failed to fetch timesheets for approval'
@@ -1439,7 +2300,6 @@ export class TimesheetService {
     currentUser: AuthUser
   ): Promise<{ timesheet?: TimesheetWithDetails; error?: string }> {
     try {
-      console.log('TimesheetService.getTimesheetById called with:', { timesheetId });
 
       const timesheet = await (Timesheet.findOne as any)({
         _id: new mongoose.Types.ObjectId(timesheetId),
@@ -1480,10 +2340,9 @@ export class TimesheetService {
         next_action: this.getNextAction(timesheet.status, currentUser, timesheet.user_id._id.toString())
       };
 
-      console.log('Timesheet retrieved successfully:', timesheetId);
       return { timesheet: detailedTimesheet };
     } catch (error) {
-      console.error('Error in getTimesheetById:', error);
+
       return { error: error instanceof Error ? error.message : 'Failed to get timesheet' };
     }
   }
@@ -1611,10 +2470,9 @@ export class TimesheetService {
         { deleted_at: new Date(), deleted_by: currentUser.id, deleted_reason: reason }
       );
 
-      console.log(`Timesheet soft deleted: ${timesheetId} by ${currentUser.full_name}`);
       return { success: true };
     } catch (error) {
-      console.error('Error in softDeleteTimesheet:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -1690,10 +2548,9 @@ export class TimesheetService {
         { deleted: true }
       );
 
-      console.log(`Timesheet deleted: ${timesheetId} by ${currentUser.full_name}`);
       return { success: true };
     } catch (error) {
-      console.error('Error in deleteTimesheet:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -1770,10 +2627,9 @@ export class TimesheetService {
         { is_hard_deleted: true, hard_deleted_at: new Date(), hard_deleted_by: currentUser.id }
       );
 
-      console.warn(`Timesheet permanently deleted: ${timesheetId} by ${currentUser.full_name}`);
       return { success: true };
     } catch (error) {
-      console.error('Error in hardDeleteTimesheet:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -1838,10 +2694,9 @@ export class TimesheetService {
         { deleted_at: null }
       );
 
-      console.log(`Timesheet restored: ${timesheetId} by ${currentUser.full_name}`);
       return { success: true };
     } catch (error) {
-      console.error('Error in restoreTimesheet:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -1871,7 +2726,7 @@ export class TimesheetService {
 
       return { timesheets };
     } catch (error) {
-      console.error('Error in getDeletedTimesheets:', error);
+
       if (error instanceof AuthorizationError) {
         return { timesheets: [], error: error.message };
       }
@@ -1908,8 +2763,446 @@ export class TimesheetService {
 
       return dependencies;
     } catch (error) {
-      console.error('Error checking timesheet dependencies:', error);
+
       return ['Error checking dependencies'];
+    }
+  }
+
+  // ============================================================================
+  // NEW ENTRY CATEGORY METHODS (Phase 2 & 3)
+  // ============================================================================
+
+  /**
+   * Add a leave entry to a timesheet
+   * Hours are auto-calculated based on session (morning=4h, afternoon=4h, full_day=8h)
+   * Leave entries are always non-billable
+   *
+   * @param timesheetId Timesheet ID
+   * @param date Leave date
+   * @param leaveSession Session type (morning, afternoon, full_day)
+   * @param currentUser Current authenticated user
+   * @returns Created leave entry or error
+   */
+  static async addLeaveEntry(
+    timesheetId: string,
+    date: Date | string,
+    leaveSession: 'morning' | 'afternoon' | 'full_day',
+    currentUser: AuthUser,
+    description?: string
+  ): Promise<{ entry?: ITimeEntry; error?: string }> {
+    try {
+      // Import CompanyHolidayService
+      const { default: CompanyHolidayService } = await import('./CompanyHolidayService');
+
+      // Get timesheet to validate permissions
+      const timesheet = await (Timesheet.findOne as any)({
+        _id: new mongoose.Types.ObjectId(timesheetId),
+        deleted_at: null
+      }).exec();
+
+      if (!timesheet) {
+        throw new NotFoundError('Timesheet not found');
+      }
+
+      // Validate access permissions
+      validateTimesheetAccess(currentUser, timesheet.user_id.toString(), 'edit');
+
+      // Validate timesheet status
+      if (!['draft', 'lead_rejected', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
+        throw new TimesheetError('Cannot add entries to timesheet in current status');
+      }
+
+      // Check if date is a holiday
+      const leaveDate = new Date(date);
+      const isHoliday = await CompanyHolidayService.isHoliday(leaveDate);
+
+      if (isHoliday) {
+        const holiday = await CompanyHolidayService.getHolidayByDate(leaveDate);
+        throw new ValidationError(
+          `Cannot log leave on ${holiday?.name || 'holiday'} (${leaveDate.toISOString().split('T')[0]})`
+        );
+      }
+
+      // Auto-calculate hours based on session
+      let hours = 8; // default full day
+      if (leaveSession === 'morning' || leaveSession === 'afternoon') {
+        hours = 4;
+      }
+
+      // Create leave entry
+      const entryInsertData = {
+        timesheet_id: new mongoose.Types.ObjectId(timesheetId),
+        entry_category: 'leave',
+        leave_session: leaveSession,
+        date: leaveDate,
+        hours: hours,
+        description: description || `Leave - ${leaveSession.replace('_', ' ')}`,
+        is_billable: false
+      };
+
+      const entry = await (TimeEntry.create as any)(entryInsertData);
+
+      // Audit log
+      await AuditLogService.logEvent(
+        'time_entries',
+        entry._id.toString(),
+        'INSERT',
+        currentUser.id,
+        currentUser.full_name,
+        {
+          timesheet_id: timesheetId,
+          date: leaveDate.toISOString(),
+          hours: hours,
+          entry_category: 'leave',
+          leave_session: leaveSession
+        },
+        { created_leave_entry: true },
+        null,
+        entryInsertData
+      );
+
+      // Update timesheet total hours
+      await this.updateTimesheetTotalHours(timesheetId);
+
+      return { entry };
+    } catch (error) {
+
+      return { error: error instanceof Error ? error.message : 'Failed to add leave entry' };
+    }
+  }
+
+  /**
+   * Add a miscellaneous entry to a timesheet
+   * Miscellaneous entries are always non-billable
+   *
+   * @param timesheetId Timesheet ID
+   * @param date Entry date
+   * @param activity Activity description (e.g., "Annual Company Meet")
+   * @param hours Hours spent
+   * @param currentUser Current authenticated user
+   * @returns Created miscellaneous entry or error
+   */
+  static async addMiscellaneousEntry(
+    timesheetId: string,
+    date: Date | string,
+    activity: string,
+    hours: number,
+    currentUser: AuthUser
+  ): Promise<{ entry?: ITimeEntry; error?: string }> {
+    try {
+      // Get timesheet to validate permissions
+      const timesheet = await (Timesheet.findOne as any)({
+        _id: new mongoose.Types.ObjectId(timesheetId),
+        deleted_at: null
+      }).exec();
+
+      if (!timesheet) {
+        throw new NotFoundError('Timesheet not found');
+      }
+
+      // Validate access permissions
+      validateTimesheetAccess(currentUser, timesheet.user_id.toString(), 'edit');
+
+      // Validate timesheet status
+      if (!['draft', 'lead_rejected', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
+        throw new TimesheetError('Cannot add entries to timesheet in current status');
+      }
+
+      // Validate activity description
+      if (!activity || activity.trim().length === 0) {
+        throw new ValidationError('Activity description is required for miscellaneous entries');
+      }
+
+      // Validate hours
+      if (hours <= 0 || hours > 24) {
+        throw new ValidationError('Hours must be between 0 and 24');
+      }
+
+      // Create miscellaneous entry
+      const entryDate = new Date(date);
+      const entryInsertData = {
+        timesheet_id: new mongoose.Types.ObjectId(timesheetId),
+        entry_category: 'miscellaneous',
+        miscellaneous_activity: activity.trim(),
+        date: entryDate,
+        hours: hours,
+        description: activity.trim(),
+        is_billable: false
+      };
+
+      const entry = await (TimeEntry.create as any)(entryInsertData);
+
+      // Audit log
+      await AuditLogService.logEvent(
+        'time_entries',
+        entry._id.toString(),
+        'INSERT',
+        currentUser.id,
+        currentUser.full_name,
+        {
+          timesheet_id: timesheetId,
+          date: entryDate.toISOString(),
+          hours: hours,
+          entry_category: 'miscellaneous',
+          activity: activity
+        },
+        { created_miscellaneous_entry: true },
+        null,
+        entryInsertData
+      );
+
+      // Update timesheet total hours
+      await this.updateTimesheetTotalHours(timesheetId);
+
+      return { entry };
+    } catch (error) {
+
+      return { error: error instanceof Error ? error.message : 'Failed to add miscellaneous entry' };
+    }
+  }
+
+  /**
+   * Add a project entry to a timesheet
+   * Unified method for both project_task and custom_task types
+   *
+   * @param timesheetId Timesheet ID
+   * @param projectId Project ID
+   * @param date Entry date
+   * @param hours Hours worked
+   * @param taskType Type of task (project_task or custom_task)
+   * @param taskId Task ID (required if task_type is project_task)
+   * @param customTaskDescription Custom task description (required if task_type is custom_task)
+   * @param isBillable Whether the entry is billable
+   * @param currentUser Current authenticated user
+   * @returns Created project entry or error
+   */
+  static async addProjectEntry(
+    timesheetId: string,
+    projectId: string,
+    date: Date | string,
+    hours: number,
+    taskType: 'project_task' | 'custom_task',
+    currentUser: AuthUser,
+    options?: {
+      taskId?: string;
+      customTaskDescription?: string;
+      isBillable?: boolean;
+      description?: string;
+    }
+  ): Promise<{ entry?: ITimeEntry; error?: string }> {
+    try {
+      // Get timesheet to validate permissions
+      const timesheet = await (Timesheet.findOne as any)({
+        _id: new mongoose.Types.ObjectId(timesheetId),
+        deleted_at: null
+      }).exec();
+
+      if (!timesheet) {
+        throw new NotFoundError('Timesheet not found');
+      }
+
+      // Validate access permissions
+      validateTimesheetAccess(currentUser, timesheet.user_id.toString(), 'edit');
+
+      // Validate timesheet status
+      if (!['draft', 'lead_rejected', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
+        throw new TimesheetError('Cannot add entries to timesheet in current status');
+      }
+
+      // Validate task type requirements
+      if (taskType === 'project_task' && !options?.taskId) {
+        throw new ValidationError('task_id is required for project_task entries');
+      }
+
+      if (taskType === 'custom_task' && !options?.customTaskDescription) {
+        throw new ValidationError('custom_task_description is required for custom_task entries');
+      }
+
+      // Validate hours
+      if (hours <= 0 || hours > 24) {
+        throw new ValidationError('Hours must be between 0 and 24');
+      }
+
+      // Create project entry
+      const entryDate = new Date(date);
+      const entryInsertData: any = {
+        timesheet_id: new mongoose.Types.ObjectId(timesheetId),
+        entry_category: 'project',
+        project_id: new mongoose.Types.ObjectId(projectId),
+        task_type: taskType,
+        date: entryDate,
+        hours: hours,
+        description: options?.description,
+        is_billable: options?.isBillable !== undefined ? options.isBillable : true
+      };
+
+      if (taskType === 'project_task' && options?.taskId) {
+        entryInsertData.task_id = new mongoose.Types.ObjectId(options.taskId);
+      }
+
+      if (taskType === 'custom_task' && options?.customTaskDescription) {
+        entryInsertData.custom_task_description = options.customTaskDescription.trim();
+      }
+
+      // Backward compatibility: also set entry_type
+      entryInsertData.entry_type = taskType;
+
+      const entry = await (TimeEntry.create as any)(entryInsertData);
+
+      // Audit log
+      await AuditLogService.logEvent(
+        'time_entries',
+        entry._id.toString(),
+        'INSERT',
+        currentUser.id,
+        currentUser.full_name,
+        {
+          timesheet_id: timesheetId,
+          project_id: projectId,
+          date: entryDate.toISOString(),
+          hours: hours,
+          entry_category: 'project',
+          task_type: taskType
+        },
+        { created_project_entry: true },
+        null,
+        entryInsertData
+      );
+
+      // Update timesheet total hours
+      await this.updateTimesheetTotalHours(timesheetId);
+
+      return { entry };
+    } catch (error) {
+
+      return { error: error instanceof Error ? error.message : 'Failed to add project entry' };
+    }
+  }
+
+  /**
+   * Add a training entry to a timesheet
+   * Training entries go to the Training Program project and follow project approval flow
+   *
+   * @param timesheetId Timesheet ID
+   * @param date Entry date
+   * @param hours Hours worked
+   * @param taskType Type of task (project_task or custom_task)
+   * @param currentUser Current authenticated user
+   * @param options Optional parameters
+   * @returns Created training entry or error
+   */
+  static async addTrainingEntry(
+    timesheetId: string,
+    date: Date | string,
+    hours: number,
+    taskType: 'project_task' | 'custom_task',
+    currentUser: AuthUser,
+    options?: {
+      taskId?: string;
+      customTaskDescription?: string;
+      description?: string;
+    }
+  ): Promise<{ entry?: ITimeEntry; error?: string }> {
+    try {
+      // Import Project model
+      const { Project } = await import('@/models/Project');
+
+      // Get timesheet to validate permissions
+      const timesheet = await (Timesheet.findOne as any)({
+        _id: new mongoose.Types.ObjectId(timesheetId),
+        deleted_at: null
+      }).exec();
+
+      if (!timesheet) {
+        throw new NotFoundError('Timesheet not found');
+      }
+
+      // Validate access permissions
+      validateTimesheetAccess(currentUser, timesheet.user_id.toString(), 'edit');
+
+      // Validate timesheet status
+      if (!['draft', 'lead_rejected', 'manager_rejected', 'management_rejected'].includes(timesheet.status)) {
+        throw new TimesheetError('Cannot add entries to timesheet in current status');
+      }
+
+      // Get Training Program project
+      const trainingProject = await Project.findOne({
+        project_type: 'training',
+        status: 'active',
+        deleted_at: null
+      });
+
+      if (!trainingProject) {
+        throw new NotFoundError('Training Program project not found. Please contact administrator.');
+      }
+
+      // Validate task type requirements
+      if (taskType === 'project_task' && !options?.taskId) {
+        throw new ValidationError('task_id is required for project_task entries');
+      }
+
+      if (taskType === 'custom_task' && !options?.customTaskDescription) {
+        throw new ValidationError('custom_task_description is required for custom_task entries');
+      }
+
+      // Validate hours
+      if (hours <= 0 || hours > 24) {
+        throw new ValidationError('Hours must be between 0 and 24');
+      }
+
+      // Create training entry
+      const entryDate = new Date(date);
+      const entryInsertData: any = {
+        timesheet_id: new mongoose.Types.ObjectId(timesheetId),
+        entry_category: 'training',
+        project_id: trainingProject._id,
+        task_type: taskType,
+        date: entryDate,
+        hours: hours,
+        description: options?.description,
+        is_billable: false // Training is always non-billable
+      };
+
+      if (taskType === 'project_task' && options?.taskId) {
+        entryInsertData.task_id = new mongoose.Types.ObjectId(options.taskId);
+      }
+
+      if (taskType === 'custom_task' && options?.customTaskDescription) {
+        entryInsertData.custom_task_description = options.customTaskDescription.trim();
+      }
+
+      // Backward compatibility: also set entry_type
+      entryInsertData.entry_type = taskType;
+
+      const entry = await (TimeEntry.create as any)(entryInsertData);
+
+      // Audit log
+      await AuditLogService.logEvent(
+        'time_entries',
+        entry._id.toString(),
+        'INSERT',
+        currentUser.id,
+        currentUser.full_name,
+        {
+          timesheet_id: timesheetId,
+          project_id: trainingProject._id.toString(),
+          date: entryDate.toISOString(),
+          hours: hours,
+          entry_category: 'training',
+          task_type: taskType
+        },
+        { created_training_entry: true },
+        null,
+        entryInsertData
+      );
+
+      // Update timesheet total hours
+      await this.updateTimesheetTotalHours(timesheetId);
+
+      return { entry };
+    } catch (error) {
+
+      return { error: error instanceof Error ? error.message : 'Failed to add training entry' };
     }
   }
 

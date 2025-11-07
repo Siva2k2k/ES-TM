@@ -35,14 +35,6 @@ axiosInstance.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
 
-    // Log request in development
-    if (import.meta.env.DEV) {
-      console.log(`🔵 [API Request] ${config.method?.toUpperCase()} ${config.url}`, {
-        data: config.data,
-        params: config.params,
-      });
-    }
-
     return config;
   },
   (error: AxiosError) => {
@@ -57,14 +49,6 @@ axiosInstance.interceptors.request.use(
  */
 axiosInstance.interceptors.response.use(
   (response: AxiosResponse) => {
-    // Log response in development
-    if (import.meta.env.DEV) {
-      console.log(`🟢 [API Response] ${response.config.method?.toUpperCase()} ${response.config.url}`, {
-        status: response.status,
-        data: response.data,
-      });
-    }
-
     return response;
   },
   async (error: AxiosError) => {

@@ -4,15 +4,17 @@
  * Reduces duplicate status mapping code across components
  */
 
-/**
- * Timesheet status types
- */
-export type TimesheetStatus = 'draft' | 'submitted' | 'approved' | 'rejected' | 'pending';
+import { BillingStatus, ProjectStatus } from './constants';
+import type { TimesheetStatus } from '../types';
 
 /**
  * Project status types
+ *  ACTIVE: 'active',
+  COMPLETED: 'completed',
+  ARCHIVED: 'archived',
+  ON_HOLD: 'on_hold',
+  CANCELLED: 'cancelled',
  */
-export type ProjectStatus = 'active' | 'inactive' | 'completed' | 'on_hold' | 'cancelled';
 
 /**
  * User status types
@@ -21,8 +23,14 @@ export type UserStatus = 'active' | 'inactive' | 'pending' | 'suspended';
 
 /**
  * Billing status types
+ * DRAFT: 'draft',
+  PENDING: 'pending',
+  APPROVED: 'approved',
+  PAID: 'paid',
+  OVERDUE: 'overdue',
+  CANCELLED: 'cancelled'
  */
-export type BillingStatus = 'draft' | 'pending' | 'approved' | 'paid' | 'overdue' | 'cancelled';
+
 
 /**
  * Get Tailwind CSS classes for timesheet status badge
@@ -34,6 +42,14 @@ export function getTimesheetStatusColor(status: TimesheetStatus | string): strin
     draft: 'bg-gray-100 text-gray-800 border-gray-300',
     submitted: 'bg-blue-100 text-blue-800 border-blue-300',
     pending: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+    lead_approved: 'bg-cyan-100 text-cyan-800 border-cyan-300',
+    lead_rejected: 'bg-orange-100 text-orange-800 border-orange-300',
+    manager_approved: 'bg-indigo-100 text-indigo-800 border-indigo-300',
+    manager_rejected: 'bg-red-100 text-red-800 border-red-300',
+    management_pending: 'bg-purple-100 text-purple-800 border-purple-300',
+    management_rejected: 'bg-red-100 text-red-800 border-red-300',
+    frozen: 'bg-blue-100 text-blue-800 border-blue-300',
+    billed: 'bg-green-100 text-green-800 border-green-300',
     approved: 'bg-green-100 text-green-800 border-green-300',
     rejected: 'bg-red-100 text-red-800 border-red-300'
   };
@@ -49,7 +65,7 @@ export function getTimesheetStatusColor(status: TimesheetStatus | string): strin
 export function getProjectStatusColor(status: ProjectStatus | string): string {
   const colors: Record<string, string> = {
     active: 'bg-green-100 text-green-800 border-green-300',
-    inactive: 'bg-gray-100 text-gray-800 border-gray-300',
+    archived: 'bg-gray-100 text-gray-800 border-gray-300',
     completed: 'bg-blue-100 text-blue-800 border-blue-300',
     on_hold: 'bg-yellow-100 text-yellow-800 border-yellow-300',
     cancelled: 'bg-red-100 text-red-800 border-red-300'
@@ -102,6 +118,14 @@ export function getTimesheetStatusLabel(status: TimesheetStatus | string): strin
     draft: 'Draft',
     submitted: 'Submitted',
     pending: 'Pending',
+    lead_approved: 'Lead Approved',
+    lead_rejected: 'Lead Rejected',
+    manager_approved: 'Manager Approved',
+    manager_rejected: 'Manager Rejected',
+    management_pending: 'Management Pending',
+    management_rejected: 'Management Rejected',
+    frozen: 'Frozen',
+    billed: 'Billed',
     approved: 'Approved',
     rejected: 'Rejected'
   };
@@ -170,6 +194,14 @@ export function getTimesheetStatusIcon(status: TimesheetStatus | string): string
     draft: 'FileEdit',
     submitted: 'Send',
     pending: 'Clock',
+    lead_approved: 'CheckCircle',
+    lead_rejected: 'XCircle',
+    manager_approved: 'CheckCircle',
+    manager_rejected: 'XCircle',
+    management_pending: 'Clock',
+    management_rejected: 'XCircle',
+    frozen: 'Lock',
+    billed: 'DollarSign',
     approved: 'CheckCircle',
     rejected: 'XCircle'
   };
@@ -224,4 +256,70 @@ export function getRoleColor(role: string): string {
   };
 
   return colors[role.toLowerCase()] || colors.employee;
+}
+
+/**
+ * Get audit action color classes
+ * Used for audit logs and action tracking
+ * @param action - Action type (CREATE, UPDATE, DELETE, APPROVE, REJECT, LOGIN, etc.)
+ * @returns Tailwind CSS text color classes
+ */
+export function getActionColor(action: string): string {
+  const upperAction = action.toUpperCase();
+
+  // Destructive actions - red
+  if (upperAction.includes('DELETE') || upperAction.includes('REJECT')) {
+    return 'text-red-600 bg-red-50 border-red-300';
+  }
+
+  // Create/Approve actions - green
+  if (upperAction.includes('CREATE') || upperAction.includes('APPROVE')) {
+    return 'text-green-600 bg-green-50 border-green-300';
+  }
+
+  // Update/Edit actions - blue
+  if (upperAction.includes('UPDATE') || upperAction.includes('EDIT')) {
+    return 'text-blue-600 bg-blue-50 border-blue-300';
+  }
+
+  // Login/Auth actions - purple
+  if (upperAction.includes('LOGIN') || upperAction.includes('LOGOUT') || upperAction.includes('AUTH')) {
+    return 'text-purple-600 bg-purple-50 border-purple-300';
+  }
+
+  // Default - gray
+  return 'text-gray-600 bg-gray-50 border-gray-300';
+}
+
+/**
+ * Get Tailwind CSS classes for task status badge
+ * @param status - Task status
+ * @returns Tailwind CSS classes
+ */
+export function getTaskStatusColor(status: string): string {
+  const colors: Record<string, string> = {
+    open: 'bg-gray-100 text-gray-800 border-gray-300',
+    in_progress: 'bg-blue-100 text-blue-800 border-blue-300',
+    completed: 'bg-green-100 text-green-800 border-green-300',
+    blocked: 'bg-red-100 text-red-800 border-red-300',
+    cancelled: 'bg-gray-100 text-gray-600 border-gray-300'
+  };
+
+  return colors[status.toLowerCase()] || colors.open;
+}
+
+/**
+ * Get Tailwind CSS classes for task priority badge
+ * @param priority - Task priority (low, medium, high, urgent)
+ * @returns Tailwind CSS classes
+ */
+export function getTaskPriorityColor(priority: string): string {
+  const colors: Record<string, string> = {
+    low: 'bg-gray-100 text-gray-700 border-gray-300',
+    medium: 'bg-blue-100 text-blue-700 border-blue-300',
+    high: 'bg-orange-100 text-orange-700 border-orange-300',
+    urgent: 'bg-red-100 text-red-700 border-red-300'
+  };
+
+  return colors[priority.toLowerCase()] || colors.medium;
 }

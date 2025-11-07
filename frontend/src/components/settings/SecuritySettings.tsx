@@ -92,13 +92,6 @@ export const SecuritySettings: React.FC<SecuritySettingsProps> = ({
     }
 
     try {
-      console.log('Attempting password change with validation:', {
-        currentPasswordLength: formData.currentPassword.length,
-        newPasswordLength: formData.newPassword.length,
-        passwordRequirements: passwordValidation,
-        score: passwordValidation.score
-      });
-      
       const result = await SettingsService.changePassword(
         formData.currentPassword,
         formData.newPassword
@@ -114,7 +107,6 @@ export const SecuritySettings: React.FC<SecuritySettingsProps> = ({
         onSettingsSaved();
       } else {
         const errorMsg = result.error || 'Failed to change password';
-        console.log('Setting error message:', errorMsg);
         setError(errorMsg);
       }
     } catch (error) {

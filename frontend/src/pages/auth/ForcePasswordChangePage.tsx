@@ -8,6 +8,7 @@ import { AuthCard, PasswordStrengthIndicator } from './components';
 import { useAuth } from '../../store/contexts/AuthContext';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
+import { BackendAuthService } from '../../services/BackendAuthService';
 
 /**
  * ForcePasswordChangePage Component
@@ -48,21 +49,10 @@ export function ForcePasswordChangePage({
     setServerError('');
 
     try {
-      const token = localStorage.getItem('accessToken');
-
-      const response = await fetch('http://localhost:3001/api/v1/auth/change-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          currentPassword: data.currentPassword,
-          newPassword: data.newPassword,
-        }),
+      const result = await BackendAuthService.changePassword({
+        currentPassword: data.currentPassword,
+        newPassword: data.newPassword,
       });
-
-      const result = await response.json();
 
       if (result.success) {
         setSuccess(true);
@@ -79,9 +69,7 @@ export function ForcePasswordChangePage({
           }
         }, 2000);
       } else {
-        const raw = result.error ?? result.message ?? 'Failed to change password';
-        const errorMessage = typeof raw === 'string' ? raw : String(raw?.message ?? JSON.stringify(raw));
-        setServerError(errorMessage);
+        setServerError(result.error || 'Failed to change password');
       }
     } catch (err) {
       setServerError(err instanceof Error ? err.message : 'Failed to change password');

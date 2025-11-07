@@ -170,8 +170,9 @@ export class ReportService {
 
       // Use backendApi with manual fetch for blob response
       const token = localStorage.getItem('accessToken');
-      const baseURL = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1').replace(/\/+$/, '');
-      console.log("Sending report request payload:", requestPayload);
+      // In production (when VITE_API_URL is not set or empty), use relative URLs (same domain)
+      const baseURL = (import.meta.env.VITE_API_URL || 
+        (import.meta.env.MODE === 'production' ? '/api/v1' : 'http://localhost:3001/api/v1')).replace(/\/+$/, '');
       const response = await fetch(`${baseURL}/reports/generate`, {
         method: 'POST',
         headers: {
@@ -194,7 +195,6 @@ export class ReportService {
 
       // Check content type
       const contentType = response.headers.get('content-type');
-      console.log('Report response content-type:', contentType);
 
       // Get filename from Content-Disposition header
       const contentDisposition = response.headers.get('Content-Disposition');
@@ -216,7 +216,6 @@ export class ReportService {
       }
 
       const blob = await response.blob();
-      console.log('Report blob size:', blob.size, 'type:', blob.type);
 
       // Validate blob content
       if (blob.size === 0) {
@@ -238,7 +237,6 @@ export class ReportService {
    */
   static downloadReport(blob: Blob, filename: string): void {
     try {
-      console.log('Downloading file:', filename, 'Size:', blob.size, 'Type:', blob.type);
       
       // Create blob URL
       const url = window.URL.createObjectURL(blob);
@@ -259,7 +257,6 @@ export class ReportService {
         window.URL.revokeObjectURL(url);
       }, 100);
       
-      console.log('Download initiated successfully');
     } catch (error) {
       console.error('Download failed:', error);
       // Fallback: try opening in new window

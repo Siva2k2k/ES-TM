@@ -207,7 +207,7 @@ export class DashboardService {
 
       return { dashboard };
     } catch (error: any) {
-      console.error('Error fetching super admin dashboard:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -255,7 +255,7 @@ export class DashboardService {
 
       return { dashboard };
     } catch (error: any) {
-      console.error('Error fetching management dashboard:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -307,7 +307,7 @@ export class DashboardService {
 
       return { dashboard };
     } catch (error: any) {
-      console.error('Error fetching manager dashboard:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -348,7 +348,7 @@ export class DashboardService {
 
       return { dashboard };
     } catch (error: any) {
-      console.error('Error fetching lead dashboard:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -385,7 +385,7 @@ export class DashboardService {
 
       return { dashboard };
     } catch (error: any) {
-      console.error('Error fetching employee dashboard:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -574,19 +574,25 @@ export class DashboardService {
       status: { $in: ['submitted', 'manager_approved'] },
       deleted_at: null
     })
-      .populate('user_id', 'full_name')
+      .populate({
+        path: 'user_id',
+        match: { deleted_at: null }, // Only populate users that are not deleted
+        select: 'full_name'
+      })
       .select('week_start_date total_hours status')
       .sort({ created_at: -1 })
       .limit(10);
 
-    return timesheets.map((timesheet: any) => ({
-      timesheet_id: timesheet._id.toString(),
-      user_name: timesheet.user_id.full_name,
-      week_start: timesheet.week_start_date,
-      total_hours: timesheet.total_hours,
-      status: timesheet.status,
-      priority: ['high', 'medium', 'low'][Math.floor(Math.random() * 3)] as 'high' | 'medium' | 'low'
-    }));
+    return timesheets
+      .filter((timesheet: any) => timesheet.user_id !== null) // Filter out timesheets with deleted users
+      .map((timesheet: any) => ({
+        timesheet_id: timesheet._id.toString(),
+        user_name: timesheet.user_id.full_name,
+        week_start: timesheet.week_start_date,
+        total_hours: timesheet.total_hours,
+        status: timesheet.status,
+        priority: ['high', 'medium', 'low'][Math.floor(Math.random() * 3)] as 'high' | 'medium' | 'low'
+      }));
   }
 
   private static async getTaskOverview(userId: string, projectIds: any[]) {
@@ -682,17 +688,23 @@ export class DashboardService {
       user_id: userId,
       deleted_at: null
     })
-      .populate('project_id', 'name is_billable')
+      .populate({
+        path: 'project_id',
+        match: { deleted_at: null }, // Only populate projects that are not deleted
+        select: 'name is_billable'
+      })
       .select('project_role');
 
-    return assignments.map((assignment: any) => ({
-      project_id: assignment.project_id._id.toString(),
-      project_name: assignment.project_id.name,
-      role: assignment.project_role,
-      active_tasks: Math.floor(Math.random() * 8) + 1, // Mock data
-      hours_logged: Math.random() * 20 + 5, // Mock data
-      is_billable: assignment.project_id.is_billable
-    }));
+    return assignments
+      .filter((assignment: any) => assignment.project_id !== null) // Filter out assignments with deleted projects
+      .map((assignment: any) => ({
+        project_id: assignment.project_id._id.toString(),
+        project_name: assignment.project_id.name,
+        role: assignment.project_role,
+        active_tasks: Math.floor(Math.random() * 8) + 1, // Mock data
+        hours_logged: Math.random() * 20 + 5, // Mock data
+        is_billable: assignment.project_id.is_billable
+      }));
   }
 
   private static async getRecentActivity(userId: string) {

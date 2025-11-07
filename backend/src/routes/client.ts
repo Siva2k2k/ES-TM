@@ -18,10 +18,13 @@ router.post('/', [
 ], ClientController.createClient);
 router.get('/', ClientController.getAllClients);
 router.get('/stats', ClientController.getClientStats);
+router.get('/deleted/all', ClientController.getDeletedClients);
 router.get('/:clientId', ClientController.getClientById);
 router.put('/:clientId', ClientController.updateClient);
 router.patch('/:clientId/deactivate', ClientController.deactivateClient);
 router.patch('/:clientId/reactivate', ClientController.reactivateClient);
 router.delete('/:clientId', ClientController.deleteClient);
+router.delete('/:clientId/hard-delete', ClientController.hardDeleteClient);
+router.post('/:clientId/restore', ClientController.restoreClient);
 
 export default router;

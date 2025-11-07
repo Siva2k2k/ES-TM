@@ -12,6 +12,8 @@ import {
 import { PasswordSecurity } from '@/utils/passwordSecurity';
 import { UserService } from '@/services/UserService';
 import { logger } from '@/config/logger';
+import { AuditLogService } from '@/services/AuditLogService';
+import { generateState, validateState, exchangeCodeForToken, validateMicrosoftToken } from '@/utils/microsoftAuth';
 
 interface AuthResponse {
   success: boolean;
@@ -68,6 +70,20 @@ export class AuthController {
     });
 
     await user.save();
+
+    // Log registration audit event
+    await AuditLogService.logEvent(
+      'users',
+      user.id,
+      'USER_CREATED',
+      user.id,
+      user.full_name,
+      {
+        email: user.email,
+        role: user.role,
+        registration_method: 'self-registration'
+      }
+    );
 
     // Generate tokens
     const tokenPayload = {
@@ -137,6 +153,21 @@ export class AuthController {
     if (!isPasswordValid) {
       // Record failed login attempt
       await UserService.recordFailedLogin(user._id);
+
+      // Log failed login attempt
+      await AuditLogService.logEvent(
+        'users',
+        user.id,
+        'USER_LOGIN',
+        user.id,
+        user.full_name,
+        {
+          success: false,
+          reason: 'Invalid password',
+          ip_address: req.ip || req.socket.remoteAddress
+        }
+      );
+
       throw new AuthenticationError('Invalid email or password');
     }
 
@@ -190,6 +221,20 @@ export class AuthController {
       (response as any).requirePasswordChange = true;
       (response as any).passwordExpired = passwordStatus.expired;
     }
+
+    // Log successful login
+    await AuditLogService.logEvent(
+      'users',
+      user.id,
+      'USER_LOGIN',
+      user.id,
+      user.full_name,
+      {
+        success: true,
+        ip_address: req.ip || req.socket.remoteAddress,
+        user_agent: req.headers['user-agent']
+      }
+    );
 
     logger.info(`Successful login for user: ${user.email}`);
     res.json(response);
@@ -310,6 +355,23 @@ export class AuthController {
    * Logout (invalidate tokens - in a real implementation, you'd maintain a blacklist)
    */
   static logout = handleAsyncError(async (req: Request, res: Response) => {
+    const userId = (req as any).user?.id;
+    const userName = (req as any).user?.full_name || 'Unknown User';
+
+    // Log logout event
+    if (userId) {
+      await AuditLogService.logEvent(
+        'users',
+        userId,
+        'USER_LOGOUT',
+        userId,
+        userName,
+        {
+          ip_address: req.ip || req.socket.remoteAddress
+        }
+      );
+    }
+
     // In a more sophisticated implementation, you would:
     // 1. Add the tokens to a blacklist/revocation list
     // 2. Store blacklisted tokens in Redis or database
@@ -433,6 +495,614 @@ export class AuthController {
       success: true,
       message: 'Profile updated successfully',
       user: result.user
+    });
+  });
+
+    /**
+   * Initiate Microsoft OAuth flow
+   * GET /api/v1/auth/microsoft
+   */
+  static microsoftAuth = handleAsyncError(async (req: Request, res: Response) => {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+    // Check if Microsoft SSO is configured
+    if (!process.env.MICROSOFT_CLIENT_ID || !process.env.MICROSOFT_CLIENT_SECRET || !process.env.MICROSOFT_REDIRECT_URI) {
+      logger.error('Microsoft SSO not properly configured - missing required environment variables');
+      return res.redirect(`${frontendUrl}/login?error=sso_not_configured&message=Microsoft+SSO+is+not+configured`);
+    }
+
+    try {
+      // Generate CSRF state token
+      const state = generateState();
+
+      // Store state in cookie for validation on callback
+      res.cookie('oauth_state', state, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 10 * 60 * 1000, // 10 minutes
+        sameSite: 'lax'
+      });
+
+      // Construct Microsoft authorization URL
+      const clientId = process.env.MICROSOFT_CLIENT_ID;
+      const tenantId = process.env.MICROSOFT_TENANT_ID || 'common';
+      const redirectUri = encodeURIComponent(process.env.MICROSOFT_REDIRECT_URI);
+      const scopes = encodeURIComponent('openid profile email User.Read');
+      
+      const authUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize?` +
+        `client_id=${clientId}` +
+        `&response_type=code` +
+        `&redirect_uri=${redirectUri}` +
+        `&response_mode=query` +
+        `&scope=${scopes}` +
+        `&state=${state}` +
+        `&prompt=select_account`;
+
+      logger.info(`Redirecting to Microsoft OAuth: ${authUrl.replace(state, '[STATE_HIDDEN]')}`);
+
+      // Redirect user to Microsoft login
+      res.redirect(authUrl);
+    } catch (error: any) {
+      logger.error('Failed to initiate Microsoft auth:', error);
+      res.redirect(`${frontendUrl}/login?error=sso_init_failed&message=${encodeURIComponent(error.message)}`);
+    }
+  });
+
+  /**
+   * Handle Microsoft OAuth callback
+   * GET /api/v1/auth/microsoft/callback
+   */
+  static microsoftCallback = handleAsyncError(async (req: Request, res: Response) => {
+    const { code, state, error, error_description } = req.query;
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+    // Check if Microsoft SSO is configured
+    if (!process.env.MICROSOFT_CLIENT_ID || !process.env.MICROSOFT_CLIENT_SECRET || !process.env.MICROSOFT_REDIRECT_URI) {
+      logger.error('Microsoft SSO not properly configured during callback');
+      return res.redirect(`${frontendUrl}/login?error=sso_not_configured&message=Microsoft+SSO+is+not+configured`);
+    }
+
+    // Handle OAuth errors
+    if (error) {
+      logger.error(`Microsoft OAuth error: ${error} - ${error_description}`);
+      return res.redirect(`${frontendUrl}/login?error=sso_failed&message=${encodeURIComponent(error_description || error)}`);
+    }
+
+    // Validate required parameters
+    if (!code || typeof code !== 'string') {
+      logger.error('Missing or invalid authorization code in callback');
+      return res.redirect(`${frontendUrl}/login?error=invalid_callback&message=Missing+authorization+code`);
+    }
+
+    // Validate CSRF state from cookie
+    const cookieState = req.cookies?.oauth_state;
+    if (!cookieState || state !== cookieState) {
+      logger.error('OAuth state mismatch - possible CSRF attack', { 
+        cookieState: cookieState ? '[PRESENT]' : '[MISSING]', 
+        queryState: state ? '[PRESENT]' : '[MISSING]' 
+      });
+      res.clearCookie('oauth_state');
+      return res.redirect(`${frontendUrl}/login?error=invalid_state&message=Security+validation+failed`);
+    }
+
+    // Clear the state cookie after validation
+    res.clearCookie('oauth_state');
+
+    try {
+      // Exchange code for token and get user info
+      const result = await exchangeCodeForToken(code);
+
+      if (!result.success || !result.userInfo) {
+        throw new Error(result.error || 'Failed to exchange code for token');
+      }
+
+      const { microsoftId, email, name } = result.userInfo;
+
+      logger.info(`Processing Microsoft SSO for user: ${email}`);
+
+      // Check if user exists by Microsoft ID
+      let user = await (User.findOne as any)({
+        microsoft_id: microsoftId,
+        deleted_at: { $exists: false }
+      });
+
+      if (!user) {
+        // Check if user exists by email (auto-merge scenario)
+        user = await (User.findOne as any)({
+          email: email.toLowerCase(),
+          deleted_at: { $exists: false }
+        });
+
+        if (user) {
+          // AUTO-MERGE: Update existing local account with Microsoft credentials
+          user.microsoft_id = microsoftId;
+          user.microsoft_email = email;
+          user.auth_provider = 'microsoft';
+          user.last_sso_login = new Date();
+          await user.save();
+
+          logger.info(`Auto-merged local account with Microsoft account: ${email}`);
+
+          // Log merge audit event
+          await AuditLogService.logEvent(
+            'users',
+            user.id,
+            'USER_ACCOUNT_MERGED',
+            user.id,
+            user.full_name,
+            {
+              email: user.email,
+              microsoft_email: email,
+              merge_type: 'auto',
+              auth_provider: 'microsoft'
+            }
+          );
+        } else {
+          // Create new user with Microsoft credentials
+          user = new User({
+            email: email.toLowerCase(),
+            full_name: name,
+            role: 'employee',
+            auth_provider: 'microsoft',
+            microsoft_id: microsoftId,
+            microsoft_email: email,
+            is_active: true,
+            is_approved_by_super_admin: false, // Requires admin approval
+            last_sso_login: new Date()
+          });
+          await user.save();
+
+          logger.info(`Created new user from Microsoft SSO: ${email}`);
+
+          // Log user creation audit event
+          await AuditLogService.logEvent(
+            'users',
+            user.id,
+            'USER_CREATED',
+            user.id,
+            user.full_name,
+            {
+              email: user.email,
+              auth_provider: 'microsoft',
+              registration_method: 'microsoft-sso'
+            }
+          );
+        }
+      } else {
+        // Update last SSO login for existing Microsoft user
+        user.last_sso_login = new Date();
+        await user.save();
+        logger.info(`Updated last SSO login for existing Microsoft user: ${email}`);
+      }
+
+      // Check if user is active and approved
+      if (!user.is_active) {
+        logger.warn(`Inactive user attempted Microsoft SSO login: ${email}`);
+        return res.redirect(`${frontendUrl}/login?error=account_inactive&message=Your+account+has+been+deactivated`);
+      }
+
+      if (!user.is_approved_by_super_admin) {
+        logger.warn(`Unapproved user attempted Microsoft SSO login: ${email}`);
+        return res.redirect(`${frontendUrl}/login?error=account_pending_approval&message=Your+account+is+pending+admin+approval`);
+      }
+
+      // Generate JWT tokens
+      const tokenPayload = {
+        id: user.id,
+        email: user.email,
+        full_name: user.full_name,
+        role: user.role
+      };
+
+      const tokens = JWTUtils.generateTokenPair(tokenPayload);
+
+      // Log successful SSO login
+      await AuditLogService.logEvent(
+        'users',
+        user.id,
+        'USER_LOGIN',
+        user.id,
+        user.full_name,
+        {
+          success: true,
+          auth_provider: 'microsoft',
+          ip_address: req.ip || req.socket.remoteAddress,
+          user_agent: req.headers['user-agent']
+        }
+      );
+
+      logger.info(`Successful Microsoft SSO login for user: ${email}`);
+
+      // Redirect to frontend with tokens
+      res.redirect(
+        `${frontendUrl}/auth/microsoft/callback?` +
+        `accessToken=${encodeURIComponent(tokens.accessToken)}&` +
+        `refreshToken=${encodeURIComponent(tokens.refreshToken)}&` +
+        `success=true`
+      );
+    } catch (error: any) {
+      logger.error('Microsoft callback error:', error);
+      res.redirect(`${frontendUrl}/login?error=sso_failed&message=${encodeURIComponent(error.message)}`);
+    }
+  });
+
+  /**
+   * Link Microsoft account to existing user
+   * POST /api/v1/auth/microsoft/link
+   */
+  static linkMicrosoftAccount = handleAsyncError(async (req: Request, res: Response) => {
+    // Check if Microsoft SSO is configured
+    if (!process.env.MICROSOFT_CLIENT_ID || !process.env.MICROSOFT_CLIENT_SECRET) {
+      logger.error('Microsoft SSO not configured for account linking');
+      return res.status(503).json({
+        success: false,
+        message: 'Microsoft SSO is not configured on this server'
+      });
+    }
+
+    const userId = (req as any).user?.id;
+    const { accessToken } = req.body;
+
+    if (!userId) {
+      throw new AuthenticationError('User not authenticated');
+    }
+
+    if (!accessToken) {
+      throw new ValidationError('Microsoft access token is required');
+    }
+
+    logger.info(`Attempting to link Microsoft account for user ID: ${userId}`);
+
+    // Validate Microsoft token and extract user info
+    const result = await validateMicrosoftToken(accessToken);
+
+    if (!result.success || !result.userInfo) {
+      logger.error(`Failed to validate Microsoft token for user ${userId}:`, result.error);
+      throw new ValidationError(result.error || 'Invalid Microsoft token');
+    }
+
+    const { microsoftId, email } = result.userInfo;
+
+    // Check if Microsoft ID is already linked to another user
+    const existingLink = await (User.findOne as any)({
+      microsoft_id: microsoftId,
+      deleted_at: { $exists: false }
+    });
+
+    if (existingLink && existingLink.id !== userId) {
+      logger.warn(`Microsoft account ${email} is already linked to another user`);
+      throw new ConflictError('This Microsoft account is already linked to another user');
+    }
+
+    // Update user with Microsoft credentials
+    const user = await (User.findByIdAndUpdate as any)(
+      userId,
+      {
+        microsoft_id: microsoftId,
+        microsoft_email: email,
+        auth_provider: 'microsoft',
+        last_sso_login: new Date()
+      },
+      { new: true }
+    );
+
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    // Log account linking audit event
+    await AuditLogService.logEvent(
+      'users',
+      user.id,
+      'USER_ACCOUNT_LINKED',
+      user.id,
+      user.full_name,
+      {
+        email: user.email,
+        microsoft_email: email,
+        link_type: 'manual',
+        auth_provider: 'microsoft'
+      }
+    );
+
+    logger.info(`User ${user.email} successfully linked Microsoft account: ${email}`);
+
+    res.json({
+      success: true,
+      message: 'Microsoft account linked successfully',
+      user: {
+        id: user.id,
+        email: user.email,
+        full_name: user.full_name,
+        auth_provider: user.auth_provider,
+        microsoft_email: user.microsoft_email
+      }
+    });
+  });
+
+  /**
+   * Handle Microsoft OAuth callback
+   * GET /api/v1/auth/microsoft/callback
+   */
+  static microsoftCallback = handleAsyncError(async (req: Request, res: Response) => {
+    const { code, state, error, error_description } = req.query;
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+    // Check if Microsoft SSO is configured
+    if (!process.env.MICROSOFT_CLIENT_ID || !process.env.MICROSOFT_CLIENT_SECRET) {
+      logger.warn('Microsoft SSO not configured');
+      return res.redirect(`${frontendUrl}/login?error=sso_not_configured`);
+    }
+
+    // Handle OAuth errors
+    if (error) {
+      logger.error(`Microsoft OAuth error: ${error} - ${error_description}`);
+      return res.redirect(`${frontendUrl}/login?error=sso_failed&message=${error_description}`);
+    }
+
+    // Validate required parameters
+    if (!code || typeof code !== 'string') {
+      return res.redirect(`${frontendUrl}/login?error=invalid_callback`);
+    }
+
+    // Validate CSRF state from cookie
+    const cookieState = req.cookies?.oauth_state;
+    if (cookieState && state !== cookieState) {
+      logger.error('OAuth state mismatch - possible CSRF attack');
+      res.clearCookie('oauth_state');
+      return res.redirect(`${frontendUrl}/login?error=invalid_state`);
+    }
+
+    // Clear the state cookie after validation
+    res.clearCookie('oauth_state');
+
+    try {
+      // Exchange code for token using direct HTTP request instead of MSAL
+      const tokenResponse = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          client_id: process.env.MICROSOFT_CLIENT_ID!,
+          client_secret: process.env.MICROSOFT_CLIENT_SECRET!,
+          code: code,
+          grant_type: 'authorization_code',
+          redirect_uri: process.env.MICROSOFT_REDIRECT_URI!,
+          scope: 'openid profile email User.Read'
+        })
+      });
+
+      if (!tokenResponse.ok) {
+        throw new Error('Failed to exchange code for token');
+      }
+
+      const tokenData = await tokenResponse.json();
+      
+      // Get user info from Microsoft Graph
+      const userResponse = await fetch('https://graph.microsoft.com/v1.0/me', {
+        headers: {
+          'Authorization': `Bearer ${tokenData.access_token}`
+        }
+      });
+
+      if (!userResponse.ok) {
+        throw new Error('Failed to get user info from Microsoft Graph');
+      }
+
+      const userData = await userResponse.json();
+
+      const microsoftId = userData.id;
+      const email = userData.mail || userData.userPrincipalName;
+      const name = userData.displayName;
+
+      // Check if user exists by Microsoft ID
+      let user = await (User.findOne as any)({
+        microsoft_id: microsoftId,
+        deleted_at: { $exists: false }
+      });
+
+      if (!user) {
+        // Check if user exists by email (auto-merge scenario)
+        user = await (User.findOne as any)({
+          email: email.toLowerCase(),
+          deleted_at: { $exists: false }
+        });
+
+        if (user) {
+          // AUTO-MERGE: Update existing local account with Microsoft credentials
+          user.microsoft_id = microsoftId;
+          user.microsoft_email = email;
+          user.auth_provider = 'microsoft';
+          user.last_sso_login = new Date();
+          await user.save();
+
+          logger.info(`Auto-merged local account with Microsoft account: ${email}`);
+
+          // Log merge audit event
+          await AuditLogService.logEvent(
+            'users',
+            user.id,
+            'USER_ACCOUNT_MERGED',
+            user.id,
+            user.full_name,
+            {
+              email: user.email,
+              microsoft_email: email,
+              merge_type: 'auto',
+              auth_provider: 'microsoft'
+            }
+          );
+        } else {
+          // Create new user with Microsoft credentials
+          user = new User({
+            email: email.toLowerCase(),
+            full_name: name,
+            role: 'employee',
+            auth_provider: 'microsoft',
+            microsoft_id: microsoftId,
+            microsoft_email: email,
+            is_active: true,
+            is_approved_by_super_admin: false, // Requires admin approval
+            last_sso_login: new Date()
+          });
+          await user.save();
+
+          logger.info(`Created new user from Microsoft SSO: ${email}`);
+
+          // Log user creation audit event
+          await AuditLogService.logEvent(
+            'users',
+            user.id,
+            'USER_CREATED',
+            user.id,
+            user.full_name,
+            {
+              email: user.email,
+              auth_provider: 'microsoft',
+              registration_method: 'microsoft-sso'
+            }
+          );
+        }
+      } else {
+        // Update last SSO login
+        user.last_sso_login = new Date();
+        await user.save();
+      }
+
+      // Check if user is active and approved
+      if (!user.is_active) {
+        return res.redirect(`${frontendUrl}/login?error=account_inactive`);
+      }
+
+      if (!user.is_approved_by_super_admin) {
+        return res.redirect(`${frontendUrl}/login?error=account_pending_approval`);
+      }
+
+      // Generate JWT tokens
+      const tokenPayload = {
+        id: user.id,
+        email: user.email,
+        full_name: user.full_name,
+        role: user.role
+      };
+
+      const tokens = JWTUtils.generateTokenPair(tokenPayload);
+
+      // Log successful SSO login
+      await AuditLogService.logEvent(
+        'users',
+        user.id,
+        'USER_LOGIN',
+        user.id,
+        user.full_name,
+        {
+          success: true,
+          auth_provider: 'microsoft',
+          ip_address: req.ip || req.socket.remoteAddress
+        }
+      );
+
+      // Redirect to frontend with tokens
+      res.redirect(
+        `${frontendUrl}/auth/microsoft/callback?` +
+        `accessToken=${tokens.accessToken}&` +
+        `refreshToken=${tokens.refreshToken}&` +
+        `success=true`
+      );
+    } catch (error: any) {
+      logger.error('Microsoft callback error:', error);
+      res.redirect(`${frontendUrl}/login?error=sso_failed&message=${encodeURIComponent(error.message)}`);
+    }
+  });
+
+  /**
+   * Link Microsoft account to existing user
+   * POST /api/v1/auth/microsoft/link
+   */
+  static linkMicrosoftAccount = handleAsyncError(async (req: Request, res: Response) => {
+    // Check if Microsoft SSO is configured
+    if (!process.env.MICROSOFT_CLIENT_ID || !process.env.MICROSOFT_CLIENT_SECRET) {
+      logger.warn('Microsoft SSO not configured');
+      return res.status(503).json({
+        success: false,
+        message: 'Microsoft SSO is not configured on this server'
+      });
+    }
+
+    const userId = (req as any).user?.id;
+    const { accessToken } = req.body;
+
+    if (!userId) {
+      throw new AuthenticationError('User not authenticated');
+    }
+
+    if (!accessToken) {
+      throw new ValidationError('Microsoft access token is required');
+    }
+
+    // Validate Microsoft token and extract user info
+    const result = await validateMicrosoftToken(accessToken);
+
+    if (!result.success || !result.userInfo) {
+      throw new ValidationError(result.error || 'Invalid Microsoft token');
+    }
+
+    const { microsoftId, email } = result.userInfo;
+
+    // Check if Microsoft ID is already linked to another user
+    const existingLink = await (User.findOne as any)({
+      microsoft_id: microsoftId,
+      deleted_at: { $exists: false }
+    });
+
+    if (existingLink && existingLink.id !== userId) {
+      throw new ConflictError('This Microsoft account is already linked to another user');
+    }
+
+    // Update user with Microsoft credentials
+    const user = await (User.findByIdAndUpdate as any)(
+      userId,
+      {
+        microsoft_id: microsoftId,
+        microsoft_email: email,
+        auth_provider: 'microsoft',
+        last_sso_login: new Date()
+      },
+      { new: true }
+    );
+
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    // Log account linking audit event
+    await AuditLogService.logEvent(
+      'users',
+      user.id,
+      'USER_ACCOUNT_LINKED',
+      user.id,
+      user.full_name,
+      {
+        email: user.email,
+        microsoft_email: email,
+        link_type: 'manual',
+        auth_provider: 'microsoft'
+      }
+    );
+
+    logger.info(`User ${user.email} linked Microsoft account manually`);
+
+    res.json({
+      success: true,
+      message: 'Microsoft account linked successfully',
+      user: {
+        id: user.id,
+        email: user.email,
+        full_name: user.full_name,
+        auth_provider: user.auth_provider,
+        microsoft_email: user.microsoft_email
+      }
     });
   });
 }

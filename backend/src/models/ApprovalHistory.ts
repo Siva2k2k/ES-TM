@@ -74,6 +74,8 @@ const ApprovalHistorySchema: Schema = new Schema({
     enum: [
       'draft',
       'submitted',
+      'lead_approved',
+      'lead_rejected',
       'manager_approved',
       'manager_rejected',
       'management_pending',
@@ -88,6 +90,8 @@ const ApprovalHistorySchema: Schema = new Schema({
     enum: [
       'draft',
       'submitted',
+      'lead_approved',
+      'lead_rejected',
       'manager_approved',
       'manager_rejected',
       'management_pending',
@@ -127,7 +131,8 @@ ApprovalHistorySchema.index({
 
 // Virtual for ID as string
 ApprovalHistorySchema.virtual('id').get(function() {
-  return this._id.toHexString();
+  // Ensure correct typing for TypeScript
+  return (this._id as mongoose.Types.ObjectId).toHexString();
 });
 
 ApprovalHistorySchema.set('toJSON', {

@@ -186,8 +186,8 @@ export class DeleteService {
         }
 
       case 'project':
-        // Enhanced project delete (to be implemented)
-        return await ProjectService.deleteProject(entityId, currentUser);
+        // Enhanced project delete (soft delete with reason)
+        return await ProjectService.deleteProject(entityId, 'Deleted via Delete Management', currentUser);
 
       default:
         return { success: false, error: `Delete not implemented for ${entityType}` };
@@ -209,7 +209,13 @@ export class DeleteService {
 
     switch (entityType) {
       case 'user':
-        return await UserService.getDeletedUsers(currentUser);
+        {
+          const result = await UserService.getDeletedUsers(currentUser);
+          if (result.error) {
+            return { success: false, error: result.error };
+          }
+          return { success: true, data: result.users };
+        }
 
       default:
         return { success: false, error: `Get deleted not implemented for ${entityType}` };

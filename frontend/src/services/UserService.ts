@@ -26,7 +26,6 @@ export class UserService {
       const response = await backendApi.post<{ success: boolean; user?: User; error?: string }>('/users', requestBody);
 
       if (response.success) {
-        console.log('Super Admin created user directly:', response.user);
         return { user: response.user };
       } else {
         console.error('Error creating user:', response.error);
@@ -72,7 +71,6 @@ export class UserService {
       const response = await backendApi.post<{ success: boolean; user?: User; error?: string }>('/users/for-approval', requestBody);
 
       if (response.success) {
-        console.log('User created for approval:', response.user);
         return { user: response.user };
       } else {
         console.error('Error creating user for approval:', response.error);
@@ -106,7 +104,6 @@ export class UserService {
       const response = await backendApi.post<{ success: boolean; error?: string }>(`/users/${userId}/approve`, {});
 
       if (response.success) {
-        console.log(`Super Admin approved user: ${userId}`);
         return { success: true };
       } else {
         console.error('Error approving user:', response.error);
@@ -129,7 +126,6 @@ export class UserService {
       const response = await backendApi.put<{ success: boolean; error?: string }>(`/users/${userId}/status`, { isActive });
 
       if (response.success) {
-        console.log(`Setting user ${userId} status to: ${isActive ? 'active' : 'inactive'}`);
         return { success: true };
       } else {
         console.error('Error setting user status:', response.error);
@@ -152,7 +148,6 @@ export class UserService {
       const response = await backendApi.put<{ success: boolean; error?: string }>(`/users/${userId}/billing`, { hourlyRate });
 
       if (response.success) {
-        console.log(`Setting billing for user ${userId}: $${hourlyRate}/hr`);
         return { success: true };
       } else {
         console.error('Error setting user billing:', response.error);
@@ -241,7 +236,6 @@ export class UserService {
       const response = await backendApi.put<{ success: boolean; error?: string }>(`/users/${userId}`, updates);
 
       if (response.success) {
-        console.log(`Updated user ${userId}`);
         return { success: true };
       } else {
         console.error('Error updating user:', response.error);
@@ -264,7 +258,6 @@ export class UserService {
       const response = await backendApi.delete<{ success: boolean; error?: string }>(`/users/${userId}`);
 
       if (response.success) {
-        console.log(`Soft deleted user: ${userId}`);
         return { success: true };
       } else {
         console.error('Error deleting user:', response.error);
@@ -354,7 +347,6 @@ export class UserService {
       const response = await backendApi.put<{ success: boolean; error?: string }>(`/users/${userId}/credentials`, { password });
 
       if (response.success) {
-        console.log(`Set credentials for user ${userId}`);
         return { success: true };
       } else {
         console.error('Error setting user credentials:', response.error);
@@ -380,7 +372,6 @@ export class UserService {
     error?: string 
   }> {
     try {
-      console.log('🔍 UserService.getTeamMembersWithProjectRoles called with userId:', userId);
       
       // For now, implement a simplified version using existing endpoints
       // Step 1: Get user's projects to understand their management scope
@@ -392,7 +383,6 @@ export class UserService {
       }
 
       const userProjects = userProjectsResponse.projects || [];
-      console.log('🔍 User projects:', userProjects);
       
       // Step 2: Get team members based on manager hierarchy
       const teamMembersResponse = await this.getTeamMembers(userId);
@@ -403,7 +393,6 @@ export class UserService {
       }
 
       const teamMembers = teamMembersResponse.users;
-      console.log('🔍 Team members found:', teamMembers.length);
 
       // Step 3: Build simplified role maps
       // For now, assume all team members are employees and user manages them across all projects they manage
@@ -414,7 +403,6 @@ export class UserService {
       const managedProjects = userProjects.filter(project => project.primary_manager_id === userId);
       const managedProjectIds = managedProjects.map(project => project.id);
 
-      console.log('🔍 Managed projects:', managedProjectIds);
 
       // For each team member, assign basic role information
       teamMembers.forEach(member => {
@@ -425,12 +413,6 @@ export class UserService {
         if (managedProjectIds.length > 0) {
           userManagerProjects.set(member.id, managedProjectIds);
         }
-      });
-
-      console.log('✅ Team members with project roles created:', {
-        userCount: teamMembers.length,
-        userProjectRoles: Object.fromEntries(userProjectRoles),
-        userManagerProjects: Object.fromEntries(userManagerProjects)
       });
 
       return { 
@@ -463,7 +445,6 @@ export class UserService {
       );
 
       if (response.success) {
-        console.log('User soft deleted:', userId);
         return { success: true };
       } else {
         console.error('Error soft deleting user:', response.error);
@@ -488,7 +469,6 @@ export class UserService {
       );
 
       if (response.success) {
-        console.log('User permanently deleted:', userId);
         return { success: true };
       } else {
         console.error('Error permanently deleting user:', response.error);
@@ -513,7 +493,6 @@ export class UserService {
       );
 
       if (response.success) {
-        console.log('User restored:', userId);
         return { success: true };
       } else {
         console.error('Error restoring user:', response.error);

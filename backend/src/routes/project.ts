@@ -10,11 +10,14 @@ import {
   updateTaskValidation,
   taskIdValidation,
   createClientValidation,
+  updateClientValidation,
   clientIdValidation,
   addProjectMemberEnhancedValidation,
-  updateProjectMemberRoleValidation
+  updateProjectMemberRoleValidation,
+  createTrainingTaskValidation,
+  updateTrainingTaskValidation
 } from '@/controllers/ProjectController';
-import { requireAuth, requireManager, requireManagement } from '@/middleware/auth';
+import { requireAuth, requireManager, requireManagement, requireSuperAdmin } from '@/middleware/auth';
 
 const router = Router();
 
@@ -41,6 +44,13 @@ router.post('/', requireManagement, createProjectValidation, ProjectController.c
  * @access Private
  */
 router.get('/status', projectStatusValidation, ProjectController.getProjectsByStatus);
+
+/**
+ * @route GET /api/v1/projects/deleted/all
+ * @desc Get all deleted projects
+ * @access Private (Management+)
+ */
+router.get('/deleted/all', requireManagement, ProjectController.getDeletedProjects);
 
 // Client Management - Must come before /:projectId routes to avoid conflicts
 /**
@@ -69,7 +79,7 @@ router.get('/clients/:clientId', requireManager, clientIdValidation, ProjectCont
  * @desc Update client (Management+ only)
  * @access Private (Management+)
  */
-router.put('/clients/:clientId', requireManagement, clientIdValidation, createClientValidation, ProjectController.updateClient);
+router.put('/clients/:clientId', requireManagement, clientIdValidation, updateClientValidation, ProjectController.updateClient);
 
 /**
  * @route DELETE /api/v1/projects/clients/:clientId
@@ -84,6 +94,38 @@ router.delete('/clients/:clientId', requireManagement, clientIdValidation, Proje
  * @access Private (Users can view own projects, Manager+ can view team member projects)
  */
 router.get('/user/:userId', userIdValidation, ProjectController.getUserProjects);
+
+// ========================================================================
+// TRAINING PROJECT ROUTES (Must come before /:projectId)
+// ========================================================================
+
+/**
+ * @route GET /api/v1/projects/training
+ * @desc Get Training Project with all tasks
+ * @access Private (All authenticated users)
+ */
+router.get('/training', ProjectController.getTrainingProject);
+
+/**
+ * @route POST /api/v1/projects/training/tasks
+ * @desc Add task to Training Project
+ * @access Private (Management, Manager, Admin only)
+ */
+router.post('/training/tasks', createTrainingTaskValidation, ProjectController.addTrainingTask);
+
+/**
+ * @route PUT /api/v1/projects/training/tasks/:taskId
+ * @desc Update task in Training Project
+ * @access Private (Management, Manager, Admin only)
+ */
+router.put('/training/tasks/:taskId', updateTrainingTaskValidation, ProjectController.updateTrainingTask);
+
+/**
+ * @route DELETE /api/v1/projects/training/tasks/:taskId
+ * @desc Delete task from Training Project
+ * @access Private (Management, Manager, Admin only)
+ */
+router.delete('/training/tasks/:taskId', taskIdValidation, ProjectController.deleteTrainingTask);
 
 /**
  * @route GET /api/v1/projects/:projectId
@@ -101,10 +143,32 @@ router.put('/:projectId', projectIdValidation, createProjectValidation, ProjectC
 
 /**
  * @route DELETE /api/v1/projects/:projectId
- * @desc Delete project (Management+ only)
+ * @desc Soft delete project (Management+ only)
  * @access Private (Management+)
  */
 router.delete('/:projectId', requireManagement, projectIdValidation, ProjectController.deleteProject);
+
+/**
+ * @route GET /api/v1/projects/:projectId/dependencies
+ * @desc Check if project can be permanently deleted (check dependencies)
+ * @access Private (Super Admin)
+ */
+// TEMPORARILY DISABLED - troubleshooting
+// router.get('/:projectId/dependencies', requireSuperAdmin, projectIdValidation, ProjectController.checkProjectDependencies);
+
+/**
+ * @route DELETE /api/v1/projects/:projectId/hard-delete
+ * @desc Permanently delete project (Super Admin only)
+ * @access Private (Super Admin)
+ */
+router.delete('/:projectId/hard-delete', requireSuperAdmin, projectIdValidation, ProjectController.hardDeleteProject);
+
+/**
+ * @route POST /api/v1/projects/:projectId/restore
+ * @desc Restore soft-deleted project (Management+ only)
+ * @access Private (Management+)
+ */
+router.post('/:projectId/restore', requireManagement, projectIdValidation, ProjectController.restoreProject);
 
 // Project Members Management
 /**

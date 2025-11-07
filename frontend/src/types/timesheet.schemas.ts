@@ -7,7 +7,13 @@ import { z } from 'zod';
  */
 
 // Entry type enum
-export const entryTypeSchema = z.enum(['project_task', 'non_project', 'leave', 'holiday']);
+export const entryTypeSchema = z.enum(['project_task', 'custom_task', 'non_project', 'leave', 'holiday']);
+
+// Entry category enum
+export const entryCategorySchema = z.enum(['project', 'leave', 'training', 'miscellaneous']);
+
+// Leave session enum
+export const leaveSessionSchema = z.enum(['morning', 'afternoon', 'full_day']);
 
 // Time entry schema
 export const timeEntrySchema = z.object({
@@ -15,22 +21,56 @@ export const timeEntrySchema = z.object({
   task_id: z.string().optional(),
   date: z.string().min(1, 'Date is required'),
   hours: z.number()
-    .min(0.5, 'Minimum 0.5 hours')
+    .min(0, 'Minimum 0 hours required')
     .max(24, 'Maximum 24 hours per day'),
-  description: z.string().min(1, 'Description is required').max(500, 'Description too long'),
-  is_billable: z.boolean().default(true),
-  entry_type: entryTypeSchema.default('project_task'),
+  // Description is optional in the UI; make it optional here to avoid blocking submissions
+  description: z.string().max(500, 'Description too long').optional(),
+  is_billable: z.boolean().optional().default(true),
+  entry_type: entryTypeSchema.optional().default('project_task'),
+  custom_task_description: z.string().optional(),
+  is_editable: z.boolean().optional(),
+  // New fields for categorization
+  entry_category: entryCategorySchema.optional(),
+  leave_session: leaveSessionSchema.optional(),
+  miscellaneous_activity: z.string().optional(),
 }).refine(
   (data) => {
     // Project tasks require project_id and task_id
     if (data.entry_type === 'project_task') {
       return !!data.project_id && !!data.task_id;
     }
+    if (data.entry_type === 'custom_task') {
+      return !!data.custom_task_description;
+    }
     return true;
   },
   {
-    message: 'Project and task are required for project tasks',
+    message: 'Task is required',
+    path: ['task_id'],
+  }
+).refine(
+  (data) => {
+    // Check project_id separately for better error message
+    if (data.entry_type === 'project_task') {
+      return !!data.project_id;
+    }
+    return true;
+  },
+  {
+    message: 'Project is required',
     path: ['project_id'],
+  }
+).refine(
+  (data) => {
+    // Custom task description is required for custom tasks
+    if (data.entry_type === 'custom_task') {
+      return !!data.custom_task_description?.trim();
+    }
+    return true;
+  },
+  {
+    message: 'Custom task description is required',
+    path: ['custom_task_description'],
   }
 ).refine(
   (data) => {
@@ -45,6 +85,17 @@ export const timeEntrySchema = z.object({
     message: 'Future dates are not allowed',
     path: ['date'],
   }
+).refine(
+  (data) => {
+    if (data.entry_type === 'holiday') {
+      return data.hours >= 0;
+    }
+    return data.hours >= 0.5;
+  },
+  {
+    message: 'Minimum 0.5 hours required',
+    path: ['hours'],
+  }
 );
 
 // Timesheet form schema
@@ -54,17 +105,32 @@ export const timesheetFormSchema = z.object({
 }).refine(
   (data) => {
     // Validate daily totals (8-10 hours per day)
-    const dailyTotals: Record<string, number> = {};
+      const dailyTotals: Record<string, number> = {};
+      const holidayDates = new Set<string>();
 
-    data.entries.forEach((entry) => {
-      dailyTotals[entry.date] = (dailyTotals[entry.date] || 0) + entry.hours;
-    });
+      // Track holiday dates to skip mandatory hour validation
+      data.entries.forEach((entry) => {
+        if (entry.entry_type === 'holiday') {
+          holidayDates.add(entry.date);
+        }
+      });
 
-    const invalidDays = Object.entries(dailyTotals).filter(
-      ([_, total]) => total < 8 || total > 10
-    );
+      // Only enforce daily 8-10 hour rule for weekdays (Mon-Fri) that are not holidays.
+      data.entries.forEach((entry) => {
+        const d = new Date(entry.date);
+        const day = d.getDay(); // Sunday=0, Saturday=6
+        if (day === 0 || day === 6) return;
+        if (entry.entry_type === 'holiday') return;
 
-    return invalidDays.length === 0;
+        dailyTotals[entry.date] = (dailyTotals[entry.date] || 0) + entry.hours;
+      });
+
+      const invalidDays = Object.entries(dailyTotals)
+        .filter(([date]) => !holidayDates.has(date))
+        .map(([, total]) => total)
+        .filter((total) => total < 8 || total > 10);
+
+      return invalidDays.length === 0;
   },
   {
     message: 'Each day must have between 8-10 hours',
@@ -73,7 +139,9 @@ export const timesheetFormSchema = z.object({
 ).refine(
   (data) => {
     // Validate weekly total (max 56 hours)
-    const weekTotal = data.entries.reduce((sum, entry) => sum + entry.hours, 0);
+    const weekTotal = data.entries
+      .filter((entry) => entry.entry_type !== 'holiday')
+      .reduce((sum, entry) => sum + entry.hours, 0);
     return weekTotal <= 56;
   },
   {
@@ -86,7 +154,11 @@ export const timesheetFormSchema = z.object({
     const seen = new Set<string>();
 
     for (const entry of data.entries) {
-      const key = `${entry.project_id}-${entry.task_id}-${entry.date}`;
+      const identifier =
+        entry.entry_type === 'custom_task'
+          ? entry.custom_task_description || entry.date
+          : entry.task_id;
+      const key = `${entry.entry_type}-${entry.project_id}-${identifier}-${entry.date}`;
       if (seen.has(key)) {
         return false;
       }
@@ -140,13 +212,21 @@ export function validateWeeklyHours(hours: number): boolean {
 
 export function getDailyTotals(entries: TimeEntry[]): Record<string, number> {
   return entries.reduce((acc, entry) => {
+    if (entry.entry_type === 'holiday') {
+      return acc;
+    }
     acc[entry.date] = (acc[entry.date] || 0) + entry.hours;
     return acc;
   }, {} as Record<string, number>);
 }
 
 export function getWeeklyTotal(entries: TimeEntry[]): number {
-  return entries.reduce((sum, entry) => sum + entry.hours, 0);
+  return entries.reduce((sum, entry) => {
+    if (entry.entry_type === 'holiday') {
+      return sum;
+    }
+    return sum + entry.hours;
+  }, 0);
 }
 
 export function hasDuplicateEntries(entries: TimeEntry[]): boolean {

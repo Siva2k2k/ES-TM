@@ -383,7 +383,6 @@ dotenv.config();
 const seedImprovedTemplates = async () => {
   try {
     await connectDB();
-    console.log('🌱 Starting improved report template seeding...');
 
     // Get or create a system user for created_by field
     const { User } = require('../models');
@@ -404,15 +403,12 @@ const seedImprovedTemplates = async () => {
           position: 'System Administrator',
           status: 'active'
         });
-        console.log('👤 Created system user for template ownership');
       } else {
-        console.log('👤 Using existing admin user for template ownership');
       }
     }
 
     // Clear existing templates
     await ReportTemplate.deleteMany({});
-    console.log('🗑️  Cleared existing report templates');
 
     // Add created_by field to all templates
     const templatesWithCreatedBy = IMPROVED_REPORT_TEMPLATE_SEEDS.map(template => ({
@@ -422,7 +418,6 @@ const seedImprovedTemplates = async () => {
 
     // Insert improved templates
     await ReportTemplate.insertMany(templatesWithCreatedBy);
-    console.log(`✅ Successfully seeded ${templatesWithCreatedBy.length} improved report templates`);
     
     // Verify no date_range filters exist
     const templatesWithDateRange = await ReportTemplate.find({
@@ -430,12 +425,9 @@ const seedImprovedTemplates = async () => {
     });
     
     if (templatesWithDateRange.length === 0) {
-      console.log('🎉 Verified: No redundant date_range filters found!');
     } else {
-      console.warn(`⚠️  Warning: ${templatesWithDateRange.length} templates still have date_range filters`);
     }
 
-    console.log('🎯 UX improvements applied: Eliminated confusing duplicate date fields');
     process.exit(0);
   } catch (error) {
     console.error('❌ Error seeding improved templates:', error);

@@ -11,7 +11,8 @@ import {
   Building2
 } from 'lucide-react';
 import type { Project } from '../../../types';
-import { ProjectStatusBadge } from './ProjectStatusBadge';
+import { StatusBadge } from '../../../components/shared/StatusBadge';
+import * as formatting from '../../../utils/formatting';
 
 interface ProjectCardProps {
   project: Project;
@@ -45,21 +46,6 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const formatDate = (dateString: string | Date) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
-
   // Get client name (handle both string and object)
   const getClientName = () => {
     if (!project.client_id) return 'No Client';
@@ -82,7 +68,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
               <span className="truncate">{getClientName()}</span>
             </div>
           </div>
-          <ProjectStatusBadge status={project.status as any} size="sm" />
+          <StatusBadge type="project" status={project.status} size="sm" />
         </div>
 
         {/* Key Metrics Row (Mobile-optimized) */}
@@ -91,14 +77,14 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
           {project.budget !== undefined && project.budget !== null && (
             <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
               <DollarSign className="h-4 w-4 shrink-0 text-green-600 dark:text-green-400" />
-              <span className="font-medium">{formatCurrency(project.budget)}</span>
+              <span className="font-medium">{formatting.formatCurrency(project.budget, 'USD')}</span>
             </div>
           )}
 
           {/* Start Date */}
           <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
             <Calendar className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
-            <span>{formatDate(project.start_date)}</span>
+            <span>{formatting.formatDate(project.start_date, 'short')}</span>
           </div>
         </div>
 
@@ -125,7 +111,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-600 dark:text-gray-400">End Date:</span>
               <span className="font-medium text-gray-900 dark:text-gray-100">
-                {formatDate(project.end_date)}
+                {formatting.formatDate(project.end_date, 'short')}
               </span>
             </div>
           )}

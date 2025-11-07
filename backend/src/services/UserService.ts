@@ -18,6 +18,8 @@ import { EmailService } from '@/services/EmailService';
 import { logger } from '@/config/logger';
 import { AuditLogService } from '@/services/AuditLogService';
 import { ValidationUtils } from '@/utils/validation';
+import { NotificationService } from '@/services/NotificationService';
+import { NotificationRecipientResolver } from '@/services/NotificationRecipientResolver';
 
 export interface UserWithProjectRoles extends IUser {
   userProjectRoles?: Map<string, string[]>;
@@ -116,18 +118,46 @@ export class UserService {
 
       logger.info(`Super Admin created user with secure credentials: ${user.id}`);
 
+      // Notify other super admins about user creation
+      try {
+        const superAdmins = await NotificationRecipientResolver.getSuperAdmins();
+        const otherAdmins = superAdmins.filter(adminId => adminId !== currentUser.id);
+        
+        if (otherAdmins.length > 0) {
+          await NotificationService.notifyUserCreated({
+            recipientIds: otherAdmins,
+            userId: user._id.toString(),
+            userName: user.full_name,
+            createdById: currentUser.id,
+            createdByName: currentUser.full_name
+          });
+        }
+      } catch (notifError) {
+        logger.error('Error sending user creation notification:', notifError);
+        // Don't fail user creation if notification fails
+      }
+
       // Audit log: User created
-      await AuditLogService.logEvent(
-        'users',
-        user._id.toString(),
-        'USER_CREATED',
-        currentUser.id,
-        currentUser.full_name,
-        { email: user.email, role: user.role, full_name: user.full_name },
-        { created_by_super_admin: true },
-        null,
-        { email: user.email, full_name: user.full_name, role: user.role }
-      );
+      try {
+        const auditResult = await AuditLogService.logEvent(
+          'users',
+          user._id.toString(),
+          'USER_CREATED',
+          currentUser.id,
+          currentUser.full_name,
+          { email: user.email, role: user.role, full_name: user.full_name },
+          { created_by_super_admin: true },
+          null,
+          { email: user.email, full_name: user.full_name, role: user.role }
+        );
+        
+        if (!auditResult.success) {
+          logger.warn('Failed to log user creation audit event:', auditResult.error);
+        }
+      } catch (auditError) {
+        logger.error('Error logging user creation audit event:', auditError);
+        // Don't fail user creation if audit logging fails
+      }
 
       // Return user without sensitive fields
       const userResponse = user.toJSON();
@@ -186,10 +216,62 @@ export class UserService {
 
       await user.save();
 
-      console.log('User created for approval:', user.id);
+      // Audit log: User created for approval
+      try {
+        const auditResult = await AuditLogService.logEvent(
+          'users',
+          user._id.toString(),
+          'USER_CREATED',
+          currentUser.id,
+          currentUser.full_name,
+          { email: user.email, role: user.role, full_name: user.full_name },
+          { created_for_approval: true },
+          null,
+          { email: user.email, full_name: user.full_name, role: user.role, is_approved_by_super_admin: false }
+        );
+        
+        if (!auditResult.success) {
+          logger.warn('Failed to log user creation audit event:', auditResult.error);
+        }
+      } catch (auditError) {
+        logger.error('Error logging user creation audit event:', auditError);
+        // Don't fail user creation if audit logging fails
+      }
+
+      // Notify super admins about pending user approval
+      try {
+        const superAdmins = await NotificationRecipientResolver.getSuperAdmins();
+        if (superAdmins.length > 0) {
+          await NotificationService.notifyUserRegistrationPending({
+            recipientIds: superAdmins,
+            userId: user._id.toString(),
+            userName: user.full_name,
+            userEmail: user.email
+          });
+        }
+      } catch (notifError) {
+        logger.error('Error sending user registration pending notification:', notifError);
+      }
+
+      // Also notify other admins about user creation by management
+      try {
+        const superAdmins = await NotificationRecipientResolver.getSuperAdmins();
+        if (superAdmins.length > 0) {
+          await NotificationService.notifyUserCreated({
+            recipientIds: superAdmins,
+            userId: user._id.toString(),
+            userName: user.full_name,
+            createdById: currentUser.id,
+            createdByName: currentUser.full_name
+          });
+        }
+      } catch (notifError) {
+        logger.error('Error sending user creation notification:', notifError);
+      }
+
       return { user };
     } catch (error) {
-      console.error('Error in createUserForApproval:', error);
+
       if (error instanceof ValidationError || error instanceof ConflictError || error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -223,7 +305,6 @@ export class UserService {
         const user: any = await (User.findById as any)(userId);
 
         if (user) {
-          console.log("Email sending is in process....")
           // If the user has no credentials yet (Management-created), generate them
           
             const temporaryPassword = PasswordSecurity.generateTemporaryPassword(16);
@@ -257,9 +338,6 @@ export class UserService {
             logger.warn(`Failed to send approval email to ${user.email}`);
           }
         }
-        else {
-          console.log('No such User exists')
-        }
       } catch (emailError) {
         logger.error('Error sending approval email:', emailError);
         // Do not fail the approval process if email fails
@@ -268,23 +346,78 @@ export class UserService {
       // Audit log: User approved
       const approvedUser = await (User.findById as any)(userId).lean();
       if (approvedUser) {
-        await AuditLogService.logEvent(
-          'users',
-          userId,
-          'USER_APPROVED',
-          currentUser.id,
-          currentUser.full_name,
-          { email: approvedUser.email, role: approvedUser.role },
-          { approved_by_super_admin: currentUser.id },
-          { is_approved_by_super_admin: false },
-          { is_approved_by_super_admin: true }
-        );
+        try {
+          const auditResult = await AuditLogService.logEvent(
+            'users',
+            userId,
+            'USER_APPROVED',
+            currentUser.id,
+            currentUser.full_name,
+            { email: approvedUser.email, role: approvedUser.role },
+            { approved_by_super_admin: currentUser.id },
+            { is_approved_by_super_admin: false },
+            { is_approved_by_super_admin: true }
+          );
+          
+          if (!auditResult.success) {
+            logger.warn('Failed to log user approval audit event:', auditResult.error);
+          }
+        } catch (auditError) {
+          logger.error('Error logging user approval audit event:', auditError);
+          // Don't fail approval if audit logging fails
+        }
+
+        // Notify the approved user
+        try {
+          await NotificationService.create({
+            recipient_id: userId,
+            sender_id: currentUser.id,
+            type: 'USER_APPROVAL' as any,
+            title: 'Account Approved',
+            message: 'Your account has been approved and is now active.',
+            action_url: '/dashboard',
+            priority: 'HIGH' as any
+          });
+        } catch (notifError) {
+          logger.error('Error sending user approval notification:', notifError);
+        }
+
+        // Also notify the management user who created this user for approval
+        try {
+          // Find the audit log entry for user creation
+          const auditLogsResult = await AuditLogService.getAuditLogs({
+            tableName: 'users',
+            recordId: userId,
+            actions: ['USER_CREATED']
+          }, currentUser);
+
+          if (auditLogsResult.logs && auditLogsResult.logs.length > 0) {
+            // Get the most recent creation log
+            const creationLog = auditLogsResult.logs[0];
+            const creatorId = creationLog.actor_id?.toString();
+
+            // Only notify if the creator is different from the approver
+            if (creatorId && creatorId !== currentUser.id) {
+              await NotificationService.create({
+                recipient_id: creatorId,
+                sender_id: currentUser.id,
+                type: 'USER_APPROVAL' as any,
+                title: 'User Approval Completed',
+                message: `The user "${approvedUser.full_name}" you created has been approved by ${currentUser.full_name}.`,
+                data: { user_id: userId, approved_by: currentUser.id },
+                action_url: `/users/${userId}`,
+                priority: 'HIGH' as any
+              });
+            }
+          }
+        } catch (notifError) {
+          logger.error('Error sending creator notification:', notifError);
+        }
       }
 
-      console.log(`Super Admin approved user: ${userId}`);
       return { success: true };
     } catch (error) {
-      console.error('Error in approveUser:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -301,6 +434,12 @@ export class UserService {
         throw new AuthorizationError('Only super admins can change user status');
       }
 
+      // Get user before update for audit
+      const userBefore = await (User.findOne as any)({ _id: userId, deleted_at: { $exists: false } });
+      if (!userBefore) {
+        throw new NotFoundError('User not found');
+      }
+
       const result = await (User.updateOne as any)({
         _id: userId,
         deleted_at: { $exists: false }
@@ -313,10 +452,26 @@ export class UserService {
         throw new NotFoundError('User not found');
       }
 
-      console.log(`Setting user ${userId} status to: ${isActive ? 'active' : 'inactive'}`);
+      // Log audit event
+      await AuditLogService.logEvent(
+        'users',
+        userId,
+        isActive ? 'USER_ACTIVATED' : 'USER_DEACTIVATED',
+        currentUser.id,
+        currentUser.full_name,
+        {
+          action: isActive ? 'activate' : 'deactivate',
+          email: userBefore.email,
+          role: userBefore.role
+        },
+        undefined,
+        { is_active: userBefore.is_active },
+        { is_active: isActive }
+      );
+
       return { success: true };
     } catch (error) {
-      console.error('Error in setUserStatus:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -337,6 +492,12 @@ export class UserService {
         throw new ValidationError('Hourly rate must be greater than 0');
       }
 
+      // Get user before update for audit
+      const userBefore = await (User.findOne as any)({ _id: userId, deleted_at: { $exists: false } });
+      if (!userBefore) {
+        throw new NotFoundError('User not found');
+      }
+
       const result = await (User.updateOne as any)({
         _id: userId,
         deleted_at: { $exists: false }
@@ -349,10 +510,27 @@ export class UserService {
         throw new NotFoundError('User not found');
       }
 
-      console.log(`Setting billing for user ${userId}: $${hourlyRate}/hr`);
+      // Log audit event for billing rate change
+      await AuditLogService.logEvent(
+        'users',
+        userId,
+        'UPDATE',
+        currentUser.id,
+        currentUser.full_name,
+        {
+          action: 'billing_rate_update',
+          email: userBefore.email,
+          role: userBefore.role,
+          field_changed: 'hourly_rate'
+        },
+        undefined,
+        { hourly_rate: userBefore.hourly_rate },
+        { hourly_rate: hourlyRate }
+      );
+
       return { success: true };
     } catch (error) {
-      console.error('Error in setUserBilling:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError || error instanceof ValidationError) {
         return { success: false, error: error.message };
       }
@@ -373,7 +551,7 @@ export class UserService {
 
       return { users };
     } catch (error) {
-      console.error('Error in getAllUsers:', error);
+
       if (error instanceof AuthorizationError) {
         return { users: [], error: error.message };
       }
@@ -414,7 +592,7 @@ export class UserService {
 
       return { users };
     } catch (error) {
-      console.error('Error in getUsers:', error);
+
       return { users: [], error: 'Failed to fetch users' };
     }
   }
@@ -437,7 +615,7 @@ export class UserService {
 
       return { users };
     } catch (error) {
-      console.error('Error in getPendingApprovals:', error);
+
       if (error instanceof AuthorizationError) {
         return { users: [], error: error.message };
       }
@@ -486,10 +664,9 @@ export class UserService {
         );
       }
 
-      console.log(`Updated user ${userId}`);
       return { success: true };
     } catch (error) {
-      console.error('Error in updateUser:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -604,22 +781,7 @@ export class UserService {
       const auditLogsResult = await AuditLogService.getAuditLogs(currentUser as any, { tableName: 'users' });
       const auditLogs = auditLogsResult.logs || [];
 
-      // Mark as hard deleted (keep record for audit trail)
-      const result = await (User.updateOne as any)(
-        { _id: userId },
-        {
-          is_hard_deleted: true,
-          hard_deleted_at: new Date(),
-          hard_deleted_by: currentUser.id,
-          updated_at: new Date()
-        }
-      );
-
-      if (result.matchedCount === 0) {
-        throw new NotFoundError('User not found');
-      }
-
-      // Final audit log: User permanently deleted
+      // Log audit event BEFORE deleting
       await AuditLogService.logEvent(
         'users',
         userId,
@@ -643,6 +805,13 @@ export class UserService {
         { is_hard_deleted: false },
         { is_hard_deleted: true, hard_deleted_at: new Date(), hard_deleted_by: currentUser.id }
       );
+
+      // Permanently delete from database
+      const result = await (User.deleteOne as any)({ _id: userId });
+
+      if (result.deletedCount === 0) {
+        throw new NotFoundError('User not found or already deleted');
+      }
 
       logger.warn(`User permanently deleted: ${userId} by ${currentUser.full_name}`);
       return { success: true };
@@ -826,7 +995,7 @@ export class UserService {
 
       return { user };
     } catch (error) {
-      console.error('Error in getUserById:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { error: error.message };
       }
@@ -853,7 +1022,7 @@ export class UserService {
 
       return { users };
     } catch (error) {
-      console.error('Error in getTeamMembers:', error);
+
       if (error instanceof AuthorizationError) {
         return { users: [], error: error.message };
       }
@@ -879,7 +1048,7 @@ export class UserService {
 
       return { users };
     } catch (error) {
-      console.error('Error in getUsersByRole:', error);
+
       if (error instanceof AuthorizationError) {
         return { users: [], error: error.message };
       }
@@ -929,6 +1098,12 @@ export class UserService {
         throw new ValidationError(`Password validation failed: ${pwValidation.errors.join(', ')}`);
       }
 
+      // Get user before update for audit
+      const userBefore = await (User.findOne as any)({ _id: userId, deleted_at: { $exists: false } });
+      if (!userBefore) {
+        throw new NotFoundError('User not found');
+      }
+
       // Hash the password
       const passwordHash = await bcrypt.hash(password, 10);
 
@@ -944,10 +1119,24 @@ export class UserService {
         throw new NotFoundError('User not found');
       }
 
-      console.log(`Set credentials for user: ${userId}`);
+      // Log audit event for password reset
+      await AuditLogService.logEvent(
+        'users',
+        userId,
+        'UPDATE',
+        currentUser.id,
+        currentUser.full_name,
+        {
+          action: 'admin_password_reset',
+          email: userBefore.email,
+          role: userBefore.role,
+          reset_by: 'super_admin'
+        }
+      );
+
       return { success: true };
     } catch (error) {
-      console.error('Error in setUserCredentials:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError || error instanceof ValidationError) {
         return { success: false, error: error.message };
       }
@@ -1007,7 +1196,7 @@ export class UserService {
 
       return { success: true, results };
     } catch (error) {
-      console.error('Error in bulkUserAction:', error);
+
       if (error instanceof AuthorizationError || error instanceof ValidationError) {
         return { success: false, error: error.message };
       }
@@ -1089,6 +1278,21 @@ export class UserService {
         }
       );
 
+      // Log audit event for password change
+      await AuditLogService.logEvent(
+        'users',
+        userId,
+        'UPDATE',
+        currentUser.id,
+        currentUser.full_name,
+        {
+          action: 'password_change',
+          email: user.email,
+          role: user.role,
+          self_initiated: currentUser.id === userId
+        }
+      );
+
       logger.info(`Password changed successfully for user: ${userId}`);
       return { success: true };
     } catch (error) {
@@ -1119,9 +1323,6 @@ export class UserService {
       // Generate secure reset token
       const resetToken = PasswordSecurity.generateResetToken();
       const resetExpiry = PasswordSecurity.generatePasswordExpiry(1); // 1 hour to reset
-      
-      // Temporary logging for development
-      console.log(`🔐 Password reset token for ${email}: ${resetToken}`);
 
       // Save reset token
       await (User.updateOne as any)(

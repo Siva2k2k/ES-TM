@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff, Lock, Shield, AlertCircle, CheckCircle, X } from 'lucide-react';
+import { SettingsService } from '../services/SettingsService';
 
 interface ChangePasswordModalProps {
   isOpen: boolean;
@@ -88,29 +89,17 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
     setError(null);
 
     try {
-      const response = await fetch('/api/auth/change-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-        },
-        body: JSON.stringify({
-          currentPassword,
-          newPassword
-        })
-      });
+      const result = await SettingsService.changePassword(currentPassword, newPassword);
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to change password');
+      if (result.success) {
+        setSuccess(true);
+        setTimeout(() => {
+          onSuccess?.();
+          handleClose();
+        }, 2000);
+      } else {
+        throw new Error(result.error || 'Failed to change password');
       }
-
-      setSuccess(true);
-      setTimeout(() => {
-        onSuccess?.();
-        handleClose();
-      }, 2000);
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to change password');

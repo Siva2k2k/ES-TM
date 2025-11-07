@@ -1,43 +1,117 @@
-# Build stage
-FROM node:18-alpine AS builder
+# Multi-stage Dockerfile for Heroku Deployment
+# Timesheet Management System - Full Stack
 
-# Set working directory
-WORKDIR /app
+# ============================================
+# Stage 1: Build Frontend (React + Vite)
+# ============================================
+FROM node:18-alpine AS frontend-builder
 
-# Copy package files
-COPY package*.json ./
+WORKDIR /app/frontend
 
-# Install all dependencies (including devDependencies for building)
+# Copy frontend package files
+COPY frontend/package*.json ./
+
+# Install dependencies
 RUN npm ci
 
-# Copy source code
-COPY . .
+# Copy frontend source code
+COPY frontend/ ./
 
-# Accept build arguments for environment variables
-ARG VITE_SUPABASE_URL
-ARG VITE_SUPABASE_ANON_KEY
+# Build arguments for frontend environment variables
+# Use empty string to make frontend use relative URLs (same domain as backend)
+ARG VITE_API_URL=""
+ENV VITE_API_URL=${VITE_API_URL}
 
-# Set environment variables for build process
-ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
-ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
-
-# Build the application with environment variables
+# Build frontend application
 RUN npm run build
 
-# Production stage - Simple Node.js server
+# ============================================
+# Stage 2: Build Backend (Node.js + TypeScript)
+# ============================================
+FROM node:18-alpine AS backend-builder
+
+WORKDIR /app/backend
+
+# Copy backend package files
+COPY backend/package*.json ./
+COPY backend/tsconfig.json ./
+
+# Install all dependencies (including dev for build)
+RUN npm ci
+
+# Copy backend source code
+COPY backend/src ./src
+
+# Build TypeScript to JavaScript
+RUN npm run build
+
+# ============================================
+# Stage 3: Production Runtime
+# ============================================
 FROM node:18-alpine AS production
 
-# Install serve globally
-RUN npm install -g serve
+# Install required utilities
+RUN apk add --no-cache curl
 
-# Create app directory
 WORKDIR /app
 
-# Copy built application from builder stage
-COPY --from=builder /app/dist ./dist
+# ----------------
+# Setup Backend
+# ----------------
+WORKDIR /app/backend
 
-# Heroku dynamically assigns ports
-# ENV PORT=3000
+# Copy backend package files
+COPY backend/package*.json ./
 
-# Start the application - serve on all interfaces
-CMD ["sh", "-c", "serve -s dist -l $PORT"]
+# Install only production dependencies
+RUN npm ci --only=production
+
+# Copy built backend from builder stage
+COPY --from=backend-builder /app/backend/dist ./dist
+
+# ----------------
+# Setup Frontend
+# ----------------
+WORKDIR /app/frontend
+
+# Copy built frontend from builder stage
+COPY --from=frontend-builder /app/frontend/dist ./dist
+
+# ----------------
+# Create Startup Script
+# ----------------
+# Backend will serve both API and static frontend files
+WORKDIR /app
+RUN printf '#!/bin/sh\n\
+    echo "Starting Timesheet Management System..."\n\
+    echo "PORT: $PORT"\n\
+    echo "NODE_ENV: $NODE_ENV"\n\
+    \n\
+    cd /app/backend\n\
+    echo "Starting Backend API (will serve frontend static files)..."\n\
+    NODE_ENV=${NODE_ENV:-production} PORT=${PORT:-3000} node dist/index.js\n\
+    ' > /app/start.sh
+
+RUN chmod +x /app/start.sh
+
+# ----------------
+# Environment Variables
+# ----------------
+ENV NODE_ENV=production
+ENV PORT=3000
+
+# ----------------
+# Expose Port (Heroku assigns dynamically)
+# ----------------
+EXPOSE ${PORT}
+
+# ----------------
+# Health Check
+# ----------------
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:${PORT}/health || curl -f http://localhost:${PORT}/ || exit 1
+
+# ----------------
+# Start Application
+# ----------------
+CMD ["/app/start.sh"]

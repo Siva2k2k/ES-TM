@@ -66,7 +66,7 @@ export class TeamReviewService {
         ? { deleted_at: null }
         : { primary_manager_id: new mongoose.Types.ObjectId(approverId), deleted_at: null };
 
-      const projects = await Project.find(projectQuery)
+      const projects = await (Project as any).find(projectQuery)
         .populate('primary_manager_id', 'name email')
         .lean() as any[];
 
@@ -132,7 +132,8 @@ export class TeamReviewService {
         const memberData = await this.buildMemberTimesheetData(
           member.user_id.toString(),
           project._id.toString(),
-          member
+          member,
+          approverRole
         );
 
         if (memberData.current_week_timesheet) {
@@ -174,7 +175,8 @@ export class TeamReviewService {
   private static async buildMemberTimesheetData(
     userId: string,
     projectId: string,
-    memberInfo: any
+    memberInfo: any,
+    approverRole: string
   ): Promise<ProjectMemberTimesheet> {
     const currentDate = new Date();
     const weekStart = new Date(currentDate);
@@ -186,7 +188,7 @@ export class TeamReviewService {
     weekEnd.setHours(23, 59, 59, 999);
 
     // Find timesheet for current week
-    const timesheet = await Timesheet.findOne({
+      const timesheet = await (Timesheet as any).findOne({
       user_id: new mongoose.Types.ObjectId(userId),
       week_start_date: { $gte: weekStart, $lte: weekEnd },
       deleted_at: null
@@ -195,20 +197,32 @@ export class TeamReviewService {
     let currentWeekData;
     if (timesheet) {
       // Get project approval status
-      const projectApproval = await TimesheetProjectApproval.findOne({
+      const projectApproval = await (TimesheetProjectApproval as any).findOne({
         timesheet_id: timesheet._id,
         project_id: new mongoose.Types.ObjectId(projectId)
       }).lean();
 
       if (projectApproval) {
         // Count entries for this project
-        const entries = await TimeEntry.find({
+        // Entry filtering based on approver role:
+        // - Lead: Only sees 'project' and 'training' entries (leave/miscellaneous skip Lead approval)
+        // - Manager/Management: See all entries including leave and miscellaneous
+        const entryFilter: any = {
           timesheet_id: timesheet._id,
           project_id: new mongoose.Types.ObjectId(projectId),
           deleted_at: null
-        }).lean();
+        };
 
-        const totalHours = entries.reduce((sum, entry) => sum + entry.hours_worked, 0);
+        // Filter entries based on approver role
+        if (approverRole === 'lead') {
+          // Leads only review project and training entries
+          entryFilter.entry_category = { $in: ['project', 'training'] };
+        }
+        // For manager, management, super_admin: show all entries (no filter)
+
+        const entries = await (TimeEntry as any).find(entryFilter).lean();
+
+        const totalHours = entries.reduce((sum, entry) => sum + (entry.hours || 0), 0);
 
         currentWeekData = {
           timesheet_id: timesheet._id.toString(),

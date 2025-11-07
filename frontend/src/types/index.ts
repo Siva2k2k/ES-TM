@@ -5,6 +5,12 @@
 // Updated to match new database schema with enhanced workflow
 // ==========================================================================
 
+// Re-export types from specialized modules
+export * from './voice';
+export * from './userTracking';
+export * from './billing';
+export * from './settings';
+
 // ==========================================================================
 // USER TYPES
 // ==========================================================================
@@ -29,7 +35,7 @@ export interface User {
 // PROJECT TYPES
 // ==========================================================================
 
-export type ProjectStatus = 'active' | 'completed' | 'archived';
+export type ProjectStatus = 'active' | 'completed' | 'archived' | 'on_hold' | 'cancelled';
 
 export interface Client {
   id: string;
@@ -40,6 +46,11 @@ export interface Client {
   created_at: string;
   updated_at: string;
   deleted_at?: string;
+}
+
+// NEW: Project approval settings
+export interface ProjectApprovalSettings {
+  lead_approval_auto_escalates: boolean;
 }
 
 export interface Project {
@@ -58,6 +69,7 @@ export interface Project {
   budget?: number;
   description?: string;
   is_billable?: boolean; // NEW: Added project-level billable flag
+  approval_settings?: ProjectApprovalSettings; // NEW: Approval workflow settings
   created_at: string;
   updated_at: string;
   deleted_at?: string;
@@ -108,12 +120,14 @@ export interface Task {
 // TIMESHEET TYPES (ENHANCED WORKFLOW)
 // ==========================================================================
 
-// UPDATED: Enhanced timesheet workflow with new statuses
-export type TimesheetStatus = 
-  | 'draft' 
-  | 'submitted' 
-  | 'manager_approved' 
-  | 'manager_rejected' 
+// UPDATED: Enhanced timesheet workflow with 3-tier hierarchy
+export type TimesheetStatus =
+  | 'draft'
+  | 'submitted'
+  | 'lead_approved'       // NEW: Lead approved employee timesheet (Tier 1)
+  | 'lead_rejected'       // NEW: Lead rejected employee timesheet (Tier 1)
+  | 'manager_approved'
+  | 'manager_rejected'
   | 'management_pending'  // NEW: Escalated to management for approval
   | 'management_rejected'
   | 'frozen'              // Management approved and verified
@@ -126,20 +140,28 @@ export interface Timesheet {
   week_end_date: string;
   total_hours: number;
   status: TimesheetStatus;
+  // Lead approval fields (Tier 1) - NEW
+  approved_by_lead_id?: string;
+  approved_by_lead_at?: string;
+  lead_rejection_reason?: string;
+  lead_rejected_at?: string;
+  // Manager approval fields (Tier 2)
   approved_by_manager_id?: string;
   approved_by_manager_at?: string;
   manager_rejection_reason?: string;
-  manager_rejected_at?: string; // NEW: Added rejection timestamp
+  manager_rejected_at?: string;
+  // Management approval fields (Tier 3)
   approved_by_management_id?: string;
   approved_by_management_at?: string;
   management_rejection_reason?: string;
-  management_rejected_at?: string; // NEW: Added rejection timestamp
+  management_rejected_at?: string;
+  // Verification fields
   verified_by_id?: string;
   is_verified: boolean;
   verified_at?: string;
   is_frozen?: boolean;
   billing_snapshot_id?: string;
-  submitted_at?: string; // NEW: Added submission timestamp
+  submitted_at?: string;
   created_at: string;
   updated_at: string;
   deleted_at?: string;
@@ -162,6 +184,10 @@ export interface TimeEntry {
   created_at: string;
   updated_at: string;
   deleted_at?: string;
+  is_rejected?: boolean;
+  rejection_reason?: string;
+  rejected_at?: string;
+  rejected_by?: string;
 }
 
 // ==========================================================================
@@ -187,6 +213,8 @@ export interface TimesheetWithDetails extends Timesheet {
   can_verify?: boolean;
   can_escalate?: boolean; // NEW: Permission to escalate to management
   can_bill?: boolean; // NEW: Permission to mark as billed
+  can_finalize?: boolean;
+  owner_role?: UserRole;
   next_action: string;
   entries?: TimeEntry[];
   user?: User;
@@ -289,6 +317,8 @@ export type AuditAction =
   | 'TIMESHEET_REJECTED'
   | 'PROJECT_CREATED'
   | 'PROJECT_UPDATED'
+  | 'PROJECT_MEMBER_ADDED'
+  | 'PROJECT_MEMBER_REMOVED'
   | 'PROJECT_DELETED'
   | 'BILLING_SNAPSHOT_GENERATED'
   | 'BILLING_APPROVED' // Enhanced for new billing workflow
@@ -504,7 +534,42 @@ export interface UserPermissions {
 }
 
 // ==========================================================================
-// EXPORT ALL TYPES
+// CALENDAR TYPES (NEW)
 // ==========================================================================
 
-// All types are already exported above
+export type CalendarType = 'system' | 'company' | 'regional' | 'personal';
+
+export interface Calendar {
+  id: string;
+  name: string;
+  description?: string;
+  type: CalendarType;
+  timezone: string;
+  is_default: boolean;
+  is_active: boolean;
+  include_public_holidays: boolean;
+  include_company_holidays: boolean;
+  working_days: number[];
+  business_hours_start?: string;
+  business_hours_end?: string;
+  working_hours_per_day: number;
+  created_by: {
+    id: string;
+    full_name: string;
+    email: string;
+  };
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string;
+}
+
+export interface CalendarWithHolidays extends Calendar {
+  holidays: Array<{
+    id: string;
+    name: string;
+    date: string;
+    holiday_type: 'public' | 'company' | 'optional';
+    description?: string;
+    is_active: boolean;
+  }>;
+}

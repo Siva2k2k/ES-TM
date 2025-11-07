@@ -1,4 +1,3 @@
-import { BackendTimesheetService } from './BackendTimesheetService';
 import { backendApi } from '../lib/backendApi';
 import type { Timesheet, TimeEntry, TimesheetStatus, TimesheetWithDetails } from '../types';
 
@@ -11,7 +10,13 @@ export class TimesheetService {
    * Get all timesheets (Super Admin and Management) - Using Backend API
    */
   static async getAllTimesheets(): Promise<{ timesheets: Timesheet[]; error?: string }> {
-    return BackendTimesheetService.getAllTimesheets();
+    try {
+      const response = await backendApi.getAllTimesheets();
+      return { timesheets: response.data || [] };
+    } catch (error: any) {
+      console.error('Error fetching all timesheets:', error);
+      return { timesheets: [], error: error.message };
+    }
   }
 
   /**
@@ -42,21 +47,63 @@ export class TimesheetService {
     limit = 50,
     offset = 0
   ): Promise<{ timesheets: TimesheetWithDetails[]; total: number; error?: string }> {
-    return BackendTimesheetService.getUserTimesheets(userId, statusFilter, weekStartFilter, limit, offset);
+    try {
+      const response = await backendApi.getUserTimesheets({
+        userId,
+        status: statusFilter,
+        weekStartDate: weekStartFilter,
+        limit,
+        offset
+      });
+
+      return {
+        timesheets: response.data || [],
+        total: response.total || 0
+      };
+    } catch (error: any) {
+      console.error('Error fetching user timesheets:', error);
+      return { timesheets: [], total: 0, error: error.message };
+    }
   }
 
   /**
    * Create new timesheet - Using Backend API
    */
   static async createTimesheet(userId: string, weekStartDate: string): Promise<{ timesheet?: Timesheet; error?: string }> {
-    return BackendTimesheetService.createTimesheet(userId, weekStartDate);
+    try {
+
+      const response = await backendApi.createTimesheet({
+        userId,
+        weekStartDate
+      });
+
+      if (response.success) {
+        return { timesheet: response.data as Timesheet };
+      } else {
+        return { error: 'Failed to create timesheet' };
+      }
+    } catch (error: any) {
+      console.error('Error in createTimesheet:', error);
+      return { error: error.message };
+    }
   }
 
   /**
    * Get timesheet for specific user and week - Using Backend API
    */
   static async getTimesheetByUserAndWeek(userId: string, weekStartDate: string): Promise<{ timesheet?: TimesheetWithDetails; error?: string }> {
-    return BackendTimesheetService.getTimesheetByUserAndWeek(userId, weekStartDate);
+    try {
+      const response = await backendApi.getTimesheetByUserAndWeek(userId, weekStartDate);
+
+      if (response.success && response.data) {
+        return { timesheet: response.data as TimesheetWithDetails };
+      } else {
+        return { timesheet: undefined };
+      }
+    } catch (error: any) {
+      console.error('Error fetching timesheet by user and week:', error);
+      return { error: error.message };
+    }
   }
 
   /**
@@ -66,7 +113,19 @@ export class TimesheetService {
    * Submit timesheet for approval - Using Backend API
    */
   static async submitTimesheet(timesheetId: string): Promise<{ success: boolean; error?: string }> {
-    return BackendTimesheetService.submitTimesheet(timesheetId);
+    try {
+
+      const response = await backendApi.submitTimesheet(timesheetId);
+
+      if (response.success) {
+        return { success: true };
+      } else {
+        return { success: false, error: 'Failed to submit timesheet' };
+      }
+    } catch (error: any) {
+      console.error('Error in submitTimesheet:', error);
+      return { success: false, error: error.message };
+    }
   }
 
   /**
@@ -75,9 +134,25 @@ export class TimesheetService {
   static async managerApproveRejectTimesheet(
     timesheetId: string,
     action: 'approve' | 'reject',
-    reason?: string
+    options: {
+      reason?: string;
+      approverRole?: 'lead' | 'manager';
+      finalize?: boolean;
+      notify?: boolean;
+    } = {}
   ): Promise<{ success: boolean; error?: string }> {
-    return BackendTimesheetService.managerApproveRejectTimesheet(timesheetId, action, reason);
+    try {
+      const response = await backendApi.managerApproveRejectTimesheet(timesheetId, action, options);
+
+      if (response.success) {
+        return { success: true };
+      } else {
+        return { success: false, error: `Failed to ${action} timesheet` };
+      }
+    } catch (error: any) {
+      console.error('Error in managerApproveRejectTimesheet:', error);
+      return { success: false, error: error.message };
+    }
   }
 
   /**
@@ -86,9 +161,25 @@ export class TimesheetService {
   static async managementApproveRejectTimesheet(
     timesheetId: string,
     action: 'approve' | 'reject',
-    reason?: string
+    options: {
+      reason?: string;
+      approverRole?: 'management' | 'manager';
+      finalize?: boolean;
+      notify?: boolean;
+    } = {}
   ): Promise<{ success: boolean; error?: string }> {
-    return BackendTimesheetService.managementApproveRejectTimesheet(timesheetId, action, reason);
+    try {
+      const response = await backendApi.managementApproveRejectTimesheet(timesheetId, action, options);
+
+      if (response.success) {
+        return { success: true };
+      } else {
+        return { success: false, error: `Failed to ${action} timesheet` };
+      }
+    } catch (error: any) {
+      console.error('Error in managementApproveRejectTimesheet:', error);
+      return { success: false, error: error.message };
+    }
   }
 
   /**
@@ -221,10 +312,169 @@ export class TimesheetService {
       description?: string;
       is_billable: boolean;
       custom_task_description?: string;
-      entry_type: 'project_task' | 'custom_task';
+      entry_type: 'project_task' | 'custom_task' | 'non_project' | 'leave' | 'holiday';
+      entry_category?: 'project' | 'leave' | 'training' | 'miscellaneous' | 'holiday';
+      leave_session?: 'morning' | 'afternoon' | 'full_day';
+      miscellaneous_activity?: string;
+      project_name?: string;
     }
   ): Promise<{ entry?: TimeEntry; error?: string }> {
-    return BackendTimesheetService.addTimeEntry(timesheetId, entryData);
+    try {
+
+      const response = await backendApi.addTimeEntry(timesheetId, {
+        date: entryData.date,
+        hours: entryData.hours,
+        entry_type: entryData.entry_type,
+        is_billable: entryData.is_billable,
+        project_id: entryData.project_id,
+        task_id: entryData.task_id,
+        description: entryData.description,
+        custom_task_description: entryData.custom_task_description
+        ,
+        // pass through optional metadata when available
+        entry_category: entryData.entry_category,
+        leave_session: entryData.leave_session,
+        miscellaneous_activity: entryData.miscellaneous_activity,
+        project_name: entryData.project_name
+      });
+
+      if (response.success) {
+        return { entry: response.data as TimeEntry };
+      } else {
+        return { error: 'Failed to add time entry' };
+      }
+    } catch (error: any) {
+      console.error('Error in addTimeEntry:', error);
+      return { error: error.message };
+    }
+  }
+
+  /**
+   * Add leave entry
+   */
+  static async addLeaveEntry(
+    timesheetId: string,
+    date: string,
+    leaveSession: 'morning' | 'afternoon' | 'full_day',
+    description?: string
+  ): Promise<{ entry?: TimeEntry; error?: string }> {
+    try {
+      const response = await backendApi.post(`/timesheets/${timesheetId}/entries/leave`, {
+        date,
+        leaveSession,
+        description
+      });
+
+      if (response.success && response.data) {
+        return { entry: response.data as TimeEntry };
+      } else {
+        return { error: response.error || 'Failed to add leave entry' };
+      }
+    } catch (error: any) {
+      console.error('Error adding leave entry:', error);
+      return { error: error.message || 'Failed to add leave entry' };
+    }
+  }
+
+  /**
+   * Add miscellaneous entry (company events, etc.)
+   */
+  static async addMiscellaneousEntry(
+    timesheetId: string,
+    date: string,
+    activity: string,
+    hours: number
+  ): Promise<{ entry?: TimeEntry; error?: string }> {
+    try {
+      const response = await backendApi.post(`/timesheets/${timesheetId}/entries/miscellaneous`, {
+        date,
+        activity,
+        hours
+      });
+
+      if (response.success && response.data) {
+        return { entry: response.data as TimeEntry };
+      } else {
+        return { error: response.error || 'Failed to add miscellaneous entry' };
+      }
+    } catch (error: any) {
+      console.error('Error adding miscellaneous entry:', error);
+      return { error: error.message || 'Failed to add miscellaneous entry' };
+    }
+  }
+
+  /**
+   * Add project entry
+   */
+  static async addProjectEntry(
+    timesheetId: string,
+    data: {
+      projectId: string;
+      date: string;
+      hours: number;
+      taskType: 'project_task' | 'custom_task';
+      taskId?: string;
+      customTaskDescription?: string;
+      description?: string;
+      isBillable?: boolean;
+    }
+  ): Promise<{ entry?: TimeEntry; error?: string }> {
+    try {
+      const response = await backendApi.post(`/timesheets/${timesheetId}/entries/project`, {
+        projectId: data.projectId,
+        date: data.date,
+        hours: data.hours,
+        taskType: data.taskType,
+        taskId: data.taskId,
+        customTaskDescription: data.customTaskDescription,
+        description: data.description,
+        isBillable: data.isBillable
+      });
+
+      if (response.success && response.data) {
+        return { entry: response.data as TimeEntry };
+      } else {
+        return { error: response.error || 'Failed to add project entry' };
+      }
+    } catch (error: any) {
+      console.error('Error adding project entry:', error);
+      return { error: error.message || 'Failed to add project entry' };
+    }
+  }
+
+  /**
+   * Add training entry
+   */
+  static async addTrainingEntry(
+    timesheetId: string,
+    data: {
+      date: string;
+      hours: number;
+      taskType: 'project_task' | 'custom_task';
+      taskId?: string;
+      customTaskDescription?: string;
+      description?: string;
+    }
+  ): Promise<{ entry?: TimeEntry; error?: string }> {
+    try {
+      const response = await backendApi.post(`/timesheets/${timesheetId}/entries/training`, {
+        date: data.date,
+        hours: data.hours,
+        taskType: data.taskType,
+        taskId: data.taskId,
+        customTaskDescription: data.customTaskDescription,
+        description: data.description
+      });
+
+      if (response.success && response.data) {
+        return { entry: response.data as TimeEntry };
+      } else {
+        return { error: response.error || 'Failed to add training entry' };
+      }
+    } catch (error: any) {
+      console.error('Error adding training entry:', error);
+      return { error: error.message || 'Failed to add training entry' };
+    }
   }
 
   /**
@@ -232,7 +482,6 @@ export class TimesheetService {
    */
   private static async updateTimesheetTotalHours(timesheetId: string): Promise<void> {
     // This is now handled automatically by the backend when entries are updated
-    console.log('✅ Timesheet total hours updated automatically by backend:', timesheetId);
   }
 
   /**
@@ -265,7 +514,11 @@ export class TimesheetService {
       description?: string;
       is_billable: boolean;
       custom_task_description?: string;
-      entry_type: 'project_task' | 'custom_task';
+      entry_type: 'project_task' | 'custom_task' | 'non_project' | 'leave' | 'holiday';
+      entry_category?: 'project' | 'leave' | 'training' | 'miscellaneous' | 'holiday';
+      leave_session?: 'morning' | 'afternoon' | 'full_day';
+      miscellaneous_activity?: string;
+      project_name?: string;
     }[]
   ): Promise<{ success: boolean; error?: string; updatedEntries?: TimeEntry[] }> {
     try {
@@ -295,7 +548,6 @@ export class TimesheetService {
    */
   static async getTimesheetById(timesheetId: string): Promise<{ timesheet?: TimesheetWithDetails; error?: string }> {
     try {
-      console.log('🔍 TimesheetService.getTimesheetById called with ID:', timesheetId);
 
       const response = await backendApi.get(`/timesheets/details/${timesheetId}`);
 
@@ -319,14 +571,6 @@ export class TimesheetService {
           can_reject: false, // Will be determined by role in component
           next_action: this.getNextAction(timesheetData.status)
         };
-
-        console.log('✅ Enhanced timesheet created:', {
-          id: enhancedTimesheet.id,
-          status: enhancedTimesheet.status,
-          total_hours: enhancedTimesheet.total_hours,
-          can_submit: enhancedTimesheet.can_submit,
-          entries_count: enhancedTimesheet.time_entries?.length || 0
-        });
 
         return { timesheet: enhancedTimesheet };
       } else {
@@ -372,12 +616,10 @@ export class TimesheetService {
     error?: string;
   }> {
     try {
-      console.log(`📅 Loading calendar data for user ${userId}, year ${year}, month ${month}`);
 
       const response = await backendApi.get(`/timesheets/calendar/${userId}/${year}/${month}`);
 
       if (response.success && response.data) {
-        console.log(`📅 Calendar data keys: ${Object.keys(response.data).length} days with data`);
         return { calendarData: response.data };
       } else {
         return { calendarData: {}, error: response.message || 'Failed to fetch calendar data' };
@@ -394,7 +636,37 @@ export class TimesheetService {
   static async getTimesheetsForApproval(
     approverRole: 'manager' | 'management' | 'lead'
   ): Promise<{ timesheets: TimesheetWithDetails[]; error?: string }> {
-    return BackendTimesheetService.getTimesheetsForApproval(approverRole);
+    try {
+      let statusFilter: TimesheetStatus[];
+
+      if (approverRole === 'lead') {
+        statusFilter = ['draft', 'submitted', 'manager_approved', 'manager_rejected', 'frozen'];
+      } else if (approverRole === 'manager') {
+        statusFilter = ['submitted', 'management_rejected'];
+      } else {
+        statusFilter = ['management_pending'];
+      }
+
+      const result = await this.getUserTimesheets(undefined, statusFilter);
+
+      if (result.error) {
+        return { timesheets: [], error: result.error };
+      }
+
+      // Enhance with approval permissions
+      const enhancedTimesheets = result.timesheets.map(timesheet => ({
+        ...timesheet,
+        can_edit: approverRole !== 'lead',
+        can_submit: false,
+        can_approve: approverRole !== 'lead',
+        can_reject: approverRole !== 'lead',
+      }));
+
+      return { timesheets: enhancedTimesheets };
+    } catch (error: any) {
+      console.error('Error in getTimesheetsForApproval:', error);
+      return { timesheets: [], error: error.message };
+    }
   }
 
   /**

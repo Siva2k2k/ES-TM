@@ -1,10 +1,10 @@
 /**
  * Phase 7: Team Review Service
  * Handles project-wise timesheet approval workflows with multi-manager support
- * SonarQube compliant with Axios integration
+ * Now uses unified backendApi with Axios interceptors
  */
 
-import axios, { AxiosError } from 'axios';
+import { backendApi } from '../lib/backendApi';
 import type {
   ProjectTimesheetGroup,
   ApprovalActionRequest,
@@ -15,37 +15,8 @@ import type {
   TeamReviewFilters,
   ProjectWeekFilters,
   ProjectWeekResponse,
-  BulkProjectWeekApprovalRequest,
   BulkProjectWeekApprovalResponse
 } from '../types/timesheetApprovals';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
-
-/**
- * Get authorization headers with access token
- */
-const getAuthHeaders = () => {
-  const token = localStorage.getItem('accessToken');
-  return {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json'
-  };
-};
-
-/**
- * Handle API errors consistently
- */
-const handleApiError = (error: unknown, defaultMessage: string): never => {
-  if (axios.isAxiosError(error)) {
-    const axiosError = error as AxiosError<{ error?: string; message?: string }>;
-    const message = axiosError.response?.data?.error ||
-                    axiosError.response?.data?.message ||
-                    axiosError.message ||
-                    defaultMessage;
-    throw new Error(message);
-  }
-  throw new Error(defaultMessage);
-};
 
 /**
  * Team Review Service
@@ -60,17 +31,14 @@ export class TeamReviewService {
     filters?: TeamReviewFilters
   ): Promise<ProjectTimesheetGroup[]> {
     try {
-      const response = await axios.get<{ projects: ProjectTimesheetGroup[] }>(
-        `${API_BASE_URL}/timesheets/projects/groups`,
-        {
-          headers: getAuthHeaders(),
-          params: filters
-        }
+      const response = await backendApi.get<{ projects: ProjectTimesheetGroup[] }>(
+        '/timesheets/projects/groups',
+        { params: filters }
       );
 
-      return response.data.projects;
+      return response.projects;
     } catch (error) {
-      return handleApiError(error, 'Failed to load project timesheet groups');
+      throw new Error(error instanceof Error ? error.message : 'Failed to load project timesheet groups');
     }
   }
 
@@ -82,20 +50,17 @@ export class TeamReviewService {
     request: ApprovalActionRequest
   ): Promise<ApprovalActionResponse> {
     try {
-      const response = await axios.post<ApprovalActionResponse>(
-        `${API_BASE_URL}/timesheets/${request.timesheet_id}/approve`,
+      const response = await backendApi.post<ApprovalActionResponse>(
+        `/timesheets/${request.timesheet_id}/approve`,
         {
           project_id: request.project_id,
           action: 'approve'
-        },
-        {
-          headers: getAuthHeaders()
         }
       );
 
-      return response.data;
+      return response;
     } catch (error) {
-      return handleApiError(error, 'Failed to approve timesheet');
+      throw new Error(error instanceof Error ? error.message : 'Failed to approve timesheet');
     }
   }
 
@@ -107,47 +72,41 @@ export class TeamReviewService {
     request: ApprovalActionRequest
   ): Promise<ApprovalActionResponse> {
     try {
-      const response = await axios.post<ApprovalActionResponse>(
-        `${API_BASE_URL}/timesheets/${request.timesheet_id}/reject`,
+      const response = await backendApi.post<ApprovalActionResponse>(
+        `/timesheets/${request.timesheet_id}/reject`,
         {
           project_id: request.project_id,
           action: 'reject',
           reason: request.reason
-        },
-        {
-          headers: getAuthHeaders()
         }
       );
 
-      return response.data;
+      return response;
     } catch (error) {
-      return handleApiError(error, 'Failed to reject timesheet');
+      throw new Error(error instanceof Error ? error.message : 'Failed to reject timesheet');
     }
   }
 
   /**
-   * Bulk verify timesheets (Management only)
-   * Changes status from 'manager_approved' to 'frozen'
+   * Bulk verify timesheets for a specific project (Management only)
+   * Changes management_status from 'pending' to 'approved' for the specified project approvals
    */
   static async bulkVerifyTimesheets(
     request: BulkApprovalRequest
   ): Promise<BulkApprovalResponse> {
     try {
-      const response = await axios.post<BulkApprovalResponse>(
-        `${API_BASE_URL}/timesheets/bulk/verify`,
+      const response = await backendApi.post<BulkApprovalResponse>(
+        '/timesheets/bulk/verify',
         {
           timesheet_ids: request.timesheet_ids,
           project_id: request.project_id,
           verification_notes: request.verification_notes
-        },
-        {
-          headers: getAuthHeaders()
         }
       );
 
-      return response.data;
+      return response;
     } catch (error) {
-      return handleApiError(error, 'Failed to bulk verify timesheets');
+      throw new Error(error instanceof Error ? error.message : 'Failed to bulk verify timesheets');
     }
   }
 
@@ -159,20 +118,17 @@ export class TeamReviewService {
     request: BulkApprovalRequest
   ): Promise<BulkApprovalResponse> {
     try {
-      const response = await axios.post<BulkApprovalResponse>(
-        `${API_BASE_URL}/timesheets/bulk/bill`,
+      const response = await backendApi.post<BulkApprovalResponse>(
+        '/timesheets/bulk/bill',
         {
           timesheet_ids: request.timesheet_ids,
           project_id: request.project_id
-        },
-        {
-          headers: getAuthHeaders()
         }
       );
 
-      return response.data;
+      return response;
     } catch (error) {
-      return handleApiError(error, 'Failed to bulk bill timesheets');
+      throw new Error(error instanceof Error ? error.message : 'Failed to bulk bill timesheets');
     }
   }
 
@@ -184,16 +140,13 @@ export class TeamReviewService {
     timesheetId: string
   ): Promise<TimesheetWithHistory> {
     try {
-      const response = await axios.get<TimesheetWithHistory>(
-        `${API_BASE_URL}/timesheets/${timesheetId}/history`,
-        {
-          headers: getAuthHeaders()
-        }
+      const response = await backendApi.get<TimesheetWithHistory>(
+        `/timesheets/${timesheetId}/history`
       );
 
-      return response.data;
+      return response;
     } catch (error) {
-      return handleApiError(error, 'Failed to load timesheet history');
+      throw new Error(error instanceof Error ? error.message : 'Failed to load timesheet history');
     }
   }
 
@@ -206,16 +159,13 @@ export class TeamReviewService {
     projectId: string
   ): Promise<TimesheetWithHistory> {
     try {
-      const response = await axios.get<TimesheetWithHistory>(
-        `${API_BASE_URL}/timesheets/${timesheetId}/project/${projectId}`,
-        {
-          headers: getAuthHeaders()
-        }
+      const response = await backendApi.get<TimesheetWithHistory>(
+        `/timesheets/${timesheetId}/project/${projectId}`
       );
 
-      return response.data;
+      return response;
     } catch (error) {
-      return handleApiError(error, 'Failed to load timesheet for project');
+      throw new Error(error instanceof Error ? error.message : 'Failed to load timesheet for project');
     }
   }
 
@@ -228,19 +178,16 @@ export class TeamReviewService {
     by_project: Array<{ project_id: string; project_name: string; count: number }>;
   }> {
     try {
-      const response = await axios.get<{
+      const response = await backendApi.get<{
         total: number;
         by_project: Array<{ project_id: string; project_name: string; count: number }>;
       }>(
-        `${API_BASE_URL}/timesheets/approvals/pending/count`,
-        {
-          headers: getAuthHeaders()
-        }
+        '/timesheets/approvals/pending/count'
       );
 
-      return response.data;
+      return response;
     } catch (error) {
-      return handleApiError(error, 'Failed to load pending approvals count');
+      throw new Error(error instanceof Error ? error.message : 'Failed to load pending approvals count');
     }
   }
 
@@ -264,17 +211,16 @@ export class TeamReviewService {
     }>;
   }> {
     try {
-      const response = await axios.get(
-        `${API_BASE_URL}/timesheets/approvals/statistics`,
+      const response = await backendApi.get(
+        '/timesheets/approvals/statistics',
         {
-          headers: getAuthHeaders(),
           params: { week_start: weekStart, week_end: weekEnd }
         }
       );
 
-      return response.data;
+      return response;
     } catch (error) {
-      return handleApiError(error, 'Failed to load approval statistics');
+      throw new Error(error instanceof Error ? error.message : 'Failed to load approval statistics');
     }
   }
 
@@ -290,17 +236,14 @@ export class TeamReviewService {
     filters?: ProjectWeekFilters
   ): Promise<ProjectWeekResponse> {
     try {
-      const response = await axios.get<ProjectWeekResponse>(
-        `${API_BASE_URL}/timesheets/project-weeks`,
-        {
-          headers: getAuthHeaders(),
-          params: filters
-        }
+      const response = await backendApi.get<ProjectWeekResponse>(
+        '/timesheets/project-weeks',
+        { params: filters }
       );
 
-      return response.data;
+      return response;
     } catch (error) {
-      return handleApiError(error, 'Failed to load project-week groups');
+      throw new Error(error instanceof Error ? error.message : 'Failed to load project-week groups');
     }
   }
 
@@ -314,21 +257,18 @@ export class TeamReviewService {
     weekEnd: string
   ): Promise<BulkProjectWeekApprovalResponse> {
     try {
-      const response = await axios.post<BulkProjectWeekApprovalResponse>(
-        `${API_BASE_URL}/timesheets/project-week/approve`,
+      const response = await backendApi.post<BulkProjectWeekApprovalResponse>(
+        '/timesheets/project-week/approve',
         {
           project_id: projectId,
           week_start: weekStart,
           week_end: weekEnd
-        },
-        {
-          headers: getAuthHeaders()
         }
       );
 
-      return response.data;
+      return response;
     } catch (error) {
-      return handleApiError(error, 'Failed to approve project-week');
+      throw new Error(error instanceof Error ? error.message : 'Failed to approve project-week');
     }
   }
 
@@ -343,22 +283,97 @@ export class TeamReviewService {
     reason: string
   ): Promise<BulkProjectWeekApprovalResponse> {
     try {
-      const response = await axios.post<BulkProjectWeekApprovalResponse>(
-        `${API_BASE_URL}/timesheets/project-week/reject`,
+      const response = await backendApi.post<BulkProjectWeekApprovalResponse>(
+        '/timesheets/project-week/reject',
         {
           project_id: projectId,
           week_start: weekStart,
           week_end: weekEnd,
           reason
-        },
-        {
-          headers: getAuthHeaders()
         }
       );
 
-      return response.data;
+      return response;
     } catch (error) {
-      return handleApiError(error, 'Failed to reject project-week');
+      throw new Error(error instanceof Error ? error.message : 'Failed to reject project-week');
+    }
+  }
+
+  /**
+   * Bulk freeze all timesheets for a project-week (Management only)
+   * Freezes ALL manager_approved timesheets, skips users without timesheets
+   * Validation: Cannot freeze if ANY timesheet is still in submitted/pending state
+   */
+  static async freezeProjectWeek(
+    projectId: string,
+    weekStart: string,
+    weekEnd: string
+  ): Promise<{
+    success: boolean;
+    message: string;
+    frozen_count: number;
+    skipped_count: number;
+    failed: Array<{ user_id: string; user_name: string; reason: string }>;
+  }> {
+    try {
+      const response = await backendApi.post<{
+        success: boolean;
+        message: string;
+        frozen_count: number;
+        skipped_count: number;
+        failed: Array<{ user_id: string; user_name: string; reason: string }>;
+      }>(
+        '/timesheets/project-week/freeze',
+        {
+          project_id: projectId,
+          week_start: weekStart,
+          week_end: weekEnd
+        }
+      );
+
+      return response;
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : 'Failed to freeze project-week');
+    }
+  }
+
+  /**
+   * Update billable adjustment for a project approval (Manager only)
+   * Manager can adjust billable hours (+/-) for a user's timesheet on a specific project
+   */
+  static async updateBillableAdjustment(
+    timesheetId: string,
+    projectId: string,
+    adjustment: number
+  ): Promise<{
+    success: boolean;
+    approval: {
+      worked_hours: number;
+      billable_hours: number;
+      billable_adjustment: number;
+    };
+    error?: string;
+  }> {
+    try {
+      const response = await backendApi.put<{
+        success: boolean;
+        approval: {
+          worked_hours: number;
+          billable_hours: number;
+          billable_adjustment: number;
+        };
+      }>(
+        '/timesheets/billable-adjustment',
+        {
+          timesheet_id: timesheetId,
+          project_id: projectId,
+          adjustment
+        }
+      );
+
+      return response;
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : 'Failed to update billable adjustment');
     }
   }
 }

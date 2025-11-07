@@ -6,13 +6,21 @@ import userRoutes from './user';
 import projectRoutes from './project';
 import billingRoutes from './billing';
 import projectBillingRoutes from './projectBilling';
+import invoiceRoutes from './invoice';
+import billingRateRoutes from './billingRate';
 import auditRoutes from './audit';
+import calendarRoutes from './calendar';
 import clientRoutes from './client';
 import dashboardRoutes from './dashboard';
 import reportRoutes from './reports';
 import settingsRoutes from './settings';
 import notificationRoutes from './notifications';
 import searchRoutes from './search';
+import defaulterRoutes from './defaulters';
+import holidayRoutes from './holidays';
+import voiceRoutes from './voice';
+import intentConfigRoutes from './intentConfig';
+import userTrackingRoutes from './userTracking';
 
 export const registerRoutes = (app: Express): void => {
   // Test routes (for development and health checks)
@@ -24,7 +32,10 @@ export const registerRoutes = (app: Express): void => {
   app.use('/api/v1/projects', projectRoutes);
   app.use('/api/v1/billing', billingRoutes);
   app.use('/api/v1/project-billing', projectBillingRoutes);
+  app.use('/api/v1/invoices', invoiceRoutes);
+  app.use('/api/v1/billing-rates', billingRateRoutes);
   app.use('/api/v1/audit', auditRoutes);
+  app.use('/api/v1/calendars', calendarRoutes);
   app.use('/api/v1/timesheets', timesheetRoutes);
   app.use('/api/v1/clients', clientRoutes);
   app.use('/api/v1/dashboard', dashboardRoutes);
@@ -32,7 +43,12 @@ export const registerRoutes = (app: Express): void => {
   app.use('/api/v1/settings', settingsRoutes);
   app.use('/api/v1/notifications', notificationRoutes);
   app.use('/api/v1/search', searchRoutes);
-  
+  app.use('/api/v1/defaulters', defaulterRoutes);
+  app.use('/api/v1/holidays', holidayRoutes);
+  app.use('/api/v1/voice', voiceRoutes);
+  app.use('/api/v1/intent-config', intentConfigRoutes);
+  app.use('/api/v1/user-tracking', userTrackingRoutes);
+
   // Health check at root
   app.get('/health', (req, res) => {
     res.json({ 

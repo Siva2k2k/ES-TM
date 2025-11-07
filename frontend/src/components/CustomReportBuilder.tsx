@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ReportService, ReportTemplate, ReportCategory, ReportFormat } from '../services/ReportService';
 import { useAuth } from '../store/contexts/AuthContext';
 import { showError, showSuccess } from '../utils/toast';
+import { themeClasses } from '../contexts/theme';
 
 const CustomReportBuilder: React.FC = () => {
   const { currentUser } = useAuth();
@@ -20,10 +21,10 @@ const CustomReportBuilder: React.FC = () => {
 
   if (!canCreateCustomReports) {
     return (
-      <div className="bg-white rounded-lg shadow p-6 text-center">
+      <div className={`${themeClasses.card} p-6 text-center`}>
         <div className="text-6xl mb-4">🔒</div>
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Access Restricted</h2>
-        <p className="text-gray-600">
+        <h2 className={`text-xl font-bold mb-2 ${themeClasses.heading}`}>Access Restricted</h2>
+        <p className={themeClasses.body}>
           Custom report creation is only available for Management and Super Admin roles.
         </p>
       </div>
@@ -139,12 +140,12 @@ const CustomReportBuilder: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg shadow p-6 border border-purple-200">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+      <div className={`bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 rounded-lg shadow p-6 border border-purple-200 dark:border-purple-800`}>
+        <h1 className={`text-2xl font-bold flex items-center gap-2 ${themeClasses.heading}`}>
           <span className="text-3xl">🛠️</span>
           Custom Report Builder
         </h1>
-        <p className="text-gray-600 mt-1">
+        <p className={`mt-1 ${themeClasses.body}`}>
           Create custom report templates for your organization
         </p>
       </div>
@@ -153,11 +154,11 @@ const CustomReportBuilder: React.FC = () => {
         {/* Form Section */}
         <div className="lg:col-span-2 space-y-6">
           {/* Basic Information */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">📝 Basic Information</h2>
+          <div className={themeClasses.card}>
+            <h2 className={`text-lg font-semibold mb-4 ${themeClasses.heading}`}>📝 Basic Information</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className={`block text-sm font-medium mb-2 ${themeClasses.subheading}`}>
                   Template Name <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -165,13 +166,13 @@ const CustomReportBuilder: React.FC = () => {
                   value={templateName}
                   onChange={(e) => setTemplateName(e.target.value)}
                   placeholder="e.g., Monthly Project Summary"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={`w-full px-4 py-2 rounded-lg ${themeClasses.input}`}
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className={`block text-sm font-medium mb-2 ${themeClasses.subheading}`}>
                   Description <span className="text-red-500">*</span>
                 </label>
                 <textarea
@@ -179,13 +180,13 @@ const CustomReportBuilder: React.FC = () => {
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Describe what this report will show..."
                   rows={3}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={`w-full px-4 py-2 rounded-lg ${themeClasses.input}`}
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className={`block text-sm font-medium mb-2 ${themeClasses.subheading}`}>
                   Category <span className="text-red-500">*</span>
                 </label>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">

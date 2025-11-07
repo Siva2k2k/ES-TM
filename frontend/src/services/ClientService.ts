@@ -32,15 +32,13 @@ export class ClientService {
         payload
       );
 
-      console.log(response);
 
       if (!response.success) {
         return { error: response.message || 'Failed to create client' };
       }
 
-      console.log('Client created:', response.data);
       return { client: response.data };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error in createClient:', error);
       if (error instanceof BackendApiError) {
         return { error: error.message, status: error.status };
@@ -114,7 +112,6 @@ export class ClientService {
         return { success: false, error: response.message || 'Failed to update client' };
       }
 
-      console.log(`Updated client ${clientId}`);
       return { success: true, client: response.data };
     } catch (error) {
       console.error('Error in updateClient:', error);
@@ -136,7 +133,6 @@ export class ClientService {
         return { success: false, error: response.message || 'Failed to deactivate client' };
       }
 
-      console.log(`Deactivated client ${clientId}`);
       return { success: true };
     } catch (error) {
       console.error('Error in deactivateClient:', error);
@@ -158,7 +154,6 @@ export class ClientService {
         return { success: false, error: response.message || 'Failed to reactivate client' };
       }
 
-      console.log(`Reactivated client ${clientId}`);
       return { success: true };
     } catch (error) {
       console.error('Error in reactivateClient:', error);
@@ -168,24 +163,85 @@ export class ClientService {
   }
 
   /**
-   * Delete client (soft delete)
+   * Delete client (soft delete) with reason
    */
-  static async deleteClient(clientId: string): Promise<{ success: boolean; error?: string }> {
+  static async deleteClient(clientId: string, reason: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await backendApi.delete<{ success: boolean; message?: string }>(
-        `/clients/${clientId}`
+      const response = await backendApi.deleteWithBody<{ success: boolean; message?: string }>(
+        `/clients/${clientId}`,
+        { reason }
       );
 
       if (!response.success) {
         return { success: false, error: response.message || 'Failed to delete client' };
       }
 
-      console.log(`Deleted client ${clientId}`);
       return { success: true };
     } catch (error) {
       console.error('Error in deleteClient:', error);
       const errorMessage = error instanceof BackendApiError ? error.message : 'Failed to delete client';
       return { success: false, error: errorMessage };
+    }
+  }
+
+  /**
+   * Hard delete client (permanent deletion)
+   */
+  static async hardDeleteClient(clientId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await backendApi.delete<{ success: boolean; message?: string }>(
+        `/clients/${clientId}/hard-delete`
+      );
+
+      if (!response.success) {
+        return { success: false, error: response.message || 'Failed to permanently delete client' };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error in hardDeleteClient:', error);
+      const errorMessage = error instanceof BackendApiError ? error.message : 'Failed to permanently delete client';
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  /**
+   * Restore soft-deleted client
+   */
+  static async restoreClient(clientId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await backendApi.post<{ success: boolean; message?: string }>(
+        `/clients/${clientId}/restore`
+      );
+
+      if (!response.success) {
+        return { success: false, error: response.message || 'Failed to restore client' };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error in restoreClient:', error);
+      const errorMessage = error instanceof BackendApiError ? error.message : 'Failed to restore client';
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  /**
+   * Check client dependencies before deletion
+   */
+  static async checkClientDependencies(clientId: string): Promise<{ dependencies: string[] }> {
+    try {
+      const client = await this.getClientById(clientId);
+      const dependencies: string[] = [];
+
+      if (client.client && client.client.total_projects && client.client.total_projects > 0) {
+        dependencies.push(`Has ${client.client.total_projects} project(s)`);
+      }
+
+      return { dependencies };
+    } catch (error) {
+      console.error('Error checking client dependencies:', error);
+      return { dependencies: [] };
     }
   }
 

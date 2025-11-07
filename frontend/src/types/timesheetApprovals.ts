@@ -3,12 +3,14 @@
  * Project-wise approval tracking with multi-manager support
  */
 
-import type { TimeEntry, UserRole, User } from './index';
+import type { TimeEntry, UserRole, TimesheetStatus } from './index';
 
 /**
- * Project role types (NO secondary_manager - removed in Phase 6)
+ * Project role types for approval workflow context
+ * Simplified to lead/employee for approval decisions
+ * Note: Different from project.schemas.ts ProjectRole which includes manager roles
  */
-export type ProjectRole = 'lead' | 'employee';
+export type ApprovalProjectRole = 'lead' | 'employee';
 
 /**
  * Timesheet approval statuses
@@ -16,38 +18,31 @@ export type ProjectRole = 'lead' | 'employee';
 export type ApprovalStatus = 'approved' | 'rejected' | 'pending' | 'not_required';
 
 /**
- * Timesheet workflow statuses
- */
-export type TimesheetStatus =
-  | 'draft'           // Employee creating timesheet
-  | 'submitted'       // Submitted, awaiting approval
-  | 'lead_approved'   // Lead approved (if applicable)
-  | 'manager_approved'// Manager approved (frozen state)
-  | 'frozen'          // Management verified (same as manager_approved)
-  | 'billed'          // Management marked as billed
-  | 'rejected';       // Rejected by any approver
-
-/**
- * Project-specific approval tracking
+ * Project-specific approval tracking (3-Tier Hierarchy)
  * Tracks approval status per project for multi-manager scenarios
  */
 export interface TimesheetProjectApproval {
   project_id: string;
   project_name: string;
 
-  // Lead approval (if project has a lead)
+  // Tier 1: Lead approval (if project has a lead)
   lead_id?: string;
   lead_name?: string;
   lead_status: ApprovalStatus;
   lead_approved_at?: Date;
   lead_rejection_reason?: string;
 
-  // Manager approval (required for all projects)
+  // Tier 2: Manager approval (required for all projects)
   manager_id: string;
   manager_name: string;
   manager_status: ApprovalStatus;
   manager_approved_at?: Date;
   manager_rejection_reason?: string;
+
+  // Tier 3: Management verification (NEW)
+  management_status: ApprovalStatus;
+  management_approved_at?: Date;
+  management_rejection_reason?: string;
 
   // Project-specific time tracking
   entries_count: number;
@@ -96,7 +91,7 @@ export interface ProjectMemberTimesheet {
   user_name: string;
   user_email: string;
   user_role: UserRole;
-  project_role: ProjectRole;
+  project_role: ApprovalProjectRole;
 
   // Current week timesheet (if exists)
   current_week_timesheet?: {
@@ -303,6 +298,12 @@ export interface ProjectWeekUser {
   total_hours_for_project: number;
   entries: TimeEntryDetail[];
   approval_status: 'pending' | 'approved' | 'rejected';
+  lead_status?: ApprovalStatus;
+  manager_status?: ApprovalStatus;
+  management_status?: ApprovalStatus;
+  worked_hours: number;
+  billable_hours: number;
+  billable_adjustment: number;
 }
 
 /**
@@ -313,6 +314,7 @@ export interface ProjectWeekGroup {
   project_id: string;
   project_name: string;
   project_status: string;
+  project_type?: string; // 'regular' | 'internal' | 'training'
   week_start: string;
   week_end: string;
   week_label: string; // e.g., "Oct 6-12, 2025"
@@ -320,16 +322,25 @@ export interface ProjectWeekGroup {
   manager_name: string;
   lead_id?: string;
   lead_name?: string;
-  approval_status: 'pending' | 'approved' | 'rejected';
+  approval_status: 'pending' | 'approved' | 'rejected' | 'partially_processed';
+  sub_status?: string; // Additional context (e.g., "3 of 5 approved", "Reopened")
   users: ProjectWeekUser[];
   total_users: number;
   total_hours: number;
   total_entries: number;
+  pending_count?: number; // Count of pending approvals
+  approved_count?: number; // Count of approved
+  rejected_count?: number; // Count of rejected
   rejected_reason?: string;
   rejected_by?: string;
   rejected_at?: string;
   approved_by?: string;
   approved_at?: string;
+  is_reopened?: boolean; // True if new timesheets added after bulk approval
+  reopened_at?: string; // When the reopening occurred
+  reopened_by_submission?: string; // User who submitted late
+  original_approval_count?: number; // How many were approved before reopening
+  reopening_type?: 'employee_late_submission' | 'lead_late_submission'; // Type of reopening
 }
 
 /**
@@ -339,7 +350,7 @@ export interface ProjectWeekFilters {
   project_id?: string | string[];
   week_start?: string;
   week_end?: string;
-  status?: 'pending' | 'approved' | 'rejected' | 'all';
+  status?: 'pending' | 'approved' | 'rejected' | 'partially_processed' | 'all';
   sort_by?: 'week_date' | 'project_name' | 'pending_count';
   sort_order?: 'asc' | 'desc';
   page?: number;
@@ -389,4 +400,36 @@ export interface BulkProjectWeekApprovalResponse {
     project_name: string;
     week_label: string;
   };
+}
+
+
+export interface TimeEntryInput {
+  project_id?: string;
+  task_id?: string;
+  date: string;
+  hours: number;
+  description?: string;
+  is_billable: boolean;
+  custom_task_description?: string;
+  // broaden supported entry types to match frontend values
+  entry_type: 'project_task' | 'custom_task' | 'non_project' | 'leave' | 'holiday';
+  // optional categorization and additional metadata used by UI/backend
+  entry_category?: 'project' | 'leave' | 'training' | 'miscellaneous' | 'holiday';
+  leave_session?: 'morning' | 'afternoon' | 'full_day';
+  miscellaneous_activity?: string;
+  project_name?: string;
+}
+
+export interface BulkTimeEntry {
+  project_id?: string;
+  task_id?: string;
+  hours: number;
+  description?: string;
+  is_billable: boolean;
+  custom_task_description?: string;
+  entry_type: 'project_task' | 'custom_task' | 'non_project' | 'leave' | 'holiday';
+  entry_category?: 'project' | 'leave' | 'training' | 'miscellaneous' | 'holiday';
+  leave_session?: 'morning' | 'afternoon' | 'full_day';
+  miscellaneous_activity?: string;
+  dates: string[]; // Array of dates for bulk entry
 }

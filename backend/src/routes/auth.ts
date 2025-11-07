@@ -101,4 +101,29 @@ router.get('/reset-password/validate', async (req, res, next) => {
  */
 router.put('/profile', requireAuth, updateProfileValidation, AuthController.updateProfile);
 
+/**
+ * Microsoft SSO Routes
+ */
+
+/**
+ * @route GET /api/v1/auth/microsoft
+ * @desc Initiate Microsoft OAuth flow
+ * @access Public
+ */
+router.get('/microsoft', AuthController.microsoftAuth);
+
+/**
+ * @route GET /api/v1/auth/microsoft/callback
+ * @desc Handle Microsoft OAuth callback
+ * @access Public
+ */
+router.get('/microsoft/callback', AuthController.microsoftCallback);
+
+/**
+ * @route POST /api/v1/auth/microsoft/link
+ * @desc Link Microsoft account to existing user
+ * @access Private
+ */
+router.post('/microsoft/link', requireAuth, AuthController.linkMicrosoftAccount);
+
 export default router;

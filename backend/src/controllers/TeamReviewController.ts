@@ -11,6 +11,7 @@ import { TeamReviewApprovalService } from '../services/TeamReviewApprovalService
 import { ApprovalHistory } from '../models/ApprovalHistory';
 import { Timesheet } from '../models/Timesheet';
 import { TimeEntry } from '../models/TimeEntry';
+import { TimesheetProjectApproval } from '../models/TimesheetProjectApproval';
 import { logger } from '../config/logger';
 import { UserRole } from '@/models/User';
 import mongoose from 'mongoose';
@@ -134,7 +135,7 @@ export class TeamReviewController {
    */
   static async bulkVerify(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { timesheet_ids } = req.body;
+      const { timesheet_ids, project_id } = req.body;
       const userId = req.user?.id;
       const userRole = req.user?.role;
 
@@ -153,7 +154,12 @@ export class TeamReviewController {
         return;
       }
 
-      const result = await TeamReviewApprovalService.bulkVerifyTimesheets(timesheet_ids, userId);
+      if (!project_id) {
+        res.status(400).json({ error: 'Project ID is required for bulk verification' });
+        return;
+      }
+
+      const result = await TeamReviewApprovalService.bulkVerifyTimesheets(timesheet_ids, project_id, userId);
 
       res.status(200).json({
         success: true,
@@ -219,7 +225,8 @@ export class TeamReviewController {
       }
 
       const timesheet = await Timesheet.findById(timesheetId)
-        .populate('user_id', 'name email role')
+        // User model stores display name in `full_name`
+        .populate('user_id', 'full_name email role')
         .lean() as any;
 
       if (!timesheet) {
@@ -227,7 +234,7 @@ export class TeamReviewController {
         return;
       }
 
-      const entries = await TimeEntry.find({
+      const entries = await (TimeEntry as any).find({
         timesheet_id: new mongoose.Types.ObjectId(timesheetId),
         deleted_at: null
       })
@@ -235,18 +242,81 @@ export class TeamReviewController {
         .populate('task_id', 'name')
         .lean() as any[];
 
-      const history = await ApprovalHistory.find({
+      // Load per-project approvals for this timesheet and include manager/lead names
+      const projectApprovals = await (TimesheetProjectApproval as any).find({
         timesheet_id: new mongoose.Types.ObjectId(timesheetId)
       })
         .populate('project_id', 'name')
-        .populate('approver_id', 'name email role')
+        // user model stores full name in `full_name`
+        .populate('lead_id', 'full_name')
+        .populate('manager_id', 'full_name')
+        .lean() as any[];
+
+      // Debug: log first approval names to help diagnose missing manager/project names in UI
+      try {
+        if (projectApprovals && projectApprovals.length > 0) {
+          const sample = projectApprovals[0];
+          logger.debug('Sample projectApproval:', {
+            project_id: sample.project_id?.toString() || sample.project_id,
+            project_name: sample.project_id?.name,
+            manager_id: sample.manager_id?._id?.toString() || sample.manager_id,
+            manager_name: sample.manager_id?.full_name || sample.manager_id?.name
+          });
+        } else {
+          logger.debug('No project approvals found for timesheet', timesheetId);
+        }
+      } catch (logErr) {
+        // Don't fail the request due to logging
+        logger.debug('Error logging projectApprovals sample', logErr);
+      }
+
+      const history = await (ApprovalHistory as any).find({
+        timesheet_id: new mongoose.Types.ObjectId(timesheetId)
+      })
+        .populate('project_id', 'name')
+        .populate('approver_id', 'full_name email role')
         .sort({ created_at: -1 })
         .lean() as any[];
+
+      // Map projectApprovals to the frontend-friendly shape
+      const mappedProjectApprovals = projectApprovals.map(pa => ({
+        project_id: pa.project_id?._id?.toString() || pa.project_id?.toString(),
+        project_name: pa.project_id?.name || '',
+        lead_id: pa.lead_id?._id?.toString() || pa.lead_id?.toString(),
+        lead_name: pa.lead_id?.full_name || pa.lead_id?.name || undefined,
+        lead_status: pa.lead_status,
+        lead_approved_at: pa.lead_approved_at,
+        lead_rejection_reason: pa.lead_rejection_reason,
+        manager_id: pa.manager_id?._id?.toString() || pa.manager_id?.toString(),
+        manager_name: pa.manager_id?.full_name || pa.manager_id?.name || undefined,
+        manager_status: pa.manager_status,
+        manager_approved_at: pa.manager_approved_at,
+        manager_rejection_reason: pa.manager_rejection_reason,
+        entries_count: pa.entries_count,
+        total_hours: pa.total_hours
+      }));
+
+      // Map approval history into simple objects expected by frontend
+      const mappedHistory = history.map(h => ({
+        id: h._id?.toString(),
+        timesheet_id: h.timesheet_id?.toString(),
+        project_id: h.project_id?._id?.toString() || h.project_id?.toString(),
+        project_name: h.project_id?.name || '',
+        approver_id: h.approver_id?._id?.toString() || h.approver_id?.toString(),
+        approver_name: h.approver_id?.full_name || h.approver_id?.name || undefined,
+        approver_role: h.approver_role,
+        action: h.action,
+        status_before: h.status_before,
+        status_after: h.status_after,
+        reason: h.reason,
+        created_at: h.created_at
+      }));
 
       res.status(200).json({
         timesheet,
         entries,
-        approval_history: history
+        project_approvals: mappedProjectApprovals,
+        approval_history: mappedHistory
       });
     } catch (error) {
       logger.error('Error fetching timesheet history:', error);
@@ -398,6 +468,102 @@ export class TeamReviewController {
       logger.error('Error rejecting project-week:', error);
       res.status(500).json({
         error: error instanceof Error ? error.message : 'Failed to reject project-week'
+      });
+    }
+  }
+
+  /**
+   * Bulk freeze all timesheets for a project-week (Management only)
+   * POST /api/v1/timesheets/project-week/freeze
+   */
+  static async freezeProjectWeek(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.id;
+      const userRole = req.user?.role;
+
+      if (!userId || !userRole) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
+      // Only Management can bulk freeze
+      if (userRole !== 'management' && userRole !== 'super_admin') {
+        res.status(403).json({ error: 'Only Management can bulk freeze project-week timesheets' });
+        return;
+      }
+
+      const { project_id, week_start, week_end } = req.body;
+
+      if (!project_id || !week_start || !week_end) {
+        res.status(400).json({
+          error: 'project_id, week_start, and week_end are required'
+        });
+        return;
+      }
+
+      const result = await TeamReviewApprovalService.bulkFreezeProjectWeek(
+        project_id,
+        week_start,
+        week_end,
+        userId
+      );
+
+      res.status(200).json(result);
+    } catch (error) {
+      logger.error('Error freezing project-week:', error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : 'Failed to freeze project-week'
+      });
+    }
+  }
+
+  /**
+   * Update billable adjustment for a project approval (Manager only)
+   * PUT /api/v1/timesheets/billable-adjustment
+   */
+  static async updateBillableAdjustment(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.id;
+      const userRole = req.user?.role;
+
+      if (!userId || !userRole) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
+      // Manager, Management, and Super Admin can adjust billable hours
+      if (!['manager', 'management', 'super_admin'].includes(userRole)) {
+        res.status(403).json({ error: 'Only Managers and Management can adjust billable hours' });
+        return;
+      }
+
+      const { timesheet_id, project_id, adjustment } = req.body;
+
+      if (!timesheet_id || !project_id || adjustment === undefined) {
+        res.status(400).json({
+          error: 'timesheet_id, project_id, and adjustment are required'
+        });
+        return;
+      }
+
+      const result = await TeamReviewApprovalService.updateBillableAdjustment(
+        timesheet_id,
+        project_id,
+        adjustment,
+        userId,
+        userRole // Pass role to allow Management to adjust any timesheet
+      );
+
+      if (!result.success) {
+        res.status(400).json({ error: result.error });
+        return;
+      }
+
+      res.status(200).json(result);
+    } catch (error) {
+      logger.error('Error updating billable adjustment:', error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : 'Failed to update billable adjustment'
       });
     }
   }

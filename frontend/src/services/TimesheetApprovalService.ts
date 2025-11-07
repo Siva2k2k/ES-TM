@@ -1,29 +1,9 @@
-import type { Timesheet, TimeEntry, TimesheetStatus, UserRole, TimesheetWithDetails, User } from '../types';
+import type { Timesheet, TimeEntry, TimesheetStatus, UserRole, TimesheetWithDetails } from '../types';
+import type { TimeEntryInput, BulkTimeEntry } from '../types/timesheetApprovals';
 import { TimesheetService } from './TimesheetService';
 import { backendApi } from '../lib/backendApi';
 
 
-export interface TimeEntryInput {
-  project_id?: string;
-  task_id?: string;
-  date: string;
-  hours: number;
-  description?: string;
-  is_billable: boolean;
-  custom_task_description?: string;
-  entry_type: 'project_task' | 'custom_task';
-}
-
-export interface BulkTimeEntry {
-  project_id?: string;
-  task_id?: string;
-  hours: number;
-  description?: string;
-  is_billable: boolean;
-  custom_task_description?: string;
-  entry_type: 'project_task' | 'custom_task';
-  dates: string[]; // Array of dates for bulk entry
-}
 
 export class TimesheetApprovalService {
   
@@ -59,12 +39,25 @@ export class TimesheetApprovalService {
           permissions.canApprove = true;
           permissions.canReject = true;
           permissions.nextAction = 'Awaiting manager approval';
+        } else if (userRole === 'lead') {
+          permissions.canApprove = true;
+          permissions.canReject = true;
+          permissions.nextAction = 'Lead review in progress';
         }
         break;
 
       case 'manager_approved':
-        // Automatically transitions to management_pending
-        permissions.nextAction = 'Automatically forwarded to management';
+        if (userRole === 'manager') {
+          permissions.canApprove = true;
+          permissions.canReject = true;
+          permissions.nextAction = 'Finalize timesheet or return for fixes';
+        } else if (userRole === 'management') {
+          permissions.canApprove = true;
+          permissions.canReject = true;
+          permissions.nextAction = 'Awaiting final approval';
+        } else {
+          permissions.nextAction = 'Awaiting manager finalization';
+        }
         break;
 
       case 'management_pending':
@@ -142,13 +135,15 @@ export class TimesheetApprovalService {
       const enhancedTimesheets: TimesheetWithDetails[] = [];
       
       for (const rawTimesheet of result.timesheets) {
-        // Convert the raw timesheet data to Timesheet type
+        // Use all fields from backend (includes effectiveStatus, project_approvals, editable_project_ids)
+        // The backend already calculated partial rejection logic
         const timesheet: Timesheet = {
+          ...rawTimesheet, // Keep all backend fields including project_approvals, editable_project_ids
           id: rawTimesheet.id,
           user_id: rawTimesheet.user_id,
           week_start_date: rawTimesheet.week_start_date,
           week_end_date: rawTimesheet.week_end_date,
-          status: rawTimesheet.status,
+          status: rawTimesheet.status, // Backend returns effectiveStatus for partial rejections
           total_hours: rawTimesheet.total_hours,
           submitted_at: rawTimesheet.submitted_at,
           approved_by_manager_id: rawTimesheet.approved_by_manager_id,
@@ -183,6 +178,7 @@ export class TimesheetApprovalService {
         const projectBreakdown = Array.isArray(rawTimesheet.projectBreakdown) ? rawTimesheet.projectBreakdown : [];
 
         // Create enhanced timesheet with permissions and existing time_entries
+        // Use backend's can_edit if available (respects partial rejection logic)
         const enhancedTimesheet: TimesheetWithDetails = {
           ...timesheet,
           user_name: rawTimesheet.user_name || '',
@@ -191,7 +187,9 @@ export class TimesheetApprovalService {
           billableHours,
           nonBillableHours,
           projectBreakdown,
-          can_edit: permissions.canEdit,
+          project_approvals: rawTimesheet.project_approvals, // Include project approvals from backend
+          editable_project_ids: rawTimesheet.editable_project_ids, // Include editable projects from backend
+          can_edit: rawTimesheet.can_edit !== undefined ? rawTimesheet.can_edit : permissions.canEdit, // Prefer backend value
           can_submit: permissions.canSubmit,
           can_approve: permissions.canApprove,
           can_reject: permissions.canReject,
@@ -205,6 +203,20 @@ export class TimesheetApprovalService {
       return enhancedTimesheets;
     } catch (error) {
       console.error('Error in TimesheetApprovalService.getUserTimesheets:', error);
+      return [];
+    }
+  }
+
+  // Wrapper used by EmployeeTimesheetPage
+  static async getEmployeeTimesheets(userId: string): Promise<any[]> {
+    try {
+      const response = await backendApi.get(`/timesheets/user?userId=${userId}`);
+      if (response.success && response.data) {
+        return response.data;
+      }
+      return [];
+    } catch (error) {
+      console.error('Failed to fetch employee timesheets:', error);
       return [];
     }
   }
@@ -242,9 +254,24 @@ export class TimesheetApprovalService {
           const billableHours = timesheet.billableHours || 0;
           const nonBillableHours = timesheet.nonBillableHours || ((timesheet.total_hours || 0) - billableHours);
 
-          const canApproveForManager = approverRole === 'manager' && timesheet.status === 'submitted';
-          const canApproveForManagement = approverRole === 'management' && (timesheet.status === 'management_pending' || timesheet.status === 'manager_approved');
-          const canReject = (approverRole === 'manager' && timesheet.status === 'submitted') || (approverRole === 'management' && (timesheet.status === 'management_pending' || timesheet.status === 'manager_approved'));
+          const ownerRole: UserRole | undefined = timesheet.user?.role || timesheet.owner_role;
+          const canApproveForLead =
+            approverRole === 'lead' &&
+            ownerRole === 'employee' &&
+            timesheet.status === 'submitted';
+
+          const canApproveForManager =
+            approverRole === 'manager' &&
+            (timesheet.status === 'submitted' || timesheet.status === 'manager_approved');
+
+          const canApproveForManagement =
+            approverRole === 'management' &&
+            (timesheet.status === 'management_pending' || timesheet.status === 'manager_approved');
+
+          const canReject =
+            (approverRole === 'lead' && ownerRole === 'employee' && timesheet.status === 'submitted') ||
+            (approverRole === 'manager' && (timesheet.status === 'submitted' || timesheet.status === 'manager_approved')) ||
+            (approverRole === 'management' && (timesheet.status === 'management_pending' || timesheet.status === 'manager_approved'));
 
           return {
             ...timesheet,
@@ -253,7 +280,7 @@ export class TimesheetApprovalService {
             nonBillableHours,
             can_edit: false,
             can_submit: false,
-            can_approve: canApproveForManager || canApproveForManagement,
+            can_approve: canApproveForLead || canApproveForManager || canApproveForManagement,
             can_reject: canReject,
             can_verify: approverRole === 'management' && timesheet.status === 'management_pending',
             next_action: this.getNextActionForRole(timesheet.status, approverRole)
@@ -276,13 +303,22 @@ export class TimesheetApprovalService {
    */
   private static getNextActionForRole(status: TimesheetStatus, role: UserRole): string {
     if (role === 'lead') {
-      return 'View only - no approval authority';
+      switch (status) {
+        case 'submitted':
+          return 'Review employee timesheet entries';
+        case 'manager_approved':
+          return 'Awaiting manager finalization';
+        default:
+          return 'No action required';
+      }
     }
     
     if (role === 'manager') {
       switch (status) {
         case 'submitted':
           return 'Ready for your approval';
+        case 'manager_approved':
+          return 'Finalize or return to employee';
         case 'manager_rejected':
           return 'Previously rejected - awaiting resubmission';
         default:
@@ -360,21 +396,9 @@ export class TimesheetApprovalService {
     }
   }
 
-  // Check if user is in manager's team (simplified - in real app, check project assignments)
-  // static isUserInManagerTeam(_userId: string, _managerId: string): boolean {
-  //   // Simplified logic - in real app, check project memberships
-  //   return true; // For demo purposes
-  // }
-  static isUserInManagerTeam(_userId: string, _managerId: string): boolean {
-    // Simplified logic - in real app, check project memberships
-    if (_userId === _managerId) return true;
-    return true; // For demo purposes
-  }
-
   // Create new timesheet
   static async createTimesheet(userId: string, weekStartDate: string): Promise<Timesheet | null> {
     try {
-      console.log('TimesheetApprovalService.createTimesheet called with:', { userId, weekStartDate });
       
       const result = await TimesheetService.createTimesheet(userId, weekStartDate);
       
@@ -383,7 +407,6 @@ export class TimesheetApprovalService {
         return null;
       }
       
-      console.log('Timesheet created successfully in TimesheetApprovalService:', result.timesheet);
       return result.timesheet || null;
     } catch (error) {
       console.error('Error in TimesheetApprovalService.createTimesheet:', error);
@@ -419,7 +442,12 @@ export class TimesheetApprovalService {
         description: entry.description,
         is_billable: entry.is_billable,
         custom_task_description: entry.custom_task_description,
-        entry_type: entry.entry_type
+        entry_type: entry.entry_type,
+        // Pass through additional fields used for leave/training/misc/holiday
+        entry_category: entry.entry_category,
+        leave_session: entry.leave_session,
+        miscellaneous_activity: entry.miscellaneous_activity,
+        project_name: entry.project_name
       });
       
       if (result.error) {
@@ -440,14 +468,19 @@ export class TimesheetApprovalService {
       const result = await TimesheetService.updateTimesheetEntries(
         timesheetId,
         entries.map(entry => ({
-          project_id: entry.project_id,
-          task_id: entry.task_id,
-          date: entry.date,
-          hours: entry.hours,
-          description: entry.description,
-          is_billable: entry.is_billable,
-          custom_task_description: entry.custom_task_description,
-          entry_type: entry.entry_type
+            project_id: entry.project_id,
+            task_id: entry.task_id,
+            date: entry.date,
+            hours: entry.hours,
+            description: entry.description,
+            is_billable: entry.is_billable,
+            custom_task_description: entry.custom_task_description,
+            entry_type: entry.entry_type,
+            // additional metadata
+            entry_category: entry.entry_category,
+            leave_session: entry.leave_session,
+            miscellaneous_activity: entry.miscellaneous_activity,
+            project_name: entry.project_name
         }))
       );
 
@@ -505,7 +538,11 @@ export class TimesheetApprovalService {
           description: e.description,
           is_billable: e.is_billable,
           custom_task_description: e.custom_task_description,
-          entry_type: e.entry_type
+          entry_type: e.entry_type,
+          entry_category: e.entry_category,
+          leave_session: e.leave_session,
+          miscellaneous_activity: e.miscellaneous_activity,
+          project_name: e.project_name
         }))
       );
 
@@ -524,19 +561,13 @@ export class TimesheetApprovalService {
   // Submit timesheet
   static async submitTimesheet(timesheetId: string, userId: string): Promise<boolean> {
     try {
-      console.log('🔄 TimesheetApprovalService: Processing submission for timesheet:', timesheetId);
       
       // Skip ALL validation and try direct submission to test if writes work
-      console.log('� BYPASSING ALL VALIDATION - Testing direct submission...');
-      console.log('� User ID:', userId, 'Timesheet ID:', timesheetId);
       
-      console.log('✅ Skipping validation, proceeding directly to submission...');
       const result = await TimesheetService.submitTimesheet(timesheetId);
       
-      console.log('📤 Direct submission result:', result);
       
       if (result.success) {
-        console.log('✅ Timesheet submission completed successfully');
       } else {
         console.error('❌ Timesheet submission failed:', result.error);
       }
@@ -553,13 +584,25 @@ export class TimesheetApprovalService {
     timesheetId: string, 
     _managerId: string, 
     action: 'approve' | 'reject', 
-    reason?: string
+    options: {
+      reason?: string;
+      approverRole?: 'lead' | 'manager';
+      finalize?: boolean;
+      notify?: boolean;
+    } = {}
   ): Promise<boolean> {
     try {
+      const payload = {
+        notify: true,
+        finalize: false,
+        approverRole: 'manager' as 'lead' | 'manager',
+        ...options
+      };
+
       const result = await TimesheetService.managerApproveRejectTimesheet(
         timesheetId,
         action,
-        reason
+        payload
       );
       
       return result.success;
@@ -574,13 +617,25 @@ export class TimesheetApprovalService {
     timesheetId: string, 
     _managementId: string, 
     action: 'approve' | 'reject', 
-    reason?: string
+    options: {
+      reason?: string;
+      approverRole?: 'management' | 'manager';
+      finalize?: boolean;
+      notify?: boolean;
+    } = {}
   ): Promise<boolean> {
     try {
+      const payload = {
+        notify: true,
+        finalize: action === 'approve',
+        approverRole: 'management' as 'management' | 'manager',
+        ...options
+      };
+
       const result = await TimesheetService.managementApproveRejectTimesheet(
         timesheetId,
         action,
-        reason
+        payload
       );
       
       return result.success;
@@ -599,7 +654,6 @@ export class TimesheetApprovalService {
     }
   }> {
     try {
-      console.log(`📅 TimesheetApprovalService.getCalendarData called for user ${userId}, month ${month}, year ${year}`);
       
       // Use the existing TimesheetService method that's already integrated
       const result = await TimesheetService.getCalendarData(userId, parseInt(year), parseInt(month));
@@ -609,7 +663,6 @@ export class TimesheetApprovalService {
         return {};
       }
       
-      console.log(`📅 TimesheetApprovalService received calendar data with ${Object.keys(result.calendarData || {}).length} days`);
       
       // Transform the data to ensure proper typing
       const transformedData: { [date: string]: { status: TimesheetStatus; hours: number; entries: TimeEntry[]; } } = {};
@@ -625,7 +678,6 @@ export class TimesheetApprovalService {
         });
       }
       
-      console.log(`📅 TimesheetApprovalService returning transformed data with ${Object.keys(transformedData).length} days`);
       
       return transformedData;
     } catch (error) {

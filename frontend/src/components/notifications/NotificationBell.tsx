@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, X, Check, Clock, AlertCircle } from 'lucide-react';
 import { BackendApiClient } from '../../lib/backendApi';
+import { useNavigate } from 'react-router-dom';
 
 interface Notification {
   _id: string;
@@ -11,6 +12,7 @@ interface Notification {
   read: boolean;
   created_at: string;
   action_url?: string;
+  data?: Record<string, unknown>;
   sender_id?: {
     full_name: string;
     email: string;
@@ -26,20 +28,9 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ className = 
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  
+  const navigate = useNavigate();
+
   const apiClient = new BackendApiClient();
-
-  useEffect(() => {
-    fetchNotifications();
-    fetchUnreadCount();
-    
-    // Poll for new notifications every 30 seconds
-    const interval = setInterval(() => {
-      fetchUnreadCount();
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, []);
 
   const fetchNotifications = async () => {
     setLoading(true);
@@ -62,6 +53,19 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ className = 
     }
   };
 
+  useEffect(() => {
+    fetchNotifications();
+    fetchUnreadCount();
+    
+    // Poll for new notifications every 30 seconds
+    const interval = setInterval(() => {
+      fetchUnreadCount();
+    }, 30000);
+
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const markAsRead = async (notificationId: string) => {
     try {
       await apiClient.patch(`/notifications/${notificationId}/read`);
@@ -81,29 +85,138 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ className = 
 
   const markAllAsRead = async () => {
     try {
-      const response = await fetch('/notifications/mark-all-read', {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
-        }
-      });
-      
-      if (response.ok) {
-        setNotifications(prev => 
-          prev.map(notif => ({ ...notif, read: true }))
-        );
-        setUnreadCount(0);
-      }
+      await apiClient.put('/notifications/mark-all-read');
+
+      setNotifications(prev => prev.map(notif => ({ ...notif, read: true })));
+      setUnreadCount(0);
+      await fetchUnreadCount();
     } catch (error) {
       console.error('Error marking all as read:', error);
     }
   };
 
+  const resolveNotificationRoute = (notification: Notification): string => {
+    const data = notification.data || {};
+    const projectId = data.project_id as string | undefined;
+    const timesheetId = data.timesheet_id as string | undefined;
+    const userId = data.user_id as string | undefined;
+    const clientId = data.client_id as string | undefined;
+
+    switch (notification.type) {
+      // Timesheet notifications
+      case 'timesheet_submission':
+      case 'project_group_ready_lead':
+      case 'project_group_ready_manager':
+      case 'project_group_ready_management':
+        return '/dashboard/team-review';
+      
+      case 'timesheet_approval':
+      case 'timesheet_lead_approved':
+      case 'timesheet_manager_approved':
+      case 'timesheet_management_approved':
+      case 'timesheet_frozen':
+      case 'timesheet_billed':
+        return timesheetId ? `/dashboard/timesheets/${timesheetId}` : '/dashboard/timesheets/status';
+      
+      case 'timesheet_rejection':
+      case 'timesheet_lead_rejected':
+      case 'timesheet_manager_rejected':
+      case 'timesheet_management_rejected':
+        return timesheetId ? `/dashboard/timesheets/${timesheetId}` : '/dashboard/timesheets';
+      
+      // Project notifications
+      case 'project_created':
+      case 'project_updated':
+      case 'project_completed':
+      case 'project_allocated':
+      case 'project_manager_assigned':
+      case 'project_manager_removed':
+      case 'project_member_added':
+      case 'project_member_removed':
+      case 'project_member_updated':
+        return projectId ? `/dashboard/projects/${projectId}` : '/dashboard/projects';
+      
+      case 'project_deleted':
+      case 'project_restored':
+        return '/dashboard/projects';
+      
+      // Task notifications
+      case 'task_allocated':
+      case 'task_received':
+      case 'task_completed':
+      case 'task_pending':
+      case 'task_overdue':
+      case 'task_created':
+      case 'task_updated':
+      case 'task_deleted':
+      case 'task_deadline_changed':
+      case 'task_assigned':
+      case 'task_unassigned':
+        return projectId ? `/dashboard/projects/${projectId}` : '/dashboard/projects';
+      
+      // User notifications
+      case 'user_approval':
+      case 'user_rejection':
+      case 'user_registration_pending':
+      case 'user_created':
+      case 'user_updated':
+      case 'user_deleted':
+      case 'user_restored':
+      case 'user_role_changed':
+        return userId ? `/dashboard/users/${userId}` : '/dashboard/users';
+      
+      // Client notifications
+      case 'client_created':
+      case 'client_updated':
+      case 'client_deleted':
+      case 'client_restored':
+        return clientId ? `/dashboard/clients/${clientId}` : '/dashboard/clients';
+      
+      // Billing notifications
+      case 'billing_update':
+      case 'billing_generated':
+      case 'billing_adjustment_created':
+      case 'billing_adjustment_updated':
+        return '/dashboard/billing';
+      
+      // System notifications
+      case 'system_announcement':
+      case 'profile_update':
+        return '/dashboard/notifications';
+      
+      default:
+        break;
+    }
+
+    const actionUrl = notification.action_url;
+    if (actionUrl) {
+      if (actionUrl.startsWith('http')) {
+        return actionUrl;
+      }
+
+      if (actionUrl.startsWith('/dashboard')) {
+        return actionUrl;
+      }
+
+      if (actionUrl.startsWith('/')) {
+        return `/dashboard${actionUrl}`.replace(/\/\/+/g, '/');
+      }
+
+      return `/dashboard/${actionUrl}`.replace(/\/\/+/g, '/');
+    }
+
+    return '/dashboard/notifications';
+  };
+
   const handleNotificationClick = async (notification: Notification) => {
     await markAsRead(notification._id);
     
-    if (notification.action_url) {
-      window.location.href = notification.action_url;
+    const target = resolveNotificationRoute(notification);
+
+    if (target.startsWith('http')) {
+      window.open(target, '_blank', 'noopener,noreferrer');
+    } else {
+      navigate(target);
     }
     
     setIsOpen(false);
@@ -133,6 +246,9 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ className = 
     return `${Math.floor(diffInMinutes / 1440)}d ago`;
   };
 
+  // Show a maximum of 3 notifications in the bell dropdown
+  const visibleNotifications = notifications.slice(0, 3);
+
   return (
     <div className={`relative ${className}`}>
       {/* Bell Icon */}
@@ -158,7 +274,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ className = 
         <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-gray-200">
-            <h3 className="font-semibold text-gray-900">Notifications</h3>
+            <h3 className="font-semibold text-gray-900">Notifications {unreadCount > 0 && `(${unreadCount})`}</h3>
             <div className="flex items-center space-x-2">
               {unreadCount > 0 && (
                 <button
@@ -187,7 +303,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ className = 
                 <p>No notifications</p>
               </div>
             ) : (
-              notifications.map((notification) => (
+              visibleNotifications.map((notification) => (
                 <div
                   key={notification._id}
                   onClick={() => handleNotificationClick(notification)}
@@ -241,8 +357,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ className = 
             <div className="p-3 border-t border-gray-200">
               <button
                 onClick={() => {
-                  // Trigger navigation to notifications page
-                  window.dispatchEvent(new CustomEvent('navigate-to-notifications'));
+                  navigate('/dashboard/notifications');
                   setIsOpen(false);
                 }}
                 className="w-full text-center text-sm text-blue-600 hover:text-blue-800"

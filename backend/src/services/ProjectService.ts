@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import {
   Project,
   ProjectMember,
@@ -19,8 +20,11 @@ import {
   requireManagerRole,
   canManageRoleHierarchy
 } from '@/utils/auth';
+import { requireSuperAdmin } from '@/utils/authorization';
 import { AuditLogService } from '@/services/AuditLogService';
 import { ValidationUtils } from '@/utils/validation';
+import { NotificationService } from '@/services/NotificationService';
+import { NotificationRecipientResolver } from '@/services/NotificationRecipientResolver';
 
 export interface ProjectWithDetails extends IProject {
   client?: IClient;
@@ -47,7 +51,7 @@ export class ProjectService {
    */
   static async createProject(projectData: Partial<IProject>, currentUser: AuthUser): Promise<{ project?: IProject; error?: string }> {
     try {
-      requireManagementRole(currentUser);
+      requireManagerRole(currentUser);
 
       // Validate project data
       const validation = this.validateProjectData(projectData);
@@ -82,10 +86,26 @@ export class ProjectService {
         { name: project.name, status: project.status, is_billable: project.is_billable }
       );
 
-      console.log('Project created:', project.id);
+      // Notify management about new project
+      try {
+        const managementUsers = await NotificationRecipientResolver.getManagementUsers();
+        const recipientIds = managementUsers.filter(id => id !== currentUser.id);
+        if (recipientIds.length > 0) {
+          await NotificationService.notifyProjectCreated({
+            recipientIds,
+            projectId: project._id.toString(),
+            projectName: project.name,
+            createdById: currentUser.id,
+            createdByName: currentUser.full_name
+          });
+        }
+      } catch (notifError) {
+
+      }
+
       return { project };
     } catch (error) {
-      console.error('Error in createProject:', error);
+
       if (error instanceof ValidationError || error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -98,7 +118,7 @@ export class ProjectService {
    */
   static async updateProject(projectId: string, updates: Partial<IProject>, currentUser: AuthUser): Promise<{ success: boolean; error?: string }> {
     try {
-      requireManagementRole(currentUser);
+      requireManagerRole(currentUser);
 
       // Sanitize updates: convert empty date strings to null
       const payload: any = { ...updates };
@@ -113,6 +133,11 @@ export class ProjectService {
       }
 
       payload.updated_at = new Date();
+
+      // Check if manager is being changed
+      const oldProject = await (Project.findById as any)(projectId).lean();
+      const managerChanged = updates.primary_manager_id && 
+        oldProject?.primary_manager_id?.toString() !== updates.primary_manager_id?.toString();
 
       const result = await (Project.updateOne as any)({
         _id: projectId,
@@ -137,12 +162,59 @@ export class ProjectService {
           null,
           payload
         );
+
+        // Notify if manager was changed
+        if (managerChanged && oldProject) {
+          try {
+            // Notify new manager
+            if (updates.primary_manager_id) {
+              await NotificationService.notifyProjectManagerAssigned({
+                recipientIds: [updates.primary_manager_id.toString()],
+                projectId,
+                projectName: updatedProject.name,
+                newManagerId: updates.primary_manager_id.toString(),
+                assignedById: currentUser.id,
+                assignedByName: currentUser.full_name
+              });
+            }
+
+            // Notify old manager they were removed
+            if (oldProject.primary_manager_id) {
+              await NotificationService.notifyProjectMemberRemoved({
+                recipientIds: [oldProject.primary_manager_id.toString()],
+                projectId,
+                projectName: updatedProject.name,
+                removedById: currentUser.id,
+                removedByName: currentUser.full_name
+              });
+            }
+          } catch (notifError) {
+
+          }
+        }
+
+        // Notify management about project updates
+        try {
+          const managementUsers = await NotificationRecipientResolver.getManagementUsers();
+          const recipientIds = managementUsers.filter(id => id !== currentUser.id);
+          if (recipientIds.length > 0) {
+            await NotificationService.notifyProjectUpdated({
+              recipientIds,
+              projectId,
+              projectName: updatedProject.name,
+              updatedById: currentUser.id,
+              updatedByName: currentUser.full_name,
+              updatedFields: Object.keys(updates)
+            });
+          }
+        } catch (notifError) {
+
+        }
       }
 
-      console.log(`Updated project ${projectId}`);
       return { success: true };
     } catch (error) {
-      console.error('Error in updateProject:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -167,7 +239,7 @@ export class ProjectService {
 
       return { projects };
     } catch (error) {
-      console.error('Error in getAllProjects:', error);
+
       if (error instanceof AuthorizationError) {
         return { projects: [], error: error.message };
       }
@@ -267,7 +339,7 @@ export class ProjectService {
 
       return { projects: projectsWithTasks };
     } catch (error) {
-      console.error('Error in getProjectsByStatus:', error);
+
       if (error instanceof AuthorizationError) {
         return { projects: [], error: error.message };
       }
@@ -308,9 +380,10 @@ export class ProjectService {
         .populate('created_by_user_id', 'full_name')
         .sort({ created_at: -1 });
 
+
       return { tasks };
     } catch (error) {
-      console.error('Error in getProjectTasks:', error);
+
       if (error instanceof AuthorizationError) {
         return { tasks: [], error: error.message };
       }
@@ -345,7 +418,7 @@ export class ProjectService {
         tasks: tasksResult.tasks
       };
     } catch (error) {
-      console.error('Error in getProjectWithTasks:', error);
+
       return { tasks: [], error: 'Failed to fetch project with tasks' };
     }
   }
@@ -369,10 +442,9 @@ export class ProjectService {
         throw new NotFoundError('Project not found');
       }
 
-      console.log(`Updated project ${projectId} status to: ${status}`);
       return { success: true };
     } catch (error) {
-      console.error('Error in updateProjectStatus:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -416,7 +488,7 @@ export class ProjectService {
         budgetUtilization: tasks.length > 0 ? (completedTasks / tasks.length) * 100 : 0
       };
     } catch (error) {
-      console.error('Error in getProjectAnalytics:', error);
+
       return {
         totalProjects: 0,
         activeProjects: 0,
@@ -443,7 +515,7 @@ export class ProjectService {
 
       return { clients };
     } catch (error) {
-      console.error('Error in getAllClients:', error);
+
       if (error instanceof AuthorizationError) {
         return { clients: [], error: error.message };
       }
@@ -491,10 +563,9 @@ export class ProjectService {
 
       await client.save();
 
-      console.log('Client created:', client.id);
       return { client };
     } catch (error) {
-      console.error('Error in createClient:', error);
+
       if (error instanceof ValidationError || error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -505,7 +576,7 @@ export class ProjectService {
   /**
    * Get project by ID
    */
-  static async getProjectById(projectId: string, currentUser: AuthUser): Promise<{ project?: ProjectWithDetails; error?: string }> {
+  static async getProjectById(projectId: string, currentUser: AuthUser): Promise<{ project?: ProjectWithDetails; error?: string; warnings?: string[] }> {
     try {
       // Check project access
       const hasAccess = await this.checkProjectAccess(projectId, currentUser);
@@ -524,9 +595,24 @@ export class ProjectService {
         throw new NotFoundError('Project not found');
       }
 
-      return { project };
+      // Non-blocking validation: check whether the project has a Lead assigned.
+      // This is a soft/warning check intended for UI display only and must not block operations.
+      const leadMember = await (ProjectMember.findOne as any)({
+        project_id: projectId,
+        project_role: 'lead',
+        removed_at: { $exists: false },
+        deleted_at: { $exists: false }
+      }).lean();
+
+      const warnings: string[] = [];
+      if (!leadMember) {
+        // Frontend can display this warning (non-blocking)
+        warnings.push('project_must_have_lead');
+      }
+
+      return { project, warnings };
     } catch (error) {
-      console.error('Error in getProjectById:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { error: error.message };
       }
@@ -537,14 +623,31 @@ export class ProjectService {
   /**
    * Soft delete project
    */
-  static async deleteProject(projectId: string, currentUser: AuthUser): Promise<{ success: boolean; error?: string }> {
+  static async deleteProject(projectId: string, reason: string, currentUser: AuthUser): Promise<{ success: boolean; error?: string }> {
     try {
       requireManagementRole(currentUser);
+
+      if (!reason || reason.trim().length === 0) {
+        return { success: false, error: 'Delete reason is required' };
+      }
+
+      // Check if project exists and is not already deleted
+      const project = await (Project.findById as any)(projectId);
+      if (!project) {
+        throw new NotFoundError('Project not found');
+      }
+
+      if (project.deleted_at) {
+        return { success: false, error: 'Project is already deleted' };
+      }
 
       const result = await (Project.updateOne as any)({
         _id: projectId
       }, {
         deleted_at: new Date(),
+        deleted_by: currentUser.id,
+        deleted_reason: reason,
+        status: 'archived',
         updated_at: new Date()
       });
 
@@ -552,30 +655,296 @@ export class ProjectService {
         throw new NotFoundError('Project not found');
       }
 
+      // Cascade soft delete to all tasks associated with this project
+      const Task = (await import('../models/Task')).default;
+      const taskUpdateResult = await (Task.updateMany as any)(
+        { project_id: projectId, deleted_at: null },
+        {
+          deleted_at: new Date(),
+          deleted_by: currentUser.id,
+          deleted_reason: `Project deleted: ${reason}`
+        }
+      );
+
+
       // Audit log: Project deleted
-      const deletedProject = await (Project.findById as any)(projectId).lean();
-      if (deletedProject) {
-        await AuditLogService.logEvent(
-          'projects',
-          projectId,
-          'PROJECT_DELETED',
-          currentUser.id,
-          currentUser.full_name,
-          { name: deletedProject.name, client_id: deletedProject.client_id?.toString() },
-          { deleted_by: currentUser.id },
-          { deleted_at: null },
-          { deleted_at: new Date() }
-        );
+      await AuditLogService.logEvent(
+        'projects',
+        projectId,
+        'PROJECT_DELETED',
+        currentUser.id,
+        currentUser.full_name,
+        {
+          name: project.name,
+          client_id: project.client_id?.toString(),
+          reason: reason,
+          cascade_deleted_tasks: taskUpdateResult.modifiedCount
+        },
+        { deleted_by: null, deleted_at: null, deleted_reason: null },
+        { deleted_by: currentUser.id, deleted_at: new Date(), deleted_reason: reason }
+      );
+
+      // Notify project manager and management about deletion
+      try {
+        const recipientIds = [];
+        
+        // Notify project manager
+        if (project.primary_manager_id && project.primary_manager_id.toString() !== currentUser.id) {
+          recipientIds.push(project.primary_manager_id.toString());
+        }
+
+        // Notify management
+        const managementUsers = await NotificationRecipientResolver.getManagementUsers();
+        for (const managementUserId of managementUsers) {
+          if (managementUserId !== currentUser.id && !recipientIds.includes(managementUserId)) {
+            recipientIds.push(managementUserId);
+          }
+        }
+
+        // Send notifications
+        if (recipientIds.length > 0) {
+          await NotificationService.notifyProjectDeleted({
+            recipientIds,
+            projectId,
+            projectName: project.name,
+            deletedById: currentUser.id,
+            deletedByName: currentUser.full_name,
+            reason
+          });
+        }
+      } catch (notifError) {
+
       }
 
-      console.log(`Soft deleted project: ${projectId}`);
       return { success: true };
     } catch (error) {
-      console.error('Error in deleteProject:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
       return { success: false, error: 'Failed to delete project' };
+    }
+  }
+
+  /**
+   * Check if project can be hard deleted (check for critical dependencies)
+   */
+  static async canHardDeleteProject(projectId: string): Promise<{
+    canDelete: boolean;
+    dependencies: string[];
+    counts: {
+      timeEntries: number;
+      billingRecords: number;
+      timesheetApprovals: number;
+    };
+  }> {
+    try {
+      const dependencies: string[] = [];
+      const counts = {
+        timeEntries: 0,
+        billingRecords: 0,
+        timesheetApprovals: 0
+      };
+
+      // Check for time entries (critical financial/legal records)
+      const TimeEntry = (await import('../models/TimeEntry')).default;
+      const timeEntryCount = await (TimeEntry.countDocuments as any)({
+        project_id: projectId
+      });
+      counts.timeEntries = timeEntryCount;
+      if (timeEntryCount > 0) {
+        dependencies.push(`${timeEntryCount} time entry/entries (financial records)`);
+      }
+
+      // Check for billing adjustments
+      const BillingAdjustment = (await import('../models/BillingAdjustment')).default;
+      const billingCount = await (BillingAdjustment.countDocuments as any)({
+        project_id: projectId
+      });
+      counts.billingRecords = billingCount;
+      if (billingCount > 0) {
+        dependencies.push(`${billingCount} billing record(s)`);
+      }
+
+      // Check for timesheet project approvals
+      const TimesheetProjectApproval = (await import('../models/TimesheetProjectApproval')).default;
+      const approvalCount = await (TimesheetProjectApproval.countDocuments as any)({
+        project_id: projectId
+      });
+      counts.timesheetApprovals = approvalCount;
+      if (approvalCount > 0) {
+        dependencies.push(`${approvalCount} timesheet approval(s)`);
+      }
+
+      return {
+        canDelete: dependencies.length === 0,
+        dependencies,
+        counts
+      };
+    } catch (error) {
+
+      return {
+        canDelete: false,
+        dependencies: ['Error checking dependencies'],
+        counts: { timeEntries: 0, billingRecords: 0, timesheetApprovals: 0 }
+      };
+    }
+  }
+
+  /**
+   * Hard delete project (permanent deletion)
+   * Only allowed if no critical dependencies exist
+   */
+  static async hardDeleteProject(projectId: string, currentUser: AuthUser): Promise<{ success: boolean; error?: string }> {
+    try {
+      requireSuperAdmin(currentUser);
+
+      // Get the project before deletion
+      const project = await (Project.findById as any)(projectId);
+      if (!project) {
+        throw new NotFoundError('Project not found');
+      }
+
+      // Must be soft deleted first
+      if (!project.deleted_at) {
+        return {
+          success: false,
+          error: 'Project must be soft deleted first before permanent deletion'
+        };
+      }
+
+      // CHECK CRITICAL DEPENDENCIES - Enterprise Standard
+      const dependencyCheck = await this.canHardDeleteProject(projectId);
+
+      if (!dependencyCheck.canDelete) {
+        return {
+          success: false,
+          error: `Cannot permanently delete project. Has critical dependencies: ${dependencyCheck.dependencies.join(', ')}. These are permanent financial/legal records that must be preserved.`
+        };
+      }
+
+      // If no critical dependencies, cascade hard delete non-critical data
+      const Task = (await import('../models/Task')).default;
+      const ProjectMember = (await import('../models/Project')).ProjectMember;
+
+      const taskDeleteResult = await (Task.deleteMany as any)({ project_id: projectId });
+      const memberDeleteResult = await (ProjectMember.deleteMany as any)({ project_id: projectId });
+
+
+      // Log audit event BEFORE deleting
+      await AuditLogService.logEvent(
+        'projects',
+        projectId,
+        'PROJECT_HARD_DELETED',
+        currentUser.id,
+        currentUser.full_name,
+        {
+          name: project.name,
+          client_id: project.client_id?.toString(),
+          deleted_reason: project.deleted_reason,
+          original_deleted_at: project.deleted_at,
+          original_deleted_by: project.deleted_by,
+          cascade_hard_deleted_tasks: taskDeleteResult.deletedCount,
+          cascade_hard_deleted_members: memberDeleteResult.deletedCount,
+          dependency_check: dependencyCheck.counts
+        }
+      );
+
+      // Permanently delete from database
+      const result = await (Project.deleteOne as any)({ _id: projectId });
+
+      if (result.deletedCount === 0) {
+        throw new NotFoundError('Project not found or already deleted');
+      }
+
+      return { success: true };
+    } catch (error) {
+
+      if (error instanceof AuthorizationError || error instanceof NotFoundError) {
+        return { success: false, error: error.message };
+      }
+      return { success: false, error: 'Failed to permanently delete project' };
+    }
+  }
+
+  /**
+   * Restore soft-deleted project
+   */
+  static async restoreProject(projectId: string, currentUser: AuthUser): Promise<{ success: boolean; error?: string }> {
+    try {
+      requireManagementRole(currentUser);
+
+      // Get the project before restoration
+      const project = await (Project.findById as any)(projectId);
+      if (!project) {
+        throw new NotFoundError('Project not found');
+      }
+
+      if (!project.deleted_at) {
+        return { success: false, error: 'Project is not deleted' };
+      }
+
+      const result = await (Project.updateOne as any)({
+        _id: projectId
+      }, {
+        $unset: { deleted_at: '', deleted_by: '', deleted_reason: '' },
+        status: 'active',
+        updated_at: new Date()
+      });
+
+      if (result.matchedCount === 0) {
+        throw new NotFoundError('Project not found');
+      }
+
+      // Audit log: Project restored
+      await AuditLogService.logEvent(
+        'projects',
+        projectId,
+        'PROJECT_RESTORED',
+        currentUser.id,
+        currentUser.full_name,
+        {
+          name: project.name,
+          client_id: project.client_id?.toString(),
+          original_deleted_reason: project.deleted_reason
+        },
+        { deleted_at: project.deleted_at, deleted_by: project.deleted_by, deleted_reason: project.deleted_reason },
+        { deleted_at: null, deleted_by: null, deleted_reason: null }
+      );
+
+      return { success: true };
+    } catch (error) {
+
+      if (error instanceof AuthorizationError || error instanceof NotFoundError) {
+        return { success: false, error: error.message };
+      }
+      return { success: false, error: 'Failed to restore project' };
+    }
+  }
+
+  /**
+   * Get all deleted projects
+   */
+  static async getDeletedProjects(currentUser: AuthUser): Promise<{ projects: any[]; error?: string }> {
+    try {
+      requireManagementRole(currentUser);
+
+      const projects = await (Project.find as any)({
+        deleted_at: { $ne: null },
+        is_hard_deleted: { $ne: true }
+      })
+        .populate('client_id', 'name')
+        .populate('primary_manager_id', 'full_name email')
+        .sort({ deleted_at: -1 })
+        .lean();
+
+      return { projects };
+    } catch (error) {
+
+      if (error instanceof AuthorizationError) {
+        return { projects: [], error: error.message };
+      }
+      return { projects: [], error: 'Failed to fetch deleted projects' };
     }
   }
 
@@ -726,8 +1095,6 @@ export class ProjectService {
             tasks: transformedTasks
           };
           
-          console.log(`🔍 Transformed project: ${project.name} - ID: ${result.id}`);
-          console.log(`🔍 Project has ${transformedTasks.length} tasks`);
           
           return result;
         })
@@ -735,7 +1102,7 @@ export class ProjectService {
 
       return { projects: projectsWithTasks as unknown as ProjectWithDetails[] };
     } catch (error) {
-      console.error('Error in getUserProjects:', error);
+
       if (error instanceof AuthorizationError) {
         return { projects: [], error: error.message };
       }
@@ -783,7 +1150,7 @@ export class ProjectService {
 
       return { members: membersData };
     } catch (error) {
-      console.error('Error in getProjectMembers:', error);
+
       if (error instanceof AuthorizationError) {
         return { members: [], error: error.message };
       }
@@ -792,27 +1159,89 @@ export class ProjectService {
   }
 
   /**
-   * Remove user from project
+   * Remove user from project (hard delete)
    */
   static async removeUserFromProject(projectId: string, userId: string, currentUser: AuthUser): Promise<{ success: boolean; error?: string }> {
     try {
       requireManagerRole(currentUser);
 
-      const result = await (ProjectMember.updateOne as any)({
+      // Get project and user details before removal
+      const project = await (Project.findById as any)(projectId).select('name primary_manager_id').lean();
+      const projectMember = await (ProjectMember.findOne as any)({
         project_id: projectId,
-        user_id: userId
-      }, {
-        removed_at: new Date(),
-        updated_at: new Date()
+        user_id: userId,
+        removed_at: { $exists: false },
+        deleted_at: { $exists: false }
+      }).populate('user_id', 'full_name email').lean();
+
+      if (!projectMember) {
+        throw new NotFoundError('Project member not found');
+      }
+
+      // Audit log: Project member removed
+      await AuditLogService.logEvent(
+        'project_members',
+        projectMember._id.toString(),
+        'PROJECT_MEMBER_REMOVED',
+        currentUser.id,
+        currentUser.full_name,
+        {
+          project_id: projectId,
+          project_name: project?.name,
+          user_id: userId,
+          user_name: projectMember.user_id?.full_name,
+          user_email: projectMember.user_id?.email,
+          project_role: projectMember.project_role,
+          is_primary_manager: projectMember.is_primary_manager,
+          is_secondary_manager: projectMember.is_secondary_manager
+        },
+        {
+          project_id: projectId,
+          user_id: userId,
+          project_role: projectMember.project_role,
+          is_primary_manager: projectMember.is_primary_manager,
+          is_secondary_manager: projectMember.is_secondary_manager,
+          assigned_at: projectMember.assigned_at
+        },
+        null,
+        null
+      );
+
+      // Hard delete the project member
+      const result = await (ProjectMember.deleteOne as any)({
+        _id: projectMember._id
       });
 
-      if (result.matchedCount === 0) {
+      if (result.deletedCount === 0) {
         throw new NotFoundError('Project member not found');
+      }
+
+      // Notify the removed member and project manager
+      if (project && projectMember) {
+        try {
+          const recipientIds = [userId];
+
+          // Add project manager to recipients
+          if (project.primary_manager_id && project.primary_manager_id.toString() !== currentUser.id) {
+            recipientIds.push(project.primary_manager_id.toString());
+          }
+
+          await NotificationService.notifyProjectMemberRemoved({
+            recipientIds,
+            projectId,
+            projectName: project.name,
+            userId,
+            removedById: currentUser.id,
+            removedByName: currentUser.full_name
+          });
+        } catch (notifError) {
+
+        }
       }
 
       return { success: true };
     } catch (error) {
-      console.error('Error in removeUserFromProject:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -828,7 +1257,6 @@ export class ProjectService {
     userId: string,
     projectRole: string,
     isPrimaryManager = false,
-    isSecondaryManager = false,
     currentUser: AuthUser
   ): Promise<{ success: boolean; error?: string }> {
     try {
@@ -839,16 +1267,14 @@ export class ProjectService {
         user_id: userId,
         project_role: projectRole,
         is_primary_manager: isPrimaryManager,
-        is_secondary_manager: isSecondaryManager,
         assigned_at: new Date()
       });
 
       await projectMember.save();
 
-      console.log(`Added user ${userId} to project ${projectId} with role ${projectRole}`);
       return { success: true };
     } catch (error) {
-      console.error('Error in addUserToProject:', error);
+
       if (error instanceof AuthorizationError) {
         return { success: false, error: error.message };
       }
@@ -890,7 +1316,7 @@ export class ProjectService {
 
       return { task };
     } catch (error) {
-      console.error('Error in createTask:', error);
+
       if (error instanceof AuthorizationError) {
         return { error: error.message };
       }
@@ -932,7 +1358,7 @@ export class ProjectService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error in updateTask:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -960,7 +1386,7 @@ export class ProjectService {
 
       return { tasks };
     } catch (error) {
-      console.error('Error in getUserTasks:', error);
+
       if (error instanceof AuthorizationError) {
         return { tasks: [], error: error.message };
       }
@@ -1036,7 +1462,7 @@ export class ProjectService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error in deleteTask:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -1047,8 +1473,8 @@ export class ProjectService {
   /**
    * Add project member (alias for addUserToProject with simpler interface)
    */
-  static async addProjectMember(projectId: string, userId: string, projectRole: string, isPrimaryManager: boolean, isSecondaryManager: boolean,  currentUser: AuthUser): Promise<{ success: boolean; error?: string }> {
-    return this.addUserToProject(projectId, userId, projectRole, isPrimaryManager, isSecondaryManager, currentUser);
+  static async addProjectMember(projectId: string, userId: string, projectRole: string, isPrimaryManager: boolean,  currentUser: AuthUser): Promise<{ success: boolean; error?: string }> {
+    return this.addUserToProject(projectId, userId, projectRole, isPrimaryManager, currentUser);
   }
 
   /**
@@ -1079,7 +1505,7 @@ export class ProjectService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error in updateClient:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -1107,7 +1533,7 @@ export class ProjectService {
 
       return { success: true };
     } catch (error) {
-      console.error('Error in deleteClient:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { success: false, error: error.message };
       }
@@ -1133,7 +1559,7 @@ export class ProjectService {
 
       return { client };
     } catch (error) {
-      console.error('Error in getClientById:', error);
+
       if (error instanceof AuthorizationError || error instanceof NotFoundError) {
         return { error: error.message };
       }
@@ -1305,7 +1731,7 @@ export class ProjectService {
       };
 
     } catch (error) {
-      console.error('Error getting project permissions:', error);
+
       return {
         projectRole: null,
         systemRole: 'employee',
@@ -1387,7 +1813,7 @@ export class ProjectService {
       return { canAdd: true };
 
     } catch (error) {
-      console.error('Error checking add permission:', error);
+
       return {
         canAdd: false,
         reason: 'Error validating permissions'
@@ -1438,11 +1864,35 @@ export class ProjectService {
 
       await projectMember.save();
 
-      console.log(`Added user ${userId} to project ${projectId} with role ${projectRole} (manager access: ${hasManagerAccess})`);
+      // Notify the added member and project manager
+      try {
+        const project = await (Project.findById as any)(projectId).select('name primary_manager_id').lean();
+        if (project) {
+          const recipientIds = [userId];
+          
+          // Add project manager to recipients
+          if (project.primary_manager_id && project.primary_manager_id.toString() !== currentUser.id) {
+            recipientIds.push(project.primary_manager_id.toString());
+          }
+
+          await NotificationService.notifyProjectMemberAdded({
+            recipientIds,
+            projectId,
+            projectName: project.name,
+            userId,
+            role: projectRole,
+            addedById: currentUser.id,
+            addedByName: currentUser.full_name
+          });
+        }
+      } catch (notifError) {
+
+      }
+
       return { success: true };
 
     } catch (error) {
-      console.error('Error in addProjectMemberEnhanced:', error);
+
       return {
         success: false,
         error: 'Failed to add project member'
@@ -1518,11 +1968,10 @@ export class ProjectService {
         user_id: userId
       }, updates);
 
-      console.log(`Updated user ${userId} in project ${projectId} to role ${newProjectRole} (manager access: ${hasManagerAccess})`);
       return { success: true };
 
     } catch (error) {
-      console.error('Error in updateProjectMemberRole:', error);
+
       return {
         success: false,
         error: 'Failed to update project member role'
@@ -1568,7 +2017,7 @@ export class ProjectService {
       return { userProjectRoles };
 
     } catch (error) {
-      console.error('Error in getUserProjectRoles:', error);
+
       return {
         error: 'Failed to fetch user project roles'
       };
@@ -1657,7 +2106,7 @@ export class ProjectService {
       return { users: availableUsers };
 
     } catch (error) {
-      console.error('Error in getAvailableUsersForProject:', error);
+
       return {
         error: 'Failed to fetch available users'
       };
@@ -1672,7 +2121,7 @@ export class ProjectService {
       const permissions = await this.getProjectPermissions(userId, projectId);
       return permissions.hasManagerAccess;
     } catch (error) {
-      console.error('Error checking manager access:', error);
+
       return false;
     }
   }
@@ -1752,8 +2201,210 @@ export class ProjectService {
       return { members: enhancedMembers };
 
     } catch (error) {
-      console.error('Error in getProjectMembersEnhanced:', error);
+
       return { error: 'Failed to fetch project members' };
+    }
+  }
+
+  // ========================================================================
+  // TRAINING PROJECT METHODS
+  // ========================================================================
+
+  /**
+   * Get Training Project with all tasks
+   */
+  static async getTrainingProjectWithTasks(): Promise<{
+    success: boolean;
+    project?: any;
+    tasks?: any[];
+    error?: string;
+  }> {
+    try {
+      const Task = (await import('../models/Task')).default;
+      const project = await (Project as any).getTrainingProject();
+
+      if (!project) {
+        return {
+          success: false,
+          error: 'Training project not found. Please contact administrator.'
+        };
+      }
+
+      // Get all tasks for this project
+      const tasks = await (Task.find as any)({
+        project_id: project._id,
+        deleted_at: null
+      }).sort({ created_at: -1 }).lean();
+
+      return {
+        success: true,
+        project,
+        tasks
+      };
+    } catch (error) {
+
+      return {
+        success: false,
+        error: 'Failed to fetch training project'
+      };
+    }
+  }
+
+  /**
+   * Add task to Training Project
+   */
+  static async addTrainingTask(
+    taskData: any,
+    currentUser: AuthUser
+  ): Promise<{
+    success: boolean;
+    task?: any;
+    error?: string;
+  }> {
+    try {
+      const project = await (Project as any).getTrainingProject();
+
+      if (!project) {
+        return {
+          success: false,
+          error: 'Training project not found'
+        };
+      }
+
+      // Create task
+      const task = await (Task.create as any)({
+        name: taskData.name,
+        description: taskData.description || '',
+        project_id: project._id,
+        created_by_user_id: new mongoose.Types.ObjectId(currentUser.id),
+        estimated_hours: 0,
+        hourly_rate: 0,
+        is_active: true,
+        is_billable: false, // Training tasks are always non-billable
+        status: 'open'
+      });
+
+      return {
+        success: true,
+        task
+      };
+    } catch (error) {
+
+      return {
+        success: false,
+        error: 'Failed to create training task'
+      };
+    }
+  }
+
+  /**
+   * Update task in Training Project
+   */
+  static async updateTrainingTask(
+    taskId: string,
+    taskData: any,
+    currentUser: AuthUser
+  ): Promise<{
+    success: boolean;
+    task?: any;
+    error?: string;
+  }> {
+    try {
+      const Task = (await import('../models/Task')).default;
+      const project = await (Project as any).getTrainingProject();
+
+      if (!project) {
+        return {
+          success: false,
+          error: 'Training project not found'
+        };
+      }
+
+      // Find task
+      const task = await (Task.findOne as any)({
+        _id: new mongoose.Types.ObjectId(taskId),
+        project_id: project._id,
+        deleted_at: null
+      });
+
+      if (!task) {
+        return {
+          success: false,
+          error: 'Training task not found'
+        };
+      }
+
+      // Update fields
+      if (taskData.name !== undefined) task.name = taskData.name;
+      if (taskData.description !== undefined) task.description = taskData.description;
+      if (taskData.is_active !== undefined) task.is_active = taskData.is_active;
+
+      // Ensure training tasks remain non-billable
+      task.is_billable = false;
+
+      await task.save();
+
+      return {
+        success: true,
+        task
+      };
+    } catch (error) {
+
+      return {
+        success: false,
+        error: 'Failed to update training task'
+      };
+    }
+  }
+
+  /**
+   * Delete task from Training Project (soft delete)
+   */
+  static async deleteTrainingTask(
+    taskId: string,
+    currentUser: AuthUser
+  ): Promise<{
+    success: boolean;
+    error?: string;
+  }> {
+    try {
+      const Task = (await import('../models/Task')).default;
+      const project = await (Project as any).getTrainingProject();
+
+      if (!project) {
+        return {
+          success: false,
+          error: 'Training project not found'
+        };
+      }
+
+      // Find task
+      const task = await (Task.findOne as any)({
+        _id: new mongoose.Types.ObjectId(taskId),
+        project_id: project._id,
+        deleted_at: null
+      });
+
+      if (!task) {
+        return {
+          success: false,
+          error: 'Training task not found'
+        };
+      }
+
+      // Soft delete
+      task.deleted_at = new Date();
+      await task.save();
+
+      return {
+        success: true
+      };
+    } catch (error) {
+
+      return {
+        success: false,
+        error: 'Failed to delete training task'
+      };
     }
   }
 }

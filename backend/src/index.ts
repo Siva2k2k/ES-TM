@@ -1,11 +1,11 @@
 import 'module-alias/register';
 import express from 'express';
+import { createServer } from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
-import rateLimit from 'express-rate-limit';
 import passport from 'passport';
 import path from 'path';
 import dotenv from 'dotenv';
@@ -17,6 +17,7 @@ import { errorHandler, notFound } from './middleware/errorHandler';
 import { checkMaintenanceMode } from './middleware/auth';
 import { registerRoutes } from './routes';
 import { SearchService } from './services/SearchService';
+import voiceSocketServer from './websocket/voiceSocketServer';
 
 dotenv.config();
 
@@ -24,22 +25,21 @@ dotenv.config();
 configurePassport();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const DEFAULT_PORT = Number(process.env.PORT) || 5000;
+const MAX_PORT_RETRIES = Number(process.env.PORT_RETRIES || 5);
 
-// Security middleware
-app.use(helmet());
-
-// Rate limiting (disabled for development)
+// Trust proxy for Heroku (needed for rate limiting and correct IP detection)
 if (process.env.NODE_ENV === 'production') {
-  const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per windowMs
-    message: {
-      error: 'Too many requests from this IP, please try again later.',
-    },
-  });
-  app.use('/api', limiter);
+  app.set('trust proxy', 1);
 }
+
+// Security middleware - Configure helmet with relaxed CSP for production
+app.use(
+  helmet({
+    contentSecurityPolicy: false, // Disable CSP as it's blocking API calls in production
+    crossOriginEmbedderPolicy: false,
+  })
+);
 
 // CORS configuration
 const corsOptions = {
@@ -112,11 +112,17 @@ app.get('*', (req, res) => {
 // Global error handler
 app.use(errorHandler);
 
+// Create HTTP server from Express app
+const httpServer = createServer(app);
+
+// Initialize Socket.IO for voice recognition
+voiceSocketServer.initialize(httpServer);
+
 // Database connection and server startup
 const startServer = async () => {
   try {
     await connectDB();
-    
+
     // Initialize search index on startup
     try {
       await SearchService.initializeSearchIndex();
@@ -124,12 +130,40 @@ const startServer = async () => {
     } catch (searchError) {
       logger.warn('Failed to initialize search index:', searchError);
     }
-    
-    app.listen(PORT, () => {
-      logger.info(`Server is running on port ${PORT}`);
-      logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
-      logger.info(`Health check available at http://localhost:${PORT}/health`);
-    });
+
+    const listenWithRetry = (port: number, attempt: number = 0): void => {
+      const server = httpServer.listen(port, () => {
+        process.env.PORT = String(port);
+        logger.info(`Server is running on port ${port}`);
+        logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
+        logger.info(`Health check available at http://localhost:${port}/health`);
+        logger.info(`WebSocket server ready for voice recognition`);
+
+        // Log Socket.IO stats
+        const stats = voiceSocketServer.getStats();
+        logger.info(`Active WebSocket connections: ${stats.connections}`);
+        logger.info(`Active voice sessions: ${stats.activeSessions}`);
+      });
+
+      server.on('error', (err: NodeJS.ErrnoException) => {
+        if (err.code === 'EADDRINUSE') {
+          if (attempt >= MAX_PORT_RETRIES) {
+            logger.error(`Port ${port} is already in use and maximum retry attempts reached.`);
+            process.exit(1);
+          }
+
+          const nextPort = port + 1;
+          logger.warn(`Port ${port} is in use. Attempting to start on port ${nextPort} (attempt ${attempt + 1}/${MAX_PORT_RETRIES}).`);
+
+          setTimeout(() => listenWithRetry(nextPort, attempt + 1), 250);
+        } else {
+          logger.error('Failed to start server:', err);
+          process.exit(1);
+        }
+      });
+    };
+
+    listenWithRetry(DEFAULT_PORT);
   } catch (error) {
     logger.error('Failed to start server:', error);
     process.exit(1);
@@ -147,6 +181,37 @@ process.on('uncaughtException', (err: Error) => {
   logger.error('Uncaught Exception:', err);
   process.exit(1);
 });
+
+// Graceful shutdown
+const gracefulShutdown = async (signal: string) => {
+  logger.info(`${signal} signal received. Starting graceful shutdown...`);
+
+  try {
+    // Shutdown voice WebSocket server
+    await voiceSocketServer.shutdown();
+
+    // Close HTTP server
+    httpServer.close(() => {
+      logger.info('HTTP server closed');
+      process.exit(0);
+    });
+
+    // Force close after 10 seconds
+    setTimeout(() => {
+      logger.error('Could not close connections in time, forcefully shutting down');
+      process.exit(1);
+    }, 10000);
+  } catch (error) {
+    logger.error('Error during shutdown:', error);
+    process.exit(1);
+  }
+};
+
+// Handle SIGTERM signal
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
+// Handle SIGINT signal (Ctrl+C)
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 startServer();
 

@@ -327,7 +327,8 @@ export const getAuditLogsValidation = [
         'TIMESHEET_SUBMITTED', 'TIMESHEET_APPROVED', 'TIMESHEET_VERIFIED',
         'TIMESHEET_REJECTED', 'PROJECT_CREATED', 'PROJECT_UPDATED',
         'PROJECT_DELETED', 'BILLING_SNAPSHOT_GENERATED', 'BILLING_APPROVED',
-        'ROLE_SWITCHED', 'PERMISSION_DENIED', 'SYSTEM_CONFIG_CHANGED'
+        'ROLE_SWITCHED', 'PERMISSION_DENIED', 'SYSTEM_CONFIG_CHANGED', 
+        'PROJECT_MEMBER_ADDED', 'PROJECT_MEMBER_REMOVED'
       ];
       const actions = value.split(',');
       const invalidActions = actions.filter(action => !validActions.includes(action.trim()));

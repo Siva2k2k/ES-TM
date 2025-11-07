@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, AlertTriangle, Trash2, RotateCcw, AlertCircle } from 'lucide-react';
+import { themeClasses, cn } from '../contexts/theme';
 
 export type DeleteAction = 'soft' | 'hard' | 'restore';
 
@@ -122,19 +123,28 @@ export const DeleteActionModal: React.FC<DeleteActionModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+      <div className={cn(themeClasses.modal, "rounded-lg shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto")}>
         {/* Header */}
-        <div className={`flex items-center justify-between p-6 border-b ${config.borderColor} ${config.bgColor}`}>
+        <div className={cn(
+          "flex items-center justify-between p-6 border-b", 
+          config.borderColor, 
+          config.bgColor,
+          themeClasses.border.default
+        )}>
           <div className="flex items-center space-x-3">
             <div className={config.iconColor}>
               {config.icon}
             </div>
-            <h2 className="text-xl font-semibold text-gray-900">{title || config.title}</h2>
+            <h2 className={cn("text-xl font-semibold", themeClasses.heading)}>{title || config.title}</h2>
           </div>
           <button
             onClick={onClose}
             disabled={isLoading}
-            className="text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+            className={cn(
+              "transition-colors disabled:opacity-50",
+              themeClasses.muted,
+              "hover:text-gray-600 dark:hover:text-gray-300"
+            )}
           >
             <X className="w-5 h-5" />
           </button>
@@ -143,23 +153,23 @@ export const DeleteActionModal: React.FC<DeleteActionModalProps> = ({
         {/* Content */}
         <div className="p-6 space-y-4">
           {/* Description */}
-          <div className="text-gray-700">
+          <div className={themeClasses.body}>
             <p>{config.description}</p>
           </div>
 
           {/* Dependencies Warning */}
           {dependencies.length > 0 && action !== 'restore' && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className={cn(themeClasses.status.error, "border rounded-lg p-4")}>
               <div className="flex items-start space-x-3">
-                <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
                 <div className="flex-1">
-                  <h4 className="font-semibold text-red-900 mb-2">Cannot Delete - Active Dependencies</h4>
-                  <ul className="list-disc list-inside space-y-1 text-sm text-red-800">
+                  <h4 className="font-semibold text-red-900 dark:text-red-100 mb-2">Cannot Delete - Active Dependencies</h4>
+                  <ul className="list-disc list-inside space-y-1 text-sm text-red-800 dark:text-red-200">
                     {dependencies.map((dep, idx) => (
                       <li key={idx}>{dep}</li>
                     ))}
                   </ul>
-                  <p className="text-sm text-red-700 mt-2">
+                  <p className="text-sm text-red-700 dark:text-red-300 mt-2">
                     Please resolve these dependencies before deleting.
                   </p>
                 </div>

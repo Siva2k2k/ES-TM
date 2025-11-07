@@ -4,13 +4,10 @@ import {
   generateWeeklySnapshotValidation,
   approveMonthlyBillingValidation,
   exportBillingReportValidation,
-  snapshotIdValidation
+  snapshotIdValidation,
+  getBillingSummaryValidation
 } from '@/controllers/BillingController';
 import { requireAuth, requireManagement } from '@/middleware/auth';
-
-// Import sub-route handlers
-import billingRatesRouter from './billingRates';
-import invoicesRouter from './invoices';
 
 const router = Router();
 
@@ -47,6 +44,13 @@ router.get('/snapshots', BillingController.getAllBillingSnapshots);
  * @access Private (Management+)
  */
 router.get('/snapshots/:snapshotId', snapshotIdValidation, BillingController.getBillingSnapshotById);
+
+/**
+ * @route GET /api/v1/billing/summary
+ * @desc Get billing summary
+ * @access Private (Management+)
+ */
+router.get('/summary', getBillingSummaryValidation, BillingController.getBillingSummary);
 
 /**
  * @route GET /api/v1/billing/dashboard
@@ -91,16 +95,7 @@ router.post('/export', exportBillingReportValidation, BillingController.exportBi
 router.get('/export', exportBillingReportValidation, BillingController.exportBillingReport);
 
 // Mount sub-routes
-/**
- * @route /api/v1/billing/rates/*
- * @desc Billing rate management routes
- */
-router.use('/rates', billingRatesRouter);
-
-/**
- * @route /api/v1/billing/invoices/*
- * @desc Invoice management routes
- */
-router.use('/invoices', invoicesRouter);
+// Note: Billing rates and invoices functionality is handled by projectBilling routes
+// See /api/v1/project-billing for rate and invoice management
 
 export default router;

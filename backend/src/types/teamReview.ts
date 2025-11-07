@@ -7,6 +7,7 @@ export interface ProjectWeekGroup {
   project_id: string;
   project_name: string;
   project_status: string;
+  project_type?: string; // 'regular' | 'internal' | 'training'
   week_start: string; // ISO date string
   week_end: string; // ISO date string
   week_label: string; // e.g., "Oct 6-12, 2025"
@@ -14,16 +15,25 @@ export interface ProjectWeekGroup {
   manager_name: string;
   lead_id?: string;
   lead_name?: string;
-  approval_status: 'pending' | 'approved' | 'rejected';
+  approval_status: 'pending' | 'approved' | 'rejected' | 'partially_processed';
+  sub_status?: string; // Additional context (e.g., "3 of 5 approved", "Reopened")
   users: ProjectWeekUser[];
   total_users: number;
   total_hours: number;
   total_entries: number;
+  pending_count?: number; // Count of pending approvals
+  approved_count?: number; // Count of approved
+  rejected_count?: number; // Count of rejected
   rejected_reason?: string; // If status is rejected
   rejected_by?: string;
   rejected_at?: string;
   approved_by?: string;
   approved_at?: string;
+  is_reopened?: boolean; // True if new timesheets added after bulk approval
+  reopened_at?: string; // When the reopening occurred
+  reopened_by_submission?: string; // User who submitted late
+  original_approval_count?: number; // How many were approved before reopening
+  reopening_type?: 'employee_late_submission' | 'lead_late_submission'; // Type of reopening
 }
 
 export interface ProjectWeekUser {
@@ -37,6 +47,12 @@ export interface ProjectWeekUser {
   total_hours_for_project: number;
   entries: TimeEntryDetail[];
   approval_status: 'pending' | 'approved' | 'rejected';
+  lead_status?: 'pending' | 'approved' | 'rejected' | 'not_required';
+  manager_status?: 'pending' | 'approved' | 'rejected' | 'not_required';
+  management_status?: 'pending' | 'approved' | 'rejected' | 'not_required';
+  worked_hours: number;
+  billable_hours: number;
+  billable_adjustment: number;
 }
 
 export interface TimeEntryDetail {
@@ -53,7 +69,7 @@ export interface ProjectWeekFilters {
   project_id?: string | string[]; // Can filter by multiple projects
   week_start?: string;
   week_end?: string;
-  status?: 'pending' | 'approved' | 'rejected' | 'all';
+  status?: 'pending' | 'approved' | 'rejected' | 'partially_processed' | 'all';
   sort_by?: 'week_date' | 'project_name' | 'pending_count';
   sort_order?: 'asc' | 'desc';
   page?: number;
@@ -85,6 +101,7 @@ export interface BulkProjectWeekApprovalResponse {
   message: string;
   affected_users: number;
   affected_timesheets: number;
+  skipped_self_approvals?: number;
   project_week: {
     project_name: string;
     week_label: string;

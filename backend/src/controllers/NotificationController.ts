@@ -295,6 +295,97 @@ export class NotificationController {
       });
     }
   }
+
+  /**
+   * Delete a specific notification
+   */
+  static async deleteNotification(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        res.status(400).json({
+          success: false,
+          error: 'Validation failed',
+          details: errors.array()
+        });
+        return;
+      }
+
+      const userId = req.user?.id;
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          error: 'User not authenticated'
+        });
+        return;
+      }
+
+      const { notification_id } = req.params;
+      
+      const success = await NotificationService.deleteNotification(notification_id, userId);
+      
+      if (!success) {
+        res.status(404).json({
+          success: false,
+          error: 'Notification not found or cannot be deleted'
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        message: 'Notification deleted successfully'
+      });
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Internal server error'
+      });
+      return;
+    }
+  }
+
+  /**
+   * Delete multiple notifications
+   */
+  static async deleteNotifications(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          error: 'User not authenticated'
+        });
+        return;
+      }
+
+      const { notification_ids } = req.body;
+      
+      if (!notification_ids || !Array.isArray(notification_ids) || notification_ids.length === 0) {
+        res.status(400).json({
+          success: false,
+          error: 'notification_ids array is required'
+        });
+        return;
+      }
+
+      const deletedCount = await NotificationService.deleteNotifications(notification_ids, userId);
+      
+      res.json({
+        success: true,
+        message: `${deletedCount} notifications deleted successfully`,
+        deleted_count: deletedCount
+      });
+    } catch (error) {
+      console.error('Error deleting notifications:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Internal server error'
+      });
+      return;
+    }
+  }
 }
 
 // Validation schemas

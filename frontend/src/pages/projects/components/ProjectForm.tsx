@@ -15,7 +15,7 @@ const projectFormSchema = z.object({
   start_date: z.string().min(1, 'Start date is required'),
   end_date: z.string().optional(),
   budget: z.number().min(0, 'Budget cannot be negative').optional(),
-  status: z.enum(['active', 'completed', 'on_hold', 'archived', 'cancelled']),
+  status: z.enum(['active', 'completed', 'archived']),
   is_billable: z.boolean(),
 }).refine((data) => {
   if (data.end_date && data.start_date) {
@@ -66,6 +66,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
     control,
     handleSubmit,
     reset,
+    watch,
     formState: { errors },
   } = useForm<ProjectFormData>({
     resolver: zodResolver(projectFormSchema),
@@ -190,6 +191,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
               label="Client"
               type="select"
               required
+              placeholder="Select a client"
               options={
                   clients && clients.length > 0
                     ? clients.map((c) => ({ value: (c as any).id || (c as any)._id || '', label: c.name }))
@@ -203,6 +205,7 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
               label="Primary Manager"
               type="select"
               required
+              placeholder="Select a manager"
               options={managers.map((m) => ({ value: m.id, label: m.full_name }))}
             />
           </div>
@@ -225,18 +228,16 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
             />
           </div>
 
+           {/* Billable Checkbox */}
+          <FormField
+            name="is_billable"
+            control={control}
+            label="Billable Project"
+            type="checkbox"
+          />
+
           {/* Budget & Status - Side by Side */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField
-              name="budget"
-              control={control}
-              label="Budget ($)"
-              type="number"
-              placeholder="0.00"
-              min={0}
-              step={0.01}
-            />
-
             <FormField
               name="status"
               control={control}
@@ -245,21 +246,20 @@ export const ProjectForm: React.FC<ProjectFormProps> = ({
               required
               options={[
                 { value: 'active', label: 'Active' },
-                { value: 'on_hold', label: 'On Hold' },
                 { value: 'completed', label: 'Completed' },
                 { value: 'archived', label: 'Archived' },
-                { value: 'cancelled', label: 'Cancelled' },
               ]}
             />
+            {watch('is_billable') && <FormField
+              name="budget"
+              control={control}
+              label="Budget ($)"
+              type="number"
+              placeholder="0.00"
+              min={0}
+              step={0.01}
+            />}
           </div>
-
-          {/* Billable Checkbox */}
-          <FormField
-            name="is_billable"
-            control={control}
-            label="Billable Project"
-            type="checkbox"
-          />
 
           {/* Form Error Summary */}
           {Object.keys(errors).length > 0 && (
