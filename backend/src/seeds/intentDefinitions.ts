@@ -26,7 +26,7 @@ export const intentDefinitions = [
       managerName: 'manager'
     },
     contextRequired: ['clients', 'users', 'projects'],
-    allowedRoles: ['super_admin', 'management', 'manager'],
+    allowedRoles: ['super_admin', 'management'],
     exampleCommand: 'Create a project named AI Platform for client Acme Corp managed by John Doe starting January 1st',
     redirectUrlTemplate: '/projects/{projectId}',
     isActive: true

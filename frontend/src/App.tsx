@@ -14,6 +14,7 @@ import {
   ResetPasswordPage,
   ForcePasswordChangePage,
 } from './pages/auth';
+import { MicrosoftCallbackPage } from './pages/auth/MicrosoftCallbackPage';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import UnauthorizedPage from './pages/auth/UnauthorizedPage';
 import NotFoundPage from './pages/auth/NotFoundPage';
@@ -95,6 +96,7 @@ const App: React.FC = () => {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/auth/microsoft/callback" element={<MicrosoftCallbackPage />} />
 
         {/* Protected Routes - App Layout */}
         <Route path="/dashboard" element={

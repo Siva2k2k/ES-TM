@@ -1,13 +1,15 @@
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Mail, Lock, AlertCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '../../store/contexts/AuthContext';
 import { loginSchema, type LoginInput } from '../../schemas/auth.schema';
 import { AuthCard } from './components';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
+import { BackendAuthService } from '../../services/BackendAuthService';
+import { isMsalConfigured } from '../../config/msalConfig';
 
 /**
  * LoginPage Component
@@ -17,7 +19,45 @@ import { Button } from '../../components/ui/Button';
 export function LoginPage() {
   const { signIn, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [serverError, setServerError] = React.useState('');
+  const [ssoLoading, setSsoLoading] = React.useState(false);
+  const showMicrosoftSSO = isMsalConfigured();
+
+  // Check for SSO errors from URL
+  React.useEffect(() => {
+    const error = searchParams.get('error');
+    const message = searchParams.get('message');
+
+    if (error) {
+      let errorMessage = 'Microsoft login failed';
+
+      switch (error) {
+        case 'sso_init_failed':
+          errorMessage = 'Failed to initiate Microsoft login. Please try again.';
+          break;
+        case 'sso_failed':
+          errorMessage = message || 'Microsoft login failed. Please try again.';
+          break;
+        case 'invalid_callback':
+          errorMessage = 'Invalid callback from Microsoft. Please try again.';
+          break;
+        case 'invalid_state':
+          errorMessage = 'Security validation failed. Please try again.';
+          break;
+        case 'account_inactive':
+          errorMessage = 'Your account is inactive. Please contact administrator.';
+          break;
+        case 'account_pending_approval':
+          errorMessage = 'Your account is pending approval. Please contact administrator.';
+          break;
+        default:
+          errorMessage = message || 'An error occurred during Microsoft login.';
+      }
+
+      setServerError(errorMessage);
+    }
+  }, [searchParams]);
 
   const {
     register,
@@ -150,7 +190,50 @@ export function LoginPage() {
             ) : (
               'Sign In'
             )}
-          </Button>          
+          </Button>
+
+          {/* Microsoft SSO Section */}
+          {showMicrosoftSSO && (
+            <>
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                    Or continue with
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSsoLoading(true);
+                  BackendAuthService.microsoftLogin();
+                }}
+                disabled={ssoLoading || isSubmitting}
+                className="w-full flex items-center justify-center px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm bg-white dark:bg-gray-700 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {ssoLoading ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin mr-3" />
+                    Redirecting to Microsoft...
+                  </>
+                ) : (
+                  <>
+                    <svg className="h-5 w-5 mr-3" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <rect x="1" y="1" width="9" height="9" fill="#F25022"/>
+                      <rect x="1" y="11" width="9" height="9" fill="#00A4EF"/>
+                      <rect x="11" y="1" width="9" height="9" fill="#7FBA00"/>
+                      <rect x="11" y="11" width="9" height="9" fill="#FFB900"/>
+                    </svg>
+                    Sign in with Microsoft
+                  </>
+                )}
+              </button>
+            </>
+          )}
         </form>
       </AuthCard>
     </div>

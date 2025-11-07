@@ -33,6 +33,14 @@ function toAuthUser(user: IUser): {
   };
 }
 
+// Helper function to validate ID format (MongoDB ObjectId or UUID)
+function isValidId(id: string | undefined | null): boolean {
+  if (!id || typeof id !== 'string') return false;
+  const mongoIdPattern = /^[0-9a-fA-F]{24}$/;
+  const uuidPattern = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+  return mongoIdPattern.test(id) || uuidPattern.test(id);
+}
+
 /**
  * Role-Based Service Dispatcher for Voice Commands
  * Routes intent execution to appropriate service methods based on user role
@@ -340,8 +348,17 @@ class RoleBasedServiceDispatcher {
    * Different validation rules based on role
    */
   private async handleUpdateUser(data: any, authUser: any): Promise<ActionExecutionResult> {
+    // Validate user ID
+    if (!isValidId(data.userId)) {
+      return {
+        intent: 'update_user',
+        success: false,
+        error: 'Invalid user ID format (must be ObjectId or UUID)'
+      };
+    }
+
     switch (authUser.role) {
-      case 'super_admin':   
+      case 'super_admin':
       case 'management': {
         // Super admin can update any user field
         const result = await UserService.updateUser(
@@ -427,6 +444,15 @@ class RoleBasedServiceDispatcher {
       };
     }
 
+    // Validate user ID
+    if (!isValidId(data.userId)) {
+      return {
+        intent: 'delete_user',
+        success: false,
+        error: 'Invalid user ID format (must be ObjectId or UUID)'
+      };
+    }
+
     const result = await UserService.softDeleteUser(
       data.userId,
       data.reason || 'Voice command deletion',
@@ -460,6 +486,15 @@ class RoleBasedServiceDispatcher {
         intent: 'approve_user',
         success: false,
         error: 'Only Super Admin can approve users'
+      };
+    }
+
+    // Validate user ID
+    if (!isValidId(data.userId)) {
+      return {
+        intent: 'approve_user',
+        success: false,
+        error: 'Invalid user ID format (must be ObjectId or UUID)'
       };
     }
 
@@ -502,8 +537,36 @@ class RoleBasedServiceDispatcher {
         };
       }
 
+      // Validate timesheet ID
+      const timesheetId = entry.timesheetId || data.timesheetId;
+      if (!isValidId(timesheetId)) {
+        return {
+          intent: 'add_entries',
+          success: false,
+          error: 'Invalid timesheet ID format (must be ObjectId or UUID)'
+        };
+      }
+
+      // Validate project ID
+      if (!isValidId(entry.projectId)) {
+        return {
+          intent: 'add_entries',
+          success: false,
+          error: 'Invalid project ID format (must be ObjectId or UUID)'
+        };
+      }
+
+      // Validate task ID
+      if (!isValidId(entry.taskId)) {
+        return {
+          intent: 'add_entries',
+          success: false,
+          error: 'Invalid task ID format (must be ObjectId or UUID)'
+        };
+      }
+
       const timeEntry = await TimesheetService.addTimeEntry(
-        entry.timesheetId || data.timesheetId,
+        timesheetId,
         {
           project_id: entry.projectId,
           task_id: entry.taskId,
@@ -544,6 +607,33 @@ class RoleBasedServiceDispatcher {
         intent: 'update_entries',
         success: false,
         error: 'Employees can only update their own entries'
+      };
+    }
+
+    // Validate timesheet ID
+    if (!isValidId(data.timesheetId)) {
+      return {
+        intent: 'update_entries',
+        success: false,
+        error: 'Invalid timesheet ID format (must be ObjectId or UUID)'
+      };
+    }
+
+    // Validate project ID
+    if (!isValidId(data.projectId)) {
+      return {
+        intent: 'update_entries',
+        success: false,
+        error: 'Invalid project ID format (must be ObjectId or UUID)'
+      };
+    }
+
+    // Validate task ID
+    if (!isValidId(data.taskId)) {
+      return {
+        intent: 'update_entries',
+        success: false,
+        error: 'Invalid task ID format (must be ObjectId or UUID)'
       };
     }
 
@@ -596,6 +686,23 @@ class RoleBasedServiceDispatcher {
       };
     }
 
+    // Validate IDs
+    if (!isValidId(data.projectId)) {
+      return {
+        intent: 'add_project_member',
+        success: false,
+        error: 'Invalid project ID format (must be ObjectId or UUID)'
+      };
+    }
+
+    if (!isValidId(data.userId)) {
+      return {
+        intent: 'add_project_member',
+        success: false,
+        error: 'Invalid user ID format (must be ObjectId or UUID)'
+      };
+    }
+
     const result = await ProjectService.addProjectMember(
       data.projectId,
       data.userId,
@@ -635,6 +742,23 @@ class RoleBasedServiceDispatcher {
       };
     }
 
+    // Validate IDs
+    if (!isValidId(data.projectId)) {
+      return {
+        intent: 'remove_project_member',
+        success: false,
+        error: 'Invalid project ID format (must be ObjectId or UUID)'
+      };
+    }
+
+    if (!isValidId(data.userId)) {
+      return {
+        intent: 'remove_project_member',
+        success: false,
+        error: 'Invalid user ID format (must be ObjectId or UUID)'
+      };
+    }
+
     const result = await ProjectService.removeProjectMember(
       data.projectId,
       data.userId,
@@ -668,6 +792,15 @@ class RoleBasedServiceDispatcher {
         intent: 'add_task',
         success: false,
         error: `Role '${authUser.role}' is not authorized to add tasks`
+      };
+    }
+
+    // Validate project ID
+    if (!isValidId(data.projectId)) {
+      return {
+        intent: 'add_task',
+        success: false,
+        error: 'Invalid project ID format (must be ObjectId or UUID)'
       };
     }
 
@@ -710,6 +843,24 @@ class RoleBasedServiceDispatcher {
         intent: 'update_project',
         success: false,
         error: `Role '${authUser.role}' is not authorized to update projects`
+      };
+    }
+
+    // Validate project ID
+    if (!isValidId(data.projectId)) {
+      return {
+        intent: 'update_project',
+        success: false,
+        error: 'Invalid project ID format (must be ObjectId or UUID)'
+      };
+    }
+
+    // Validate client ID if provided
+    if (data.clientId && !isValidId(data.clientId)) {
+      return {
+        intent: 'update_project',
+        success: false,
+        error: 'Invalid client ID format (must be ObjectId or UUID)'
       };
     }
 
@@ -759,6 +910,15 @@ class RoleBasedServiceDispatcher {
       };
     }
 
+    // Validate task ID
+    if (!isValidId(data.taskId)) {
+      return {
+        intent: 'update_task',
+        success: false,
+        error: 'Invalid task ID format (must be ObjectId or UUID)'
+      };
+    }
+
     const result = await ProjectService.updateTask(
       data.taskId,
       {
@@ -799,6 +959,15 @@ class RoleBasedServiceDispatcher {
       };
     }
 
+    // Validate project ID
+    if (!isValidId(data.projectId)) {
+      return {
+        intent: 'delete_project',
+        success: false,
+        error: 'Invalid project ID format (must be ObjectId or UUID)'
+      };
+    }
+
     const result = await ProjectService.deleteProject(
       data.projectId,
       data.reason || 'Deleted via voice command',
@@ -836,6 +1005,15 @@ class RoleBasedServiceDispatcher {
         intent: 'update_client',
         success: false,
         error: `Role '${authUser.role}' is not authorized to update clients`
+      };
+    }
+
+    // Validate client ID
+    if (!isValidId(data.clientId)) {
+      return {
+        intent: 'update_client',
+        success: false,
+        error: 'Invalid client ID format (must be ObjectId or UUID)'
       };
     }
 
@@ -883,6 +1061,15 @@ class RoleBasedServiceDispatcher {
       };
     }
 
+    // Validate client ID
+    if (!isValidId(data.clientId)) {
+      return {
+        intent: 'delete_client',
+        success: false,
+        error: 'Invalid client ID format (must be ObjectId or UUID)'
+      };
+    }
+
     const result = await ClientService.deleteClient(
       data.clientId,
       data.reason || 'Deleted via voice command',
@@ -925,6 +1112,15 @@ class RoleBasedServiceDispatcher {
       };
     }
 
+    // Validate user ID if provided
+    if (data.userId && !isValidId(data.userId)) {
+      return {
+        intent: 'create_timesheet',
+        success: false,
+        error: 'Invalid user ID format (must be ObjectId or UUID)'
+      };
+    }
+
     const result = await TimesheetService.createTimesheet(
       data.userId || authUser.id,
       data.weekStart,
@@ -962,6 +1158,15 @@ class RoleBasedServiceDispatcher {
       };
     }
 
+    // Validate timesheet ID
+    if (!isValidId(data.timesheetId)) {
+      return {
+        intent: 'delete_timesheet',
+        success: false,
+        error: 'Invalid timesheet ID format (must be ObjectId or UUID)'
+      };
+    }
+
     const result = await TimesheetService.deleteTimesheet(
       data.timesheetId,
       authUser
@@ -995,6 +1200,15 @@ class RoleBasedServiceDispatcher {
         intent: 'delete_entries',
         success: false,
         error: 'Employees can only delete their own entries'
+      };
+    }
+
+    // Validate timesheet ID
+    if (!isValidId(data.timesheetId)) {
+      return {
+        intent: 'delete_entries',
+        success: false,
+        error: 'Invalid timesheet ID format (must be ObjectId or UUID)'
       };
     }
 
@@ -1057,6 +1271,15 @@ class RoleBasedServiceDispatcher {
         intent: 'approve_project_week',
         success: false,
         error: `Role '${authUser.role}' is not authorized to approve project weeks`
+      };
+    }
+
+    // Validate project ID
+    if (!isValidId(data.projectId)) {
+      return {
+        intent: 'approve_project_week',
+        success: false,
+        error: 'Invalid project ID format (must be ObjectId or UUID)'
       };
     }
 
@@ -1125,6 +1348,15 @@ class RoleBasedServiceDispatcher {
       };
     }
 
+    // Validate project ID
+    if (!isValidId(data.projectId)) {
+      return {
+        intent: 'reject_project_week',
+        success: false,
+        error: 'Invalid project ID format (must be ObjectId or UUID)'
+      };
+    }
+
     try {
       const result = await TeamReviewApprovalService.rejectProjectWeek(
         data.projectId,
@@ -1171,6 +1403,15 @@ class RoleBasedServiceDispatcher {
       };
     }
 
+    // Validate project ID if provided
+    if (data.projectId && !isValidId(data.projectId)) {
+      return {
+        intent: 'send_reminder',
+        success: false,
+        error: 'Invalid project ID format (must be ObjectId or UUID)'
+      };
+    }
+
     const defaulterService = new DefaulterService();
     const result = await defaulterService.notifyDefaulters(
       data.projectId,
@@ -1210,9 +1451,32 @@ class RoleBasedServiceDispatcher {
 
     const projectIds = data.projectIds || (data.projectId ? [data.projectId] : []);
 
+    // Validate all project IDs
+    for (const projectId of projectIds) {
+      if (!isValidId(projectId)) {
+        return {
+          intent: 'export_project_billing',
+          success: false,
+          error: 'Invalid project ID format in array (must be ObjectId or UUID)'
+        };
+      }
+    }
+
+    // Validate all client IDs if provided
+    const clientIds = data.clientIds || [];
+    for (const clientId of clientIds) {
+      if (!isValidId(clientId)) {
+        return {
+          intent: 'export_project_billing',
+          success: false,
+          error: 'Invalid client ID format in array (must be ObjectId or UUID)'
+        };
+      }
+    }
+
     const result = await ProjectBillingService.buildProjectBillingData({
       projectIds,
-      clientIds: data.clientIds || [],
+      clientIds,
       startDate: data.startDate,
       endDate: data.endDate,
       view: 'custom'
@@ -1249,9 +1513,44 @@ class RoleBasedServiceDispatcher {
 
     const userIds = data.userIds || (data.userId ? [data.userId] : []);
 
+    // Validate all user IDs
+    for (const userId of userIds) {
+      if (!isValidId(userId)) {
+        return {
+          intent: 'export_user_billing',
+          success: false,
+          error: 'Invalid user ID format in array (must be ObjectId or UUID)'
+        };
+      }
+    }
+
+    // Validate all project IDs if provided
+    const projectIds = data.projectIds || [];
+    for (const projectId of projectIds) {
+      if (!isValidId(projectId)) {
+        return {
+          intent: 'export_user_billing',
+          success: false,
+          error: 'Invalid project ID format in array (must be ObjectId or UUID)'
+        };
+      }
+    }
+
+    // Validate all client IDs if provided
+    const clientIds = data.clientIds || [];
+    for (const clientId of clientIds) {
+      if (!isValidId(clientId)) {
+        return {
+          intent: 'export_user_billing',
+          success: false,
+          error: 'Invalid client ID format in array (must be ObjectId or UUID)'
+        };
+      }
+    }
+
     const result = await ProjectBillingService.buildProjectBillingData({
-      projectIds: data.projectIds || [],
-      clientIds: data.clientIds || [],
+      projectIds,
+      clientIds,
       startDate: data.startDate,
       endDate: data.endDate,
       view: 'custom'

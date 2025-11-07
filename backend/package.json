@@ -16,6 +16,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@azure/msal-node": "^3.8.1",
     "@azure/openai": "^2.0.0",
     "@types/puppeteer": "^5.4.7",
     "@types/socket.io": "^3.0.2",

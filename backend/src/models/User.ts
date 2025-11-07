@@ -1,6 +1,7 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export type UserRole = 'super_admin' | 'management' | 'manager' | 'lead' | 'employee';
+export type AuthProvider = 'local' | 'microsoft';
 
 export interface  IUser extends Document {
   _id: mongoose.Types.ObjectId;
@@ -12,6 +13,13 @@ export interface  IUser extends Document {
   is_approved_by_super_admin: boolean;
   manager_id?: mongoose.Types.ObjectId;
   password_hash?: string;
+
+  // SSO / OAuth fields
+  auth_provider: AuthProvider;
+  microsoft_id?: string;
+  microsoft_email?: string;
+  avatar_url?: string;
+  last_sso_login?: Date;
 
   // Secure credential management fields
   temporary_password?: string;
@@ -77,6 +85,31 @@ const UserSchema: Schema = new Schema({
   },
   password_hash: {
     type: String,
+    required: false
+  },
+
+  // SSO / OAuth fields
+  auth_provider: {
+    type: String,
+    enum: ['local', 'microsoft'],
+    default: 'local'
+  },
+  microsoft_id: {
+    type: String,
+    required: false,
+    sparse: true
+  },
+  microsoft_email: {
+    type: String,
+    required: false,
+    lowercase: true
+  },
+  avatar_url: {
+    type: String,
+    required: false
+  },
+  last_sso_login: {
+    type: Date,
     required: false
   },
 
@@ -169,6 +202,8 @@ UserSchema.index({ deleted_at: 1 }, { sparse: true }); // Sparse index for soft 
 UserSchema.index({ password_reset_token: 1 }, { sparse: true }); // Sparse index, rarely used
 UserSchema.index({ password_expires_at: 1 }, { sparse: true }); // Sparse index for expired passwords
 UserSchema.index({ account_locked_until: 1 }, { sparse: true }); // Sparse index for locked accounts
+UserSchema.index({ microsoft_id: 1 }, { sparse: true }); // Sparse index for Microsoft SSO lookups
+UserSchema.index({ auth_provider: 1 }); // Index for filtering by auth provider
 
 // Virtual for ID as string
 UserSchema.virtual('id').get(function() {

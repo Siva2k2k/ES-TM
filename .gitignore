@@ -33,3 +33,8 @@ dist-ssr
 
 # Python virtual environment
 .venv
+
+# Windows special device files
+nul
+*/nul
+**/nul
