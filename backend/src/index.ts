@@ -6,13 +6,11 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
-import passport from 'passport';
 import path from 'path';
 import dotenv from 'dotenv';
 
 import { connectDB } from './config/database';
 import logger from './config/logger';
-import { configurePassport } from './config/passport';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import { checkMaintenanceMode } from './middleware/auth';
 import { registerRoutes } from './routes';
@@ -20,9 +18,6 @@ import { SearchService } from './services/SearchService';
 import voiceSocketServer from './websocket/voiceSocketServer';
 
 dotenv.config();
-
-// Configure Passport
-configurePassport();
 
 const app = express();
 const DEFAULT_PORT = Number(process.env.PORT) || 5000;
@@ -59,9 +54,6 @@ app.use(cookieParser());
 
 // Compression middleware
 app.use(compression());
-
-// Initialize Passport
-app.use(passport.initialize());
 
 // Maintenance mode check
 app.use(checkMaintenanceMode);

@@ -1,45 +1,28 @@
-import { PublicClientApplication, LogLevel, Configuration, PopupRequest, RedirectRequest } from '@azure/msal-browser';
+import { PublicClientApplication, LogLevel, Configuration } from '@azure/msal-browser';
 
 /**
- * MSAL Configuration for Microsoft Authentication
- * Supports both popup and redirect flows for browser-based authentication
+ * Microsoft SSO Configuration
+ * Hybrid approach: Client-side MSAL for silent detection, server-side for actual authentication
  */
 
-// MSAL configuration
+// MSAL configuration for silent SSO detection only
 export const msalConfig: Configuration = {
   auth: {
-    clientId: import.meta.env.VITE_MICROSOFT_CLIENT_ID || '',
-    authority: `https://login.microsoftonline.com/${import.meta.env.VITE_MICROSOFT_TENANT_ID || 'common'}`,
-    redirectUri: import.meta.env.VITE_MICROSOFT_REDIRECT_URI || window.location.origin,
-    postLogoutRedirectUri: window.location.origin,
+    clientId: '7d2d4ead-c096-42ff-a560-280d5d2aac22', // Your actual client ID
+    authority: 'https://login.microsoftonline.com/7ba118fb-fa31-45b6-918a-24dd21e641db', // Your tenant
+    redirectUri: globalThis.location?.origin || 'http://localhost:5173', // Frontend URL for silent checks
+    postLogoutRedirectUri: globalThis.location?.origin || 'http://localhost:5173',
     navigateToLoginRequestUrl: false,
   },
   cache: {
-    cacheLocation: 'localStorage', // Use localStorage for persistent storage
-    storeAuthStateInCookie: false, // Set to true for IE11 support
+    cacheLocation: 'localStorage',
+    storeAuthStateInCookie: false,
   },
   system: {
     loggerOptions: {
       loggerCallback: (level, message, containsPii) => {
-        if (containsPii) {
-          return;
-        }
-        switch (level) {
-          case LogLevel.Error:
-            console.error(message);
-            return;
-          case LogLevel.Info:
-            console.info(message);
-            return;
-          case LogLevel.Verbose:
-            console.debug(message);
-            return;
-          case LogLevel.Warning:
-            console.warn(message);
-            return;
-          default:
-            return;
-        }
+        if (containsPii) return;
+        if (level === LogLevel.Error) console.error(message);
       },
       piiLoggingEnabled: false,
       logLevel: LogLevel.Warning,
@@ -50,42 +33,56 @@ export const msalConfig: Configuration = {
   },
 };
 
-// Initialize MSAL instance
+// Initialize MSAL instance for silent checks only
 export const msalInstance = new PublicClientApplication(msalConfig);
 
-// Initialize MSAL (moved to async function to avoid top-level await)
+// Initialize MSAL
 export const initializeMsal = async (): Promise<void> => {
   await msalInstance.initialize();
   
-  // Account selection logic
   const accounts = msalInstance.getAllAccounts();
   if (accounts.length > 0) {
     msalInstance.setActiveAccount(accounts[0]);
   }
 };
 
-// Login request configuration
-export const loginRequest: PopupRequest | RedirectRequest = {
-  scopes: ['openid', 'profile', 'email', 'User.Read'],
-  prompt: 'select_account', // Force account selection
-};
-
-// Silent login request (for SharePoint seamless auth)
+// Silent request for checking existing sessions
 export const silentRequest = {
   scopes: ['openid', 'profile', 'email', 'User.Read'],
   forceRefresh: false,
 };
 
-// Graph API configuration
-export const graphConfig = {
-  graphMeEndpoint: 'https://graph.microsoft.com/v1.0/me',
+/**
+ * Check if Microsoft SSO is enabled
+ */
+export const isMsalConfigured = (): boolean => {
+  return import.meta.env.VITE_MICROSOFT_ENABLED === 'true';
 };
 
 /**
- * Check if MSAL is configured
+ * Check if user has silent Microsoft SSO available
+ * This doesn't authenticate - just checks if tokens exist
  */
-export const isMsalConfigured = (): boolean => {
-  return Boolean(import.meta.env.VITE_MICROSOFT_CLIENT_ID);
+export const checkSilentMicrosoftAuth = async (): Promise<boolean> => {
+  if (!isMsalConfigured()) return false;
+
+  try {
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length === 0) return false;
+
+    msalInstance.setActiveAccount(accounts[0]);
+
+    // Try silent token acquisition
+    const response = await msalInstance.acquireTokenSilent({
+      ...silentRequest,
+      account: accounts[0],
+    });
+
+    return !!(response && response.accessToken);
+  } catch (error) {
+    console.log('Silent Microsoft auth not available:', error);
+    return false;
+  }
 };
 
 export default msalInstance;

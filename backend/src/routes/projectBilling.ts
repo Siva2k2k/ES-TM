@@ -68,7 +68,7 @@ router.get(
  * @desc Test endpoint
  * @access Private
  */
-router.get('/test', (req, res) => {
+router.get('/test', (req: any, res) => {
   res.json({ success: true, message: 'Project billing routes are working!', user: req.user });
 });
 

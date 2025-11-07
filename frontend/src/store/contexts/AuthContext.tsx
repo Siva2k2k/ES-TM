@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import { useMsal } from '@azure/msal-react';
 import { BackendAuthService } from '../../services/BackendAuthService';
-import { silentRequest, isMsalConfigured } from '../../config/msalConfig';
+import { checkSilentMicrosoftAuth } from '../../config/msalConfig';
 import type { UserRole, User } from '../../types';
 
 interface AuthContextType {
@@ -28,7 +28,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [currentUserRole, setCurrentUserRole] = useState<UserRole>('employee');
   const [isLoading, setIsLoading] = useState(true);
   const [requirePasswordChange, setRequirePasswordChange] = useState(false);
-  const { instance: msalInstance } = useMsal();
 
   const isAuthenticated = !!currentUser;
 
@@ -109,38 +108,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, []);
 
-  // Attempt silent Microsoft SSO authentication (for SharePoint seamless login)
+  // Check for silent Microsoft SSO and auto-redirect if available
   const attemptSilentMicrosoftAuth = useCallback(async (): Promise<boolean> => {
-    // Only attempt if MSAL is configured and no existing auth
-    if (!isMsalConfigured() || BackendAuthService.isAuthenticated()) {
+    // Skip if already authenticated or Microsoft SSO disabled
+    if (BackendAuthService.isAuthenticated()) {
       return false;
     }
 
     try {
-      console.log('Attempting silent Microsoft authentication...');
-
-      const accounts = msalInstance.getAllAccounts();
-      if (accounts.length === 0) {
-        // No Microsoft account in cache
-        return false;
-      }
-
-      // Set active account
-      msalInstance.setActiveAccount(accounts[0]);
-
-      // Try to acquire token silently
-      const response = await msalInstance.acquireTokenSilent({
-        ...silentRequest,
-        account: accounts[0],
-      });
-
-      if (response && response.accessToken) {
-        console.log('Silent Microsoft authentication successful');
-
-        // We got a Microsoft token, but we need to redirect through backend
-        // to get our JWT tokens and create/merge user account
-        // For now, just log success - user will need to click "Sign in with Microsoft"
-        // In production, you could auto-redirect here
+      console.log('Checking for silent Microsoft authentication...');
+      
+      // Check if user has cached Microsoft tokens
+      const hasValidTokens = await checkSilentMicrosoftAuth();
+      
+      if (hasValidTokens) {
+        console.log('Silent Microsoft tokens found, redirecting to backend...');
+        
+        // Auto-redirect to backend Microsoft OAuth endpoint
+        // The backend will handle the authentication and redirect back with our JWT tokens
+        globalThis.location.href = '/api/v1/auth/microsoft?silent=true';
         return true;
       }
 
@@ -149,7 +135,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.log('Silent Microsoft authentication not available:', error);
       return false;
     }
-  }, [msalInstance]);
+  }, []);
 
   // Initialize auth state
   useEffect(() => {

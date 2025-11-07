@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { validationResult } from 'express-validator';
+import { AuthRequest } from '@/middleware/auth';
 import { Project } from '@/models/Project';
 import { Timesheet } from '@/models/Timesheet';
 import { User } from '@/models/User';
@@ -497,7 +498,7 @@ export class ProjectBillingController {
     }
   }
 
-  static async createBillingAdjustment(req: Request, res: Response): Promise<void> {
+  static async createBillingAdjustment(req: AuthRequest, res: Response): Promise<void> {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
@@ -577,8 +578,8 @@ export class ProjectBillingController {
       let adjustedBy: mongoose.Types.ObjectId;
       
       try {
-        if ((req.user as any)?._id) {
-          const userId = (req.user as any)._id;
+        if (req.user?.id) {
+          const userId = req.user.id;
           adjustedBy = typeof userId === 'string' 
             ? mongoose.Types.ObjectId.createFromHexString(userId)
             : userId;

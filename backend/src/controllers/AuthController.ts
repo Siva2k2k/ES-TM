@@ -504,6 +504,7 @@ export class AuthController {
    */
   static microsoftAuth = handleAsyncError(async (req: Request, res: Response) => {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const isSilentAuth = req.query.silent === 'true';
 
     // Check if Microsoft SSO is configured
     if (!process.env.MICROSOFT_CLIENT_ID || !process.env.MICROSOFT_CLIENT_SECRET || !process.env.MICROSOFT_REDIRECT_URI) {
@@ -523,11 +524,24 @@ export class AuthController {
         sameSite: 'lax'
       });
 
+      // Store silent auth flag in cookie for callback handling
+      if (isSilentAuth) {
+        res.cookie('silent_auth', 'true', {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          maxAge: 10 * 60 * 1000, // 10 minutes
+          sameSite: 'lax'
+        });
+      }
+
       // Construct Microsoft authorization URL
       const clientId = process.env.MICROSOFT_CLIENT_ID;
       const tenantId = process.env.MICROSOFT_TENANT_ID || 'common';
       const redirectUri = encodeURIComponent(process.env.MICROSOFT_REDIRECT_URI);
       const scopes = encodeURIComponent('openid profile email User.Read');
+      
+      // For silent auth, use 'none' prompt to avoid showing login UI if user is already signed in
+      const prompt = isSilentAuth ? 'none' : 'select_account';
       
       const authUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize?` +
         `client_id=${clientId}` +
@@ -536,9 +550,9 @@ export class AuthController {
         `&response_mode=query` +
         `&scope=${scopes}` +
         `&state=${state}` +
-        `&prompt=select_account`;
+        `&prompt=${prompt}`;
 
-      logger.info(`Redirecting to Microsoft OAuth: ${authUrl.replace(state, '[STATE_HIDDEN]')}`);
+      logger.info(`Redirecting to Microsoft OAuth (silent: ${isSilentAuth}): ${authUrl.replace(state, '[STATE_HIDDEN]')}`);
 
       // Redirect user to Microsoft login
       res.redirect(authUrl);
@@ -555,6 +569,7 @@ export class AuthController {
   static microsoftCallback = handleAsyncError(async (req: Request, res: Response) => {
     const { code, state, error, error_description } = req.query;
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const isSilentAuth = req.cookies.silent_auth === 'true';
 
     // Check if Microsoft SSO is configured
     if (!process.env.MICROSOFT_CLIENT_ID || !process.env.MICROSOFT_CLIENT_SECRET || !process.env.MICROSOFT_REDIRECT_URI) {
@@ -565,6 +580,13 @@ export class AuthController {
     // Handle OAuth errors
     if (error) {
       logger.error(`Microsoft OAuth error: ${error} - ${error_description}`);
+      
+      // For silent auth failures, quietly redirect to login without showing error
+      if (isSilentAuth && error === 'login_required') {
+        logger.info('Silent auth failed (login_required) - user needs to login manually');
+        return res.redirect(`${frontendUrl}/login`);
+      }
+      
       return res.redirect(`${frontendUrl}/login?error=sso_failed&message=${encodeURIComponent(String(error_description || error))}`);
     }
 
@@ -582,11 +604,13 @@ export class AuthController {
         queryState: state ? '[PRESENT]' : '[MISSING]' 
       });
       res.clearCookie('oauth_state');
+      res.clearCookie('silent_auth');
       return res.redirect(`${frontendUrl}/login?error=invalid_state&message=Security+validation+failed`);
     }
 
-    // Clear the state cookie after validation
+    // Clear the state and silent auth cookies after validation
     res.clearCookie('oauth_state');
+    res.clearCookie('silent_auth');
 
     try {
       // Exchange code for token and get user info
