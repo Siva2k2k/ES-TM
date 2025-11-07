@@ -12,6 +12,7 @@ import { DeviceDetector } from '../utils/deviceDetection';
 import { SpeechFallbackManager } from '../services/SpeechFallbackManager';
 import { VoiceError } from '../types/voiceErrors';
 import { showSuccess, showError, showInfo } from '../utils/toast';
+import { useAuth } from '../store/contexts/AuthContext';
 
 // Initial state
 const initialState: VoiceState = {
@@ -78,6 +79,7 @@ const VoiceContext = createContext<VoiceContextType | undefined>(undefined);
 // Provider component
 export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(voiceReducer, initialState);
+  const { isAuthenticated, isLoading: authIsLoading } = useAuth();
 
   // Create fallback manager instance (persists across re-renders)
   const fallbackManagerRef = useRef<SpeechFallbackManager | null>(null);
@@ -89,28 +91,42 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }
 
   // Initialize device info and load user preferences
+  // Wait for AuthContext to finish initializing before attempting voice API calls
   useEffect(() => {
     const initializeVoice = async () => {
       try {
-        // Detect device capabilities
+        // Detect device capabilities first (no API call required)
         const deviceInfo = DeviceDetector.detect();
         dispatch({ type: 'SET_DEVICE_INFO', payload: deviceInfo });
 
-        // Load user preferences
-        const preferences = await voiceService.getUserPreferences();
-        dispatch({ type: 'SET_PREFERENCES', payload: preferences });
+        // Only attempt API calls if:
+        // 1. AuthContext has finished loading
+        // 2. User is authenticated
+        if (!authIsLoading && isAuthenticated) {
+          // Load user preferences
+          const preferences = await voiceService.getUserPreferences();
+          dispatch({ type: 'SET_PREFERENCES', payload: preferences });
 
-        // Load voice context
-        const context = await voiceService.getContext();
-        dispatch({ type: 'SET_CONTEXT', payload: context });
+          // Load voice context
+          const context = await voiceService.getContext();
+          dispatch({ type: 'SET_CONTEXT', payload: context });
+        } else if (!authIsLoading && !isAuthenticated) {
+          // Auth finished but user not authenticated - clear any auth-dependent state
+          dispatch({ type: 'SET_PREFERENCES', payload: null });
+          dispatch({ type: 'SET_CONTEXT', payload: null });
+        }
+        // If authIsLoading is true, wait for next effect run
       } catch (error: any) {
         console.error('Failed to initialize voice layer:', error);
-        dispatch({ type: 'SET_ERROR', payload: error.message });
+        // Only set error if we're authenticated (to avoid auth-related startup errors)
+        if (isAuthenticated) {
+          dispatch({ type: 'SET_ERROR', payload: error.message });
+        }
       }
     };
 
     initializeVoice();
-  }, []);
+  }, [authIsLoading, isAuthenticated]); // Re-run when auth state changes
 
   // Start listening
   const startListening = useCallback(() => {

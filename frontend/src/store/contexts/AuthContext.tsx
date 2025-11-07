@@ -1,7 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
-import { useMsal } from '@azure/msal-react';
 import { BackendAuthService } from '../../services/BackendAuthService';
-import { checkSilentMicrosoftAuth } from '../../config/msalConfig';
 import type { UserRole, User } from '../../types';
 
 interface AuthContextType {
@@ -108,35 +106,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, []);
 
-  // Check for silent Microsoft SSO and auto-redirect if available
-  const attemptSilentMicrosoftAuth = useCallback(async (): Promise<boolean> => {
-    // Skip if already authenticated or Microsoft SSO disabled
-    if (BackendAuthService.isAuthenticated()) {
-      return false;
-    }
-
-    try {
-      console.log('Checking for silent Microsoft authentication...');
-      
-      // Check if user has cached Microsoft tokens
-      const hasValidTokens = await checkSilentMicrosoftAuth();
-      
-      if (hasValidTokens) {
-        console.log('Silent Microsoft tokens found, redirecting to backend...');
-        
-        // Auto-redirect to backend Microsoft OAuth endpoint
-        // The backend will handle the authentication and redirect back with our JWT tokens
-        globalThis.location.href = '/api/v1/auth/microsoft?silent=true';
-        return true;
-      }
-
-      return false;
-    } catch (error) {
-      console.log('Silent Microsoft authentication not available:', error);
-      return false;
-    }
-  }, []);
-
   // Initialize auth state
   useEffect(() => {
     let mounted = true;
@@ -156,9 +125,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
           // Load user profile
           await loadUserProfile();
-        } else {
-          // No local auth - attempt silent Microsoft SSO
-          await attemptSilentMicrosoftAuth();
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
@@ -175,7 +141,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return () => {
       mounted = false;
     };
-  }, [loadUserProfile, attemptSilentMicrosoftAuth]);
+  }, [loadUserProfile]);
 
   const value: AuthContextType = useMemo(() => ({
     currentUser,

@@ -17,8 +17,6 @@
     "start": "serve -s dist"
   },
   "dependencies": {
-    "@azure/msal-browser": "^4.26.1",
-    "@azure/msal-react": "^3.0.21",
     "@hookform/resolvers": "^5.2.2",
     "axios": "^1.12.2",
     "class-variance-authority": "^0.7.1",

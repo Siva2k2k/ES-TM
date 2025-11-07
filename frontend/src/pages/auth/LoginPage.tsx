@@ -9,7 +9,7 @@ import { AuthCard } from './components';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { BackendAuthService } from '../../services/BackendAuthService';
-import { isMsalConfigured } from '../../config/msalConfig';
+import { isMicrosoftOAuthEnabled } from '../../config/msalConfig';
 
 /**
  * LoginPage Component
@@ -22,7 +22,7 @@ export function LoginPage() {
   const [searchParams] = useSearchParams();
   const [serverError, setServerError] = React.useState('');
   const [ssoLoading, setSsoLoading] = React.useState(false);
-  const showMicrosoftSSO = isMsalConfigured();
+  const showMicrosoftSSO = isMicrosoftOAuthEnabled();
 
   // Check for SSO errors from URL
   React.useEffect(() => {
