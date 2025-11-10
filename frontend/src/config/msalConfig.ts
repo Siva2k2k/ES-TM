@@ -8,7 +8,7 @@
  * Check if Microsoft OAuth is enabled
  */
 export const isMicrosoftOAuthEnabled = (): boolean => {
-  return import.meta.env.VITE_MICROSOFT_ENABLED === 'true';
+  return true; // Set to true to enable Microsoft OAuth
 };
 
 /**
