@@ -1041,23 +1041,125 @@ class VoiceFieldMapper {
   }
 
   /**
+   * Resolve task name to ID within a specific project context
+   */
+  async resolveTaskInProject(
+    taskName: string, 
+    projectId: Types.ObjectId
+  ): Promise<NameResolverResult> {
+    try {
+      // Try exact match first
+      const exactMatch = await (Task as any).findOne({
+        name: { $regex: new RegExp(`^${this.escapeRegex(taskName)}$`, 'i') },
+        project_id: projectId,
+        deleted_at: { $exists: false }
+      });
+
+      if (exactMatch) {
+        logger.info('Task resolved within project context', { 
+          input: taskName, 
+          matched: exactMatch.name, 
+          id: exactMatch._id,
+          projectId: projectId
+        });
+        return { success: true, id: exactMatch._id as Types.ObjectId };
+      }
+
+      // Try fuzzy matching
+      const fuzzyMatches = await (Task as any).find({
+        name: { $regex: new RegExp(this.escapeRegex(taskName), 'i') },
+        project_id: projectId,
+        deleted_at: { $exists: false }
+      }).limit(5);
+
+      if (fuzzyMatches.length === 1) {
+        logger.info('Task fuzzy matched within project context', { 
+          input: taskName, 
+          matched: fuzzyMatches[0].name, 
+          id: fuzzyMatches[0]._id,
+          projectId: projectId
+        });
+        return { success: true, id: fuzzyMatches[0]._id as Types.ObjectId };
+      }
+
+      if (fuzzyMatches.length > 1) {
+        const suggestions = fuzzyMatches.map(t => t.name).slice(0, 3);
+        return {
+          success: false,
+          error: {
+            field: 'taskName',
+            message: `Multiple tasks found with similar names in this project. Did you mean: ${suggestions.join(', ')}?`,
+            receivedValue: taskName
+          }
+        };
+      }
+
+      // No matches found
+      return {
+        success: false,
+        error: {
+          field: 'taskName',
+          message: `Task '${taskName}' not found in project. Cannot update non-existing task.`,
+          receivedValue: taskName
+        }
+      };
+
+    } catch (error) {
+      logger.error('Error resolving task within project context', { taskName, projectId, error });
+      return {
+        success: false,
+        error: {
+          field: 'taskName',
+          message: 'Failed to resolve task name',
+          receivedValue: taskName
+        }
+      };
+    }
+  }
+
+  /**
    * Map update_task intent data
    */
   async mapUpdateTask(data: Record<string, any>): Promise<MappingResult> {
     const errors: FieldMappingError[] = [];
     const mapped: Record<string, any> = {};
 
-    // Resolve task identifier to task_id
+    // Check for project context to enable project-scoped task resolution
+    let projectId: Types.ObjectId | null = null;
+    if (data.projectName || data.project_name || data.projectId || data.project_id) {
+      const projectIdentifier = data.projectName || data.project_name || data.projectId || data.project_id;
+      const projectResult = await this.resolveNameToId(projectIdentifier, 'project', 'project_id');
+      
+      if (projectResult.success) {
+        projectId = projectResult.id;
+        mapped.project_id = projectResult.id;
+      } else {
+        errors.push(projectResult.error!);
+      }
+    }
+
+    // Resolve task identifier to task_id (with project context if available)
     if (data.taskId || data.task_id || data.taskName || data.task_name) {
       const taskIdentifier = data.taskId || data.task_id || data.taskName || data.task_name;
       
       if (data.taskName || data.task_name) {
-        // If it's a name, we need to resolve it
-        const taskResult = await this.resolveNameToId(taskIdentifier, 'task', 'task_id');
-        if (taskResult.success) {
-          mapped.task_id = taskResult.id;
+        // If it's a name and we have project context, use project-scoped resolution
+        if (projectId) {
+          const taskResult = await this.resolveTaskInProject(taskIdentifier, projectId);
+          if (taskResult.success) {
+            mapped.task_id = taskResult.id;
+          } else {
+            // For update operations, task MUST exist - throw error instead of custom_task
+            errors.push(taskResult.error!);
+          }
         } else {
-          errors.push(taskResult.error!);
+          // Fallback to global task resolution
+          const taskResult = await this.resolveNameToId(taskIdentifier, 'task', 'task_id');
+          if (taskResult.success) {
+            mapped.task_id = taskResult.id;
+          } else {
+            errors.push(taskResult.error!);
+          }
         }
       } else {
         // If it's already an ID, just validate it
@@ -1086,6 +1188,32 @@ class VoiceFieldMapper {
 
     if (data.description) {
       mapped.description = data.description;
+    }
+
+    // Map status (optional for updates)
+    if (data.status) {
+      mapped.status = data.status.toLowerCase();
+    }
+
+    // Map estimated hours
+    if (data.estimatedHours || data.estimated_hours) {
+      const hours = data.estimatedHours || data.estimated_hours;
+      if (typeof hours === 'number' && hours >= 0) {
+        mapped.estimated_hours = hours;
+      }
+    }
+
+    // Map assigned member (optional for updates)
+    if (data.assignedMemberName || data.assigned_member_name || data.assignedUser || data.assigned_user) {
+      const memberIdentifier = data.assignedMemberName || data.assigned_member_name || 
+                             data.assignedUser || data.assigned_user;
+      const memberResult = await this.resolveNameToId(memberIdentifier, 'user', 'assigned_to_user_id');
+      
+      if (memberResult.success) {
+        mapped.assigned_to_user_id = memberResult.id;
+      } else {
+        errors.push(memberResult.error!);
+      }
     }
 
     return {

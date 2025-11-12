@@ -4,6 +4,7 @@ import { VoiceAction, VoiceActionField, VoiceError } from '../../types/voice';
 import { Project, User, ProjectMember } from '../../types';
 import { backendApi } from '../../lib/backendApi';
 import { sanitizeVoiceActions } from '../../utils/voiceDataSanitization';
+import { voiceEntityResolver } from '../../utils/voiceEntityResolver';
 import VoiceErrorDisplay from '../VoiceErrorDisplay';
 
 const IconCheck = ({ size = 20 }: { size?: number }) => (
@@ -70,18 +71,6 @@ const FieldRenderer: React.FC<FieldRendererProps> = ({ field, value, onChange, e
                            dropdownOptions &&
                            dropdownOptions.length > 0;
 
-  // Debug logging for reference/enum fields
-  if ((field.type === 'reference' || field.type === 'enum') && process.env.NODE_ENV === 'development') {
-    console.log('Dropdown field:', {
-      fieldName: field.name,
-      fieldType: field.type,
-      referenceType: field.referenceType,
-      hasOptions: !!dropdownOptions,
-      optionsCount: dropdownOptions?.length || 0,
-      enumValues: field.enumValues,
-      currentValue: value
-    });
-  }
 
   // Display mode
   if (!editMode) {
@@ -243,10 +232,13 @@ const VoiceConfirmationModal: React.FC = () => {
 
             // Track project ID for task/member fetching
             if (field.referenceType === 'task' || field.referenceType === 'projectMember') {
-              const projectId = action.data.project_id || action.data.projectName || action.data.project;
-              if (projectId) {
-                if (field.referenceType === 'task') projectIdForTasks = projectId;
-                if (field.referenceType === 'projectMember') projectIdForMembers = projectId;
+              const projectIdentifier = action.data.project_id || action.data.projectName || action.data.project;
+              if (projectIdentifier && typeof projectIdentifier === 'string') {
+                // Use entity resolver for project name-to-ID resolution
+                const resolvedProjectId = voiceEntityResolver.resolveProjectId(projectIdentifier);
+                
+                if (field.referenceType === 'task') projectIdForTasks = resolvedProjectId;
+                if (field.referenceType === 'projectMember') projectIdForMembers = resolvedProjectId;
               }
             }
           }
@@ -290,18 +282,33 @@ const VoiceConfirmationModal: React.FC = () => {
 
       // Fetch projects first (needed for resolving project names to IDs)
       let projectsData: Project[] = [];
-      if (referenceTypes.has('project')) {
+      
+      // Always fetch projects if we have project references OR project member actions
+      const needsProjects = referenceTypes.has('project') || 
+                           actions.some(action => 
+                             action.intent === 'add_project_member' || 
+                             action.intent === 'remove_project_member'
+                           );
+      
+      if (needsProjects) {
         try {
           const projectsResponse = await backendApi.get<{ success: boolean; projects: Project[] }>('/projects');
           if (projectsResponse.success && projectsResponse.projects) {
             projectsData = projectsResponse.projects;
-            const projectOptions = projectsData.map((p: Project) => ({
-              value: p.id,
-              label: p.name
-            }));
-            options['project'] = projectOptions;
-            options['project_id'] = projectOptions;
-            options['projectName'] = projectOptions;
+            
+            // Set projects in entity resolver for name-to-ID resolution
+            voiceEntityResolver.setProjects(projectsData as unknown as Array<{ id: string; name?: string; [key: string]: unknown }>);
+            
+            // Set project options if needed for reference fields
+            if (referenceTypes.has('project')) {
+              const projectOptions = projectsData.map((p: Project) => ({
+                value: p.id,
+                label: p.name
+              }));
+              options['project'] = projectOptions;
+              options['project_id'] = projectOptions;
+              options['projectName'] = projectOptions;
+            }
           }
         } catch (error) {
           console.error('Failed to fetch projects:', error);
