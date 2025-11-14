@@ -181,10 +181,15 @@ Parse this command and return the structured JSON response.`;
 
       // Ensure field exists in data (with empty value if not present)
       if (!(fieldName in action.data)) {
-        // Special handling for userName field in create_user intent
-        if (action.intent === 'create_user' && fieldName === 'userName') {
+        // Special handling for userName field in user management intents
+        if ((action.intent === 'create_user' || action.intent === 'update_user' || action.intent === 'delete_user') && fieldName === 'userName') {
           // Try to get the value from alternative name fields
           action.data[fieldName] = action.data.name || action.data.fullName || action.data.full_name || action.data.user_name || this.getDefaultValueForType(fieldType);
+        }
+        // Special handling for clientName field in client management intents
+        else if ((action.intent === 'create_client' || action.intent === 'update_client' || action.intent === 'delete_client') && fieldName === 'clientName') {
+          // Try to get the value from alternative name fields
+          action.data[fieldName] = action.data.name || action.data.client_name || action.data.clientName || this.getDefaultValueForType(fieldType);
         } else {
           action.data[fieldName] = this.getDefaultValueForType(fieldType);
         }
@@ -211,8 +216,8 @@ Parse this command and return the structured JSON response.`;
         if (fieldType === 'boolean') {
           action.data[fieldName] = false;
         } else {
-          // Special handling for userName field in create_user or update_user intent
-          if ((action.intent === 'create_user' || action.intent === 'update_user') && fieldName === 'userName') {
+          // Special handling for userName field in user management intents
+          if ((action.intent === 'create_user' || action.intent === 'update_user' || action.intent === 'delete_user') && fieldName === 'userName') {
             // Try to get the value from alternative name fields
             action.data[fieldName] = action.data.name || action.data.fullName || action.data.full_name || action.data.user_name || this.getDefaultValueForType(fieldType);
           } else {

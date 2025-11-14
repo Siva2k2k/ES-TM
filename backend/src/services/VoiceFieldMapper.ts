@@ -681,8 +681,8 @@ class VoiceFieldMapper {
     }
 
     // Map updateable fields
-    if (data.name) {
-      mapped.name = data.name;
+    if (data.name || data.clientName || data.client_name) {
+      mapped.name = data.name || data.clientName || data.client_name;
     }
 
     if (data.contactPerson || data.contact_person) {
@@ -1494,8 +1494,9 @@ class VoiceFieldMapper {
       mapped.email = data.email.toLowerCase();
     }
 
-    if (data.role) {
-      mapped.role = data.role.toLowerCase();
+    // Map role - Enhanced validation for string values
+    if (data.role && typeof data.role === 'string' && data.role.trim() !== '') {
+      mapped.role = data.role.toLowerCase().trim();
     }
 
     // Map hourly rate (optional for updates)

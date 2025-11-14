@@ -370,7 +370,7 @@ class RoleBasedServiceDispatcher {
       case 'management': {
         // Super admin can update any user field
         const result = await UserService.updateUser(
-          mappedData.userId,
+          mappedData.user_id,
           {
             email: mappedData.email,
             role: mappedData.role,
@@ -394,7 +394,7 @@ class RoleBasedServiceDispatcher {
           data: { message: 'User updated successfully' },
           affectedEntities: [{
             type: 'user',
-            id: mappedData.userId
+            id: mappedData.user_id
           }]
         };
       }
@@ -402,7 +402,7 @@ class RoleBasedServiceDispatcher {
       case 'manager': {
         // Management can update limited fields, no role changes
         const limitedResult = await UserService.updateUser(
-          mappedData.userId,
+          mappedData.user_id,
           {
             email: mappedData.email,
             hourly_rate: mappedData.hourly_rate,
@@ -426,7 +426,7 @@ class RoleBasedServiceDispatcher {
           data: { message: 'User updated successfully (limited permissions)' },
           affectedEntities: [{
             type: 'user',
-            id: mappedData.userId
+            id: mappedData.user_id
           }]
         };
       }
@@ -467,7 +467,7 @@ class RoleBasedServiceDispatcher {
     const mappedData = mappingResult.data;
 
     const result = await UserService.softDeleteUser(
-      mappedData.userId,
+      mappedData.user_id,
       mappedData.reason,
       authUser
     );
@@ -485,7 +485,7 @@ class RoleBasedServiceDispatcher {
       success: true,
       affectedEntities: [{
         type: 'user',
-        id: mappedData.userId
+        id: mappedData.user_id
       }]
     };
   }
