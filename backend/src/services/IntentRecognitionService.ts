@@ -181,7 +181,13 @@ Parse this command and return the structured JSON response.`;
 
       // Ensure field exists in data (with empty value if not present)
       if (!(fieldName in action.data)) {
-        action.data[fieldName] = this.getDefaultValueForType(fieldType);
+        // Special handling for userName field in create_user intent
+        if (action.intent === 'create_user' && fieldName === 'userName') {
+          // Try to get the value from alternative name fields
+          action.data[fieldName] = action.data.name || action.data.fullName || action.data.full_name || action.data.user_name || this.getDefaultValueForType(fieldType);
+        } else {
+          action.data[fieldName] = this.getDefaultValueForType(fieldType);
+        }
       }
     }
 
@@ -205,7 +211,13 @@ Parse this command and return the structured JSON response.`;
         if (fieldType === 'boolean') {
           action.data[fieldName] = false;
         } else {
-          action.data[fieldName] = this.getDefaultValueForType(fieldType);
+          // Special handling for userName field in create_user or update_user intent
+          if ((action.intent === 'create_user' || action.intent === 'update_user') && fieldName === 'userName') {
+            // Try to get the value from alternative name fields
+            action.data[fieldName] = action.data.name || action.data.fullName || action.data.full_name || action.data.user_name || this.getDefaultValueForType(fieldType);
+          } else {
+            action.data[fieldName] = this.getDefaultValueForType(fieldType);
+          }
         }
       }
     }

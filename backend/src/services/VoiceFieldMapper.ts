@@ -400,14 +400,14 @@ class VoiceFieldMapper {
       });
     }
 
-    // Map role
-    if (data.role) {
-      mapped.role = data.role.toLowerCase();
+    // Map role - Fixed to handle string values properly
+    if (data.role && typeof data.role === 'string' && data.role.trim() !== '') {
+      mapped.role = data.role.toLowerCase().trim();
     } else {
       errors.push({
         field: 'role',
         message: 'User role is required',
-        receivedValue: undefined
+        receivedValue: data.role
       });
     }
 

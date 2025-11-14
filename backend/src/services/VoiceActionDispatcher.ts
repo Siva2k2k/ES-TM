@@ -382,7 +382,7 @@ class VoiceActionDispatcher {
       data: result.project,
       affectedEntities: [{
         type: 'project',
-        id: result.project._id.toString(),
+        id: result.project._id ? result.project._id.toString() : result.project.id,
         name: result.project.name
       }]
     };
@@ -636,7 +636,7 @@ class VoiceActionDispatcher {
         data: { message: 'Task added successfully', task: result.task },
         affectedEntities: [{
           type: 'task',
-          id: result.task._id.toString(),
+          id: result.task._id ? result.task._id.toString() : result.task.id,
           name: result.task.name
         }, {
           type: 'project',
@@ -954,7 +954,7 @@ class VoiceActionDispatcher {
       data: result.user,
       affectedEntities: [{
         type: 'user',
-        id: result.user._id.toString(),
+        id: result.user._id ? result.user._id.toString() : result.user.id,
         name: result.user.full_name
       }]
     };
@@ -1056,7 +1056,7 @@ class VoiceActionDispatcher {
       data: result.client,
       affectedEntities: [{
         type: 'client',
-        id: result.client._id.toString(),
+        id: result.client._id ? result.client._id.toString() : result.client.id,
         name: result.client.name
       }]
     };

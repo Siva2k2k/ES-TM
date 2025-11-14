@@ -196,7 +196,7 @@ class RoleBasedServiceDispatcher {
           data: adminResult.user,
           affectedEntities: [{
             type: 'user',
-            id: adminResult.user._id.toString(),
+            id: adminResult.user._id ? adminResult.user._id.toString() : adminResult.user.id,
             name: adminResult.user.full_name
           }]
         };
@@ -224,7 +224,7 @@ class RoleBasedServiceDispatcher {
           },
           affectedEntities: [{
             type: 'user',
-            id: approvalResult.user._id.toString(),
+            id: approvalResult.user._id ? approvalResult.user._id.toString() : approvalResult.user.id,
             name: approvalResult.user.full_name
           }]
         };
@@ -340,7 +340,7 @@ class RoleBasedServiceDispatcher {
       data: result.client,
       affectedEntities: [{
         type: 'client',
-        id: result.client._id.toString(),
+        id: result.client._id ? result.client._id.toString() : result.client.id,
         name: result.client.name
       }]
     };

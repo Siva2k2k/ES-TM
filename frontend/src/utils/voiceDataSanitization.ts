@@ -64,7 +64,7 @@ export function sanitizeVoiceActionData(data: Record<string, any>): Record<strin
   Object.keys(sanitized).forEach((fieldName) => {
     const value = sanitized[fieldName];
     
-    // Remove null/undefined/empty values
+    // Remove null/undefined values
     if (value === null || value === undefined) {
       delete sanitized[fieldName];
       return;
@@ -73,7 +73,17 @@ export function sanitizeVoiceActionData(data: Record<string, any>): Record<strin
     if (typeof value === 'string') {
       const trimmed = value.trim();
       
-      // Remove empty strings
+      // CRITICAL: Preserve role fields even if they appear empty
+      if (fieldName.toLowerCase() === 'role') {
+        if (trimmed === '') {
+          delete sanitized[fieldName];
+        } else {
+          sanitized[fieldName] = trimmed;
+        }
+        return;
+      }
+      
+      // Remove empty strings for non-role fields
       if (trimmed === '') {
         delete sanitized[fieldName];
         return;
