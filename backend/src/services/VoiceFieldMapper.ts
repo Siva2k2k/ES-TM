@@ -422,6 +422,12 @@ class VoiceFieldMapper {
           message: 'Invalid hourly rate',
           receivedValue: rate
         });
+      } else if (mapped.hourly_rate < 0) {
+        errors.push({
+          field: 'hourly_rate',
+          message: 'Hourly rate must be non-negative',
+          receivedValue: rate
+        });
       }
     }
 
@@ -873,8 +879,125 @@ class VoiceFieldMapper {
    * Map update_entries intent data
    */
   async mapUpdateEntries(data: Record<string, any>): Promise<MappingResult> {
-    // Similar to mapAddEntries but for updates
-    return this.mapAddEntries(data);
+    const mapped: Record<string, any> = {};
+    const errors: FieldMappingError[] = [];
+
+    // Map entry_id (required for updates)
+    if (data.entryId || data.entry_id) {
+      const entryId = data.entryId || data.entry_id;
+      if (Types.ObjectId.isValid(entryId)) {
+        mapped.entry_id = new Types.ObjectId(entryId);
+      } else {
+        errors.push({
+          field: 'entry_id',
+          message: 'Invalid entry ID format',
+          receivedValue: entryId
+        });
+      }
+    } else {
+      errors.push({
+        field: 'entry_id',
+        message: 'Entry ID is required for updates',
+        receivedValue: undefined
+      });
+    }
+
+    // Map project_id (optional for updates)
+    if (data.project || data.projectId || data.project_id) {
+      const projectIdentifier = data.project || data.projectId || data.project_id;
+
+      if (typeof projectIdentifier === 'string' && !Types.ObjectId.isValid(projectIdentifier)) {
+        const projectResult = await this.resolveNameToId(projectIdentifier, 'project');
+        if (projectResult.success) {
+          mapped.project_id = projectResult.id;
+        } else {
+          errors.push(projectResult.error!);
+        }
+      } else {
+        if (Types.ObjectId.isValid(projectIdentifier)) {
+          mapped.project_id = new Types.ObjectId(projectIdentifier);
+        } else {
+          errors.push({
+            field: 'project_id',
+            message: 'Invalid project ID format',
+            receivedValue: projectIdentifier
+          });
+        }
+      }
+    }
+
+    // Map task_id (optional for updates)
+    if (data.task || data.taskId || data.task_id) {
+      const taskIdentifier = data.task || data.taskId || data.task_id;
+
+      if (typeof taskIdentifier === 'string' && !Types.ObjectId.isValid(taskIdentifier)) {
+        const projectId = mapped.project_id || data.projectId || data.project_id;
+        const taskResult = await this.resolveNameToId(taskIdentifier, 'task');
+        if (taskResult.success) {
+          mapped.task_id = taskResult.id;
+        } else {
+          errors.push(taskResult.error!);
+        }
+      } else {
+        if (Types.ObjectId.isValid(taskIdentifier)) {
+          mapped.task_id = new Types.ObjectId(taskIdentifier);
+        } else {
+          errors.push({
+            field: 'task_id',
+            message: 'Invalid task ID format',
+            receivedValue: taskIdentifier
+          });
+        }
+      }
+    }
+
+    // Map date (optional for updates)
+    if (data.date) {
+      mapped.date = this.parseDate(data.date);
+      if (!mapped.date) {
+        errors.push({
+          field: 'date',
+          message: 'Invalid date format',
+          receivedValue: data.date
+        });
+      }
+    }
+
+    // Map hours (optional for updates)
+    if (data.hours !== undefined) {
+      mapped.hours = parseFloat(data.hours);
+      if (isNaN(mapped.hours) || mapped.hours < 0) {
+        errors.push({
+          field: 'hours',
+          message: 'Invalid hours value',
+          receivedValue: data.hours
+        });
+      }
+    }
+
+    // Map entry type (optional for updates)
+    if (data.entryType || data.entry_type) {
+      mapped.entry_type = (data.entryType || data.entry_type).toLowerCase();
+    }
+
+    // Map optional fields
+    if (data.description !== undefined) {
+      mapped.description = data.description;
+    }
+
+    if (data.taskType || data.task_type) {
+      mapped.task_type = (data.taskType || data.task_type).toLowerCase();
+    }
+
+    if (data.isBillable !== undefined || data.is_billable !== undefined) {
+      mapped.is_billable = data.isBillable ?? data.is_billable;
+    }
+
+    return {
+      success: errors.length === 0,
+      data: mapped,
+      errors: errors.length > 0 ? errors : undefined
+    };
   }
 
   /**
@@ -884,7 +1007,33 @@ class VoiceFieldMapper {
     const errors: FieldMappingError[] = [];
     const mapped: Record<string, any> = {};
 
-    // Map week start date
+    // Map entry_id (for single entry deletion)
+    if (data.entryId || data.entry_id) {
+      const entryId = data.entryId || data.entry_id;
+      if (Types.ObjectId.isValid(entryId)) {
+        mapped.entry_id = new Types.ObjectId(entryId);
+      } else {
+        errors.push({
+          field: 'entry_id',
+          message: 'Invalid entry ID format',
+          receivedValue: entryId
+        });
+      }
+    }
+
+    // Map date (for filtering entries by specific date)
+    if (data.date) {
+      mapped.date = this.parseDate(data.date);
+      if (!mapped.date) {
+        errors.push({
+          field: 'date',
+          message: 'Invalid date format',
+          receivedValue: data.date
+        });
+      }
+    }
+
+    // Map week start date (for filtering entries by week)
     if (data.weekStart || data.week_start) {
       mapped.week_start = this.parseDate(data.weekStart || data.week_start);
       if (!mapped.week_start) {
@@ -896,15 +1045,52 @@ class VoiceFieldMapper {
       }
     }
 
-    // Resolve project name to project_id
-    if (data.projectId || data.project_id || data.projectName || data.project_name) {
-      const projectIdentifier = data.projectId || data.project_id || data.projectName || data.project_name;
-      const projectResult = await this.resolveNameToId(projectIdentifier, 'project', 'project_id');
+    // Resolve project name to project_id (for filtering entries by project)
+    if (data.project || data.projectId || data.project_id) {
+      const projectIdentifier = data.project || data.projectId || data.project_id;
 
-      if (projectResult.success) {
-        mapped.project_id = projectResult.id;
+      if (typeof projectIdentifier === 'string' && !Types.ObjectId.isValid(projectIdentifier)) {
+        const projectResult = await this.resolveNameToId(projectIdentifier, 'project');
+        if (projectResult.success) {
+          mapped.project_id = projectResult.id;
+        } else {
+          errors.push(projectResult.error!);
+        }
       } else {
-        errors.push(projectResult.error!);
+        if (Types.ObjectId.isValid(projectIdentifier)) {
+          mapped.project_id = new Types.ObjectId(projectIdentifier);
+        } else {
+          errors.push({
+            field: 'project_id',
+            message: 'Invalid project ID format',
+            receivedValue: projectIdentifier
+          });
+        }
+      }
+    }
+
+    // Resolve task name to task_id (for filtering entries by task)
+    if (data.task || data.taskId || data.task_id) {
+      const taskIdentifier = data.task || data.taskId || data.task_id;
+
+      if (typeof taskIdentifier === 'string' && !Types.ObjectId.isValid(taskIdentifier)) {
+        const projectId = mapped.project_id || data.projectId || data.project_id;
+        const taskResult = await this.resolveNameToId(taskIdentifier, 'task');
+        if (taskResult.success) {
+          mapped.task_id = taskResult.id;
+        } else {
+          errors.push(taskResult.error!);
+        }
+      } else {
+        if (Types.ObjectId.isValid(taskIdentifier)) {
+          mapped.task_id = new Types.ObjectId(taskIdentifier);
+        } else {
+          errors.push({
+            field: 'task_id',
+            message: 'Invalid task ID format',
+            receivedValue: taskIdentifier
+          });
+        }
       }
     }
 
@@ -1259,6 +1445,18 @@ class VoiceFieldMapper {
       });
     }
 
+    // Map manager name to manager_id (optional for additional context)
+    if (data.managerId || data.manager_id || data.managerName || data.manager_name) {
+      const managerIdentifier = data.managerId || data.manager_id || data.managerName || data.manager_name;
+      const managerResult = await this.resolveNameToId(managerIdentifier, 'manager', 'manager_id');
+
+      if (managerResult.success) {
+        mapped.manager_id = managerResult.id;
+      } else {
+        errors.push(managerResult.error!);
+      }
+    }
+
     return {
       success: errors.length === 0,
       data: mapped,
@@ -1298,6 +1496,36 @@ class VoiceFieldMapper {
 
     if (data.role) {
       mapped.role = data.role.toLowerCase();
+    }
+
+    // Map hourly rate (optional for updates)
+    if (data.hourlyRate !== undefined || data.hourly_rate !== undefined) {
+      const rate = data.hourlyRate ?? data.hourly_rate;
+      mapped.hourly_rate = parseFloat(rate);
+
+      if (isNaN(mapped.hourly_rate)) {
+        errors.push({
+          field: 'hourly_rate',
+          message: 'Invalid hourly rate',
+          receivedValue: rate
+        });
+      } else if (mapped.hourly_rate < 0) {
+        errors.push({
+          field: 'hourly_rate',
+          message: 'Hourly rate must be non-negative',
+          receivedValue: rate
+        });
+      }
+    }
+
+    // Map phone (optional for updates)
+    if (data.phone) {
+      mapped.phone = data.phone;
+    }
+
+    // Map full name (optional for updates)
+    if (data.fullName || data.full_name) {
+      mapped.full_name = data.fullName || data.full_name;
     }
 
     return {
@@ -1418,33 +1646,119 @@ class VoiceFieldMapper {
    * Map copy_entry intent data
    */
   async mapCopyEntry(data: Record<string, any>): Promise<MappingResult> {
-    return {
-      success: true,
-      data: data  // Simplified for now
-    };
-  }
-
-  /**
-   * Map team review actions (approve/reject user/project)
-   */
-  async mapTeamReviewAction(data: Record<string, any>): Promise<MappingResult> {
     const errors: FieldMappingError[] = [];
     const mapped: Record<string, any> = {};
 
-    // Map week start date
-    if (data.weekStart || data.week_start) {
-      mapped.week_start = this.parseDate(data.weekStart || data.week_start);
+    // Map source entry_id (required)
+    if (data.entryId || data.entry_id || data.sourceEntryId || data.source_entry_id) {
+      const entryId = data.entryId || data.entry_id || data.sourceEntryId || data.source_entry_id;
+      if (Types.ObjectId.isValid(entryId)) {
+        mapped.entry_id = new Types.ObjectId(entryId);
+      } else {
+        errors.push({
+          field: 'entry_id',
+          message: 'Invalid entry ID format',
+          receivedValue: entryId
+        });
+      }
+    } else {
+      errors.push({
+        field: 'entry_id',
+        message: 'Source entry ID is required',
+        receivedValue: undefined
+      });
     }
 
-    // Resolve project name to project_id
-    if (data.projectId || data.project_id || data.projectName || data.project_name) {
-      const projectIdentifier = data.projectId || data.project_id || data.projectName || data.project_name;
-      const projectResult = await this.resolveNameToId(projectIdentifier, 'project', 'project_id');
+    // Map source date (optional - if not provided, will use entry's existing date)
+    if (data.sourceDate || data.source_date) {
+      mapped.source_date = this.parseDate(data.sourceDate || data.source_date);
+      if (!mapped.source_date) {
+        errors.push({
+          field: 'source_date',
+          message: 'Invalid source date format',
+          receivedValue: data.sourceDate || data.source_date
+        });
+      }
+    }
 
-      if (projectResult.success) {
-        mapped.project_id = projectResult.id;
+    // Map target date(s) (required - can be single date or array of dates)
+    if (data.targetDate || data.target_date || data.targetDates || data.target_dates) {
+      const targetDateInput = data.targetDate || data.target_date || data.targetDates || data.target_dates;
+
+      // Handle both single date and array of dates
+      const dateArray = Array.isArray(targetDateInput) ? targetDateInput : [targetDateInput];
+      const parsedDates: Date[] = [];
+
+      for (const dateStr of dateArray) {
+        const parsedDate = this.parseDate(dateStr);
+        if (parsedDate) {
+          parsedDates.push(parsedDate);
+        } else {
+          errors.push({
+            field: 'target_date',
+            message: 'Invalid target date format',
+            receivedValue: dateStr
+          });
+        }
+      }
+
+      if (parsedDates.length > 0) {
+        mapped.target_dates = parsedDates;
+      }
+    } else {
+      errors.push({
+        field: 'target_date',
+        message: 'Target date(s) required for copying entry',
+        receivedValue: undefined
+      });
+    }
+
+    // Map optional project override
+    if (data.project || data.projectId || data.project_id) {
+      const projectIdentifier = data.project || data.projectId || data.project_id;
+
+      if (typeof projectIdentifier === 'string' && !Types.ObjectId.isValid(projectIdentifier)) {
+        const projectResult = await this.resolveNameToId(projectIdentifier, 'project');
+        if (projectResult.success) {
+          mapped.project_id = projectResult.id;
+        } else {
+          errors.push(projectResult.error!);
+        }
       } else {
-        errors.push(projectResult.error!);
+        if (Types.ObjectId.isValid(projectIdentifier)) {
+          mapped.project_id = new Types.ObjectId(projectIdentifier);
+        } else {
+          errors.push({
+            field: 'project_id',
+            message: 'Invalid project ID format',
+            receivedValue: projectIdentifier
+          });
+        }
+      }
+    }
+
+    // Map optional task override
+    if (data.task || data.taskId || data.task_id) {
+      const taskIdentifier = data.task || data.taskId || data.task_id;
+
+      if (typeof taskIdentifier === 'string' && !Types.ObjectId.isValid(taskIdentifier)) {
+        const projectId = mapped.project_id || data.projectId || data.project_id;
+        const taskResult = await this.resolveNameToId(taskIdentifier, 'task');
+        if (taskResult.success) {
+          mapped.task_id = taskResult.id;
+        } else {
+          errors.push(taskResult.error!);
+        }
+      } else {
+        if (Types.ObjectId.isValid(taskIdentifier)) {
+          mapped.task_id = new Types.ObjectId(taskIdentifier);
+        } else {
+          errors.push({
+            field: 'task_id',
+            message: 'Invalid task ID format',
+            receivedValue: taskIdentifier
+          });
+        }
       }
     }
 
@@ -1456,26 +1770,717 @@ class VoiceFieldMapper {
   }
 
   /**
-   * Map export billing intents
+   * Map approve_user intent data
    */
-  async mapExportBilling(data: Record<string, any>): Promise<MappingResult> {
+  async mapApproveUser(data: Record<string, any>): Promise<MappingResult> {
     const errors: FieldMappingError[] = [];
     const mapped: Record<string, any> = {};
 
-    // Map date range
+    // Map week start date (required)
+    if (data.weekStart || data.week_start) {
+      mapped.week_start = this.parseDate(data.weekStart || data.week_start);
+      if (!mapped.week_start) {
+        errors.push({
+          field: 'week_start',
+          message: 'Invalid week start date format',
+          receivedValue: data.weekStart || data.week_start
+        });
+      }
+    } else {
+      errors.push({
+        field: 'week_start',
+        message: 'Week start date is required',
+        receivedValue: undefined
+      });
+    }
+
+    // Map week end date (required)
+    if (data.weekEnd || data.week_end) {
+      mapped.week_end = this.parseDate(data.weekEnd || data.week_end);
+      if (!mapped.week_end) {
+        errors.push({
+          field: 'week_end',
+          message: 'Invalid week end date format',
+          receivedValue: data.weekEnd || data.week_end
+        });
+      }
+    } else {
+      errors.push({
+        field: 'week_end',
+        message: 'Week end date is required',
+        receivedValue: undefined
+      });
+    }
+
+    // Resolve user name to user_id (required)
+    if (data.user || data.userId || data.user_id) {
+      const userIdentifier = data.user || data.userId || data.user_id;
+
+      if (typeof userIdentifier === 'string' && !Types.ObjectId.isValid(userIdentifier)) {
+        const userResult = await this.resolveNameToId(userIdentifier, 'user');
+        if (userResult.success) {
+          mapped.user_id = userResult.id;
+        } else {
+          errors.push(userResult.error!);
+        }
+      } else {
+        if (Types.ObjectId.isValid(userIdentifier)) {
+          mapped.user_id = new Types.ObjectId(userIdentifier);
+        } else {
+          errors.push({
+            field: 'user_id',
+            message: 'Invalid user ID format',
+            receivedValue: userIdentifier
+          });
+        }
+      }
+    } else {
+      errors.push({
+        field: 'user_id',
+        message: 'User is required',
+        receivedValue: undefined
+      });
+    }
+
+    // Resolve project name to project_id (required)
+    if (data.project || data.projectId || data.project_id) {
+      const projectIdentifier = data.project || data.projectId || data.project_id;
+
+      if (typeof projectIdentifier === 'string' && !Types.ObjectId.isValid(projectIdentifier)) {
+        const projectResult = await this.resolveNameToId(projectIdentifier, 'project');
+        if (projectResult.success) {
+          mapped.project_id = projectResult.id;
+        } else {
+          errors.push(projectResult.error!);
+        }
+      } else {
+        if (Types.ObjectId.isValid(projectIdentifier)) {
+          mapped.project_id = new Types.ObjectId(projectIdentifier);
+        } else {
+          errors.push({
+            field: 'project_id',
+            message: 'Invalid project ID format',
+            receivedValue: projectIdentifier
+          });
+        }
+      }
+    } else {
+      errors.push({
+        field: 'project_id',
+        message: 'Project is required',
+        receivedValue: undefined
+      });
+    }
+
+    return {
+      success: errors.length === 0,
+      data: mapped,
+      errors: errors.length > 0 ? errors : undefined
+    };
+  }
+
+  /**
+   * Map approve_project_week intent data
+   */
+  async mapApproveProjectWeek(data: Record<string, any>): Promise<MappingResult> {
+    const errors: FieldMappingError[] = [];
+    const mapped: Record<string, any> = {};
+
+    // Map week start date (required)
+    if (data.weekStart || data.week_start) {
+      mapped.week_start = this.parseDate(data.weekStart || data.week_start);
+      if (!mapped.week_start) {
+        errors.push({
+          field: 'week_start',
+          message: 'Invalid week start date format',
+          receivedValue: data.weekStart || data.week_start
+        });
+      }
+    } else {
+      errors.push({
+        field: 'week_start',
+        message: 'Week start date is required',
+        receivedValue: undefined
+      });
+    }
+
+    // Map week end date (required)
+    if (data.weekEnd || data.week_end) {
+      mapped.week_end = this.parseDate(data.weekEnd || data.week_end);
+      if (!mapped.week_end) {
+        errors.push({
+          field: 'week_end',
+          message: 'Invalid week end date format',
+          receivedValue: data.weekEnd || data.week_end
+        });
+      }
+    } else {
+      errors.push({
+        field: 'week_end',
+        message: 'Week end date is required',
+        receivedValue: undefined
+      });
+    }
+
+    // Resolve project name to project_id (required)
+    if (data.project || data.projectId || data.project_id) {
+      const projectIdentifier = data.project || data.projectId || data.project_id;
+
+      if (typeof projectIdentifier === 'string' && !Types.ObjectId.isValid(projectIdentifier)) {
+        const projectResult = await this.resolveNameToId(projectIdentifier, 'project');
+        if (projectResult.success) {
+          mapped.project_id = projectResult.id;
+        } else {
+          errors.push(projectResult.error!);
+        }
+      } else {
+        if (Types.ObjectId.isValid(projectIdentifier)) {
+          mapped.project_id = new Types.ObjectId(projectIdentifier);
+        } else {
+          errors.push({
+            field: 'project_id',
+            message: 'Invalid project ID format',
+            receivedValue: projectIdentifier
+          });
+        }
+      }
+    } else {
+      errors.push({
+        field: 'project_id',
+        message: 'Project is required',
+        receivedValue: undefined
+      });
+    }
+
+    return {
+      success: errors.length === 0,
+      data: mapped,
+      errors: errors.length > 0 ? errors : undefined
+    };
+  }
+
+  /**
+   * Map reject_user intent data
+   */
+  async mapRejectUser(data: Record<string, any>): Promise<MappingResult> {
+    const errors: FieldMappingError[] = [];
+    const mapped: Record<string, any> = {};
+
+    // Map week start date (required)
+    if (data.weekStart || data.week_start) {
+      mapped.week_start = this.parseDate(data.weekStart || data.week_start);
+      if (!mapped.week_start) {
+        errors.push({
+          field: 'week_start',
+          message: 'Invalid week start date format',
+          receivedValue: data.weekStart || data.week_start
+        });
+      }
+    } else {
+      errors.push({
+        field: 'week_start',
+        message: 'Week start date is required',
+        receivedValue: undefined
+      });
+    }
+
+    // Map week end date (required)
+    if (data.weekEnd || data.week_end) {
+      mapped.week_end = this.parseDate(data.weekEnd || data.week_end);
+      if (!mapped.week_end) {
+        errors.push({
+          field: 'week_end',
+          message: 'Invalid week end date format',
+          receivedValue: data.weekEnd || data.week_end
+        });
+      }
+    } else {
+      errors.push({
+        field: 'week_end',
+        message: 'Week end date is required',
+        receivedValue: undefined
+      });
+    }
+
+    // Resolve user name to user_id (required)
+    if (data.user || data.userId || data.user_id) {
+      const userIdentifier = data.user || data.userId || data.user_id;
+
+      if (typeof userIdentifier === 'string' && !Types.ObjectId.isValid(userIdentifier)) {
+        const userResult = await this.resolveNameToId(userIdentifier, 'user');
+        if (userResult.success) {
+          mapped.user_id = userResult.id;
+        } else {
+          errors.push(userResult.error!);
+        }
+      } else {
+        if (Types.ObjectId.isValid(userIdentifier)) {
+          mapped.user_id = new Types.ObjectId(userIdentifier);
+        } else {
+          errors.push({
+            field: 'user_id',
+            message: 'Invalid user ID format',
+            receivedValue: userIdentifier
+          });
+        }
+      }
+    } else {
+      errors.push({
+        field: 'user_id',
+        message: 'User is required',
+        receivedValue: undefined
+      });
+    }
+
+    // Resolve project name to project_id (required)
+    if (data.project || data.projectId || data.project_id) {
+      const projectIdentifier = data.project || data.projectId || data.project_id;
+
+      if (typeof projectIdentifier === 'string' && !Types.ObjectId.isValid(projectIdentifier)) {
+        const projectResult = await this.resolveNameToId(projectIdentifier, 'project');
+        if (projectResult.success) {
+          mapped.project_id = projectResult.id;
+        } else {
+          errors.push(projectResult.error!);
+        }
+      } else {
+        if (Types.ObjectId.isValid(projectIdentifier)) {
+          mapped.project_id = new Types.ObjectId(projectIdentifier);
+        } else {
+          errors.push({
+            field: 'project_id',
+            message: 'Invalid project ID format',
+            receivedValue: projectIdentifier
+          });
+        }
+      }
+    } else {
+      errors.push({
+        field: 'project_id',
+        message: 'Project is required',
+        receivedValue: undefined
+      });
+    }
+
+    // Map rejection reason (optional)
+    if (data.reason) {
+      mapped.reason = data.reason;
+    }
+
+    return {
+      success: errors.length === 0,
+      data: mapped,
+      errors: errors.length > 0 ? errors : undefined
+    };
+  }
+
+  /**
+   * Map reject_project_week intent data
+   */
+  async mapRejectProjectWeek(data: Record<string, any>): Promise<MappingResult> {
+    const errors: FieldMappingError[] = [];
+    const mapped: Record<string, any> = {};
+
+    // Map week start date (required)
+    if (data.weekStart || data.week_start) {
+      mapped.week_start = this.parseDate(data.weekStart || data.week_start);
+      if (!mapped.week_start) {
+        errors.push({
+          field: 'week_start',
+          message: 'Invalid week start date format',
+          receivedValue: data.weekStart || data.week_start
+        });
+      }
+    } else {
+      errors.push({
+        field: 'week_start',
+        message: 'Week start date is required',
+        receivedValue: undefined
+      });
+    }
+
+    // Map week end date (required)
+    if (data.weekEnd || data.week_end) {
+      mapped.week_end = this.parseDate(data.weekEnd || data.week_end);
+      if (!mapped.week_end) {
+        errors.push({
+          field: 'week_end',
+          message: 'Invalid week end date format',
+          receivedValue: data.weekEnd || data.week_end
+        });
+      }
+    } else {
+      errors.push({
+        field: 'week_end',
+        message: 'Week end date is required',
+        receivedValue: undefined
+      });
+    }
+
+    // Resolve project name to project_id (required)
+    if (data.project || data.projectId || data.project_id) {
+      const projectIdentifier = data.project || data.projectId || data.project_id;
+
+      if (typeof projectIdentifier === 'string' && !Types.ObjectId.isValid(projectIdentifier)) {
+        const projectResult = await this.resolveNameToId(projectIdentifier, 'project');
+        if (projectResult.success) {
+          mapped.project_id = projectResult.id;
+        } else {
+          errors.push(projectResult.error!);
+        }
+      } else {
+        if (Types.ObjectId.isValid(projectIdentifier)) {
+          mapped.project_id = new Types.ObjectId(projectIdentifier);
+        } else {
+          errors.push({
+            field: 'project_id',
+            message: 'Invalid project ID format',
+            receivedValue: projectIdentifier
+          });
+        }
+      }
+    } else {
+      errors.push({
+        field: 'project_id',
+        message: 'Project is required',
+        receivedValue: undefined
+      });
+    }
+
+    // Map rejection reason (optional)
+    if (data.reason) {
+      mapped.reason = data.reason;
+    }
+
+    return {
+      success: errors.length === 0,
+      data: mapped,
+      errors: errors.length > 0 ? errors : undefined
+    };
+  }
+
+  /**
+   * Map send_reminder intent data
+   */
+  async mapSendReminder(data: Record<string, any>): Promise<MappingResult> {
+    const errors: FieldMappingError[] = [];
+    const mapped: Record<string, any> = {};
+
+    // Map week start date (required)
+    if (data.weekStart || data.week_start) {
+      mapped.week_start = this.parseDate(data.weekStart || data.week_start);
+      if (!mapped.week_start) {
+        errors.push({
+          field: 'week_start',
+          message: 'Invalid week start date format',
+          receivedValue: data.weekStart || data.week_start
+        });
+      }
+    } else {
+      errors.push({
+        field: 'week_start',
+        message: 'Week start date is required',
+        receivedValue: undefined
+      });
+    }
+
+    // Map week end date (required)
+    if (data.weekEnd || data.week_end) {
+      mapped.week_end = this.parseDate(data.weekEnd || data.week_end);
+      if (!mapped.week_end) {
+        errors.push({
+          field: 'week_end',
+          message: 'Invalid week end date format',
+          receivedValue: data.weekEnd || data.week_end
+        });
+      }
+    } else {
+      errors.push({
+        field: 'week_end',
+        message: 'Week end date is required',
+        receivedValue: undefined
+      });
+    }
+
+    // Resolve user name to user_id (optional - can send to specific user or all)
+    if (data.user || data.userId || data.user_id) {
+      const userIdentifier = data.user || data.userId || data.user_id;
+
+      if (typeof userIdentifier === 'string' && !Types.ObjectId.isValid(userIdentifier)) {
+        const userResult = await this.resolveNameToId(userIdentifier, 'user');
+        if (userResult.success) {
+          mapped.user_id = userResult.id;
+        } else {
+          errors.push(userResult.error!);
+        }
+      } else {
+        if (Types.ObjectId.isValid(userIdentifier)) {
+          mapped.user_id = new Types.ObjectId(userIdentifier);
+        } else {
+          errors.push({
+            field: 'user_id',
+            message: 'Invalid user ID format',
+            receivedValue: userIdentifier
+          });
+        }
+      }
+    }
+
+    // Resolve project name to project_id (optional - can filter by project)
+    if (data.project || data.projectId || data.project_id) {
+      const projectIdentifier = data.project || data.projectId || data.project_id;
+
+      if (typeof projectIdentifier === 'string' && !Types.ObjectId.isValid(projectIdentifier)) {
+        const projectResult = await this.resolveNameToId(projectIdentifier, 'project');
+        if (projectResult.success) {
+          mapped.project_id = projectResult.id;
+        } else {
+          errors.push(projectResult.error!);
+        }
+      } else {
+        if (Types.ObjectId.isValid(projectIdentifier)) {
+          mapped.project_id = new Types.ObjectId(projectIdentifier);
+        } else {
+          errors.push({
+            field: 'project_id',
+            message: 'Invalid project ID format',
+            receivedValue: projectIdentifier
+          });
+        }
+      }
+    }
+
+    // Map reminder message (optional)
+    if (data.message) {
+      mapped.message = data.message;
+    }
+
+    return {
+      success: errors.length === 0,
+      data: mapped,
+      errors: errors.length > 0 ? errors : undefined
+    };
+  }
+
+  /**
+   * Map export_project_billing intent data
+   */
+  async mapExportProjectBilling(data: Record<string, any>): Promise<MappingResult> {
+    const errors: FieldMappingError[] = [];
+    const mapped: Record<string, any> = {};
+
+    // Map start date (required)
     if (data.startDate || data.start_date) {
       mapped.start_date = this.parseDate(data.startDate || data.start_date);
+      if (!mapped.start_date) {
+        errors.push({
+          field: 'start_date',
+          message: 'Invalid start date format',
+          receivedValue: data.startDate || data.start_date
+        });
+      }
+    } else {
+      errors.push({
+        field: 'start_date',
+        message: 'Start date is required',
+        receivedValue: undefined
+      });
     }
 
+    // Map end date (required)
     if (data.endDate || data.end_date) {
       mapped.end_date = this.parseDate(data.endDate || data.end_date);
+      if (!mapped.end_date) {
+        errors.push({
+          field: 'end_date',
+          message: 'Invalid end date format',
+          receivedValue: data.endDate || data.end_date
+        });
+      }
+    } else {
+      errors.push({
+        field: 'end_date',
+        message: 'End date is required',
+        receivedValue: undefined
+      });
     }
 
-    // Map format
+    // Validate date range
+    if (mapped.start_date && mapped.end_date && mapped.start_date > mapped.end_date) {
+      errors.push({
+        field: 'end_date',
+        message: 'End date must be after start date',
+        receivedValue: data.endDate || data.end_date
+      });
+    }
+
+    // Resolve project name to project_id (optional)
+    if (data.project || data.projectId || data.project_id) {
+      const projectIdentifier = data.project || data.projectId || data.project_id;
+
+      if (typeof projectIdentifier === 'string' && !Types.ObjectId.isValid(projectIdentifier)) {
+        const projectResult = await this.resolveNameToId(projectIdentifier, 'project');
+        if (projectResult.success) {
+          mapped.project_id = projectResult.id;
+        } else {
+          errors.push(projectResult.error!);
+        }
+      } else {
+        if (Types.ObjectId.isValid(projectIdentifier)) {
+          mapped.project_id = new Types.ObjectId(projectIdentifier);
+        } else {
+          errors.push({
+            field: 'project_id',
+            message: 'Invalid project ID format',
+            receivedValue: projectIdentifier
+          });
+        }
+      }
+    }
+
+    // Resolve client name to client_id (optional)
+    if (data.client || data.clientId || data.client_id) {
+      const clientIdentifier = data.client || data.clientId || data.client_id;
+
+      if (typeof clientIdentifier === 'string' && !Types.ObjectId.isValid(clientIdentifier)) {
+        const clientResult = await this.resolveNameToId(clientIdentifier, 'client');
+        if (clientResult.success) {
+          mapped.client_id = clientResult.id;
+        } else {
+          errors.push(clientResult.error!);
+        }
+      } else {
+        if (Types.ObjectId.isValid(clientIdentifier)) {
+          mapped.client_id = new Types.ObjectId(clientIdentifier);
+        } else {
+          errors.push({
+            field: 'client_id',
+            message: 'Invalid client ID format',
+            receivedValue: clientIdentifier
+          });
+        }
+      }
+    }
+
+    // Map format (optional with default)
     if (data.format) {
-      mapped.format = data.format.toLowerCase();
+      mapped.format = data.format.toUpperCase();
     } else {
-      mapped.format = 'csv'; // Default format
+      mapped.format = 'CSV'; // Default format
+    }
+
+    return {
+      success: errors.length === 0,
+      data: mapped,
+      errors: errors.length > 0 ? errors : undefined
+    };
+  }
+
+  /**
+   * Map export_user_billing intent data
+   */
+  async mapExportUserBilling(data: Record<string, any>): Promise<MappingResult> {
+    const errors: FieldMappingError[] = [];
+    const mapped: Record<string, any> = {};
+
+    // Map start date (required)
+    if (data.startDate || data.start_date) {
+      mapped.start_date = this.parseDate(data.startDate || data.start_date);
+      if (!mapped.start_date) {
+        errors.push({
+          field: 'start_date',
+          message: 'Invalid start date format',
+          receivedValue: data.startDate || data.start_date
+        });
+      }
+    } else {
+      errors.push({
+        field: 'start_date',
+        message: 'Start date is required',
+        receivedValue: undefined
+      });
+    }
+
+    // Map end date (required)
+    if (data.endDate || data.end_date) {
+      mapped.end_date = this.parseDate(data.endDate || data.end_date);
+      if (!mapped.end_date) {
+        errors.push({
+          field: 'end_date',
+          message: 'Invalid end date format',
+          receivedValue: data.endDate || data.end_date
+        });
+      }
+    } else {
+      errors.push({
+        field: 'end_date',
+        message: 'End date is required',
+        receivedValue: undefined
+      });
+    }
+
+    // Validate date range
+    if (mapped.start_date && mapped.end_date && mapped.start_date > mapped.end_date) {
+      errors.push({
+        field: 'end_date',
+        message: 'End date must be after start date',
+        receivedValue: data.endDate || data.end_date
+      });
+    }
+
+    // Resolve user name to user_id (optional)
+    if (data.user || data.userId || data.user_id) {
+      const userIdentifier = data.user || data.userId || data.user_id;
+
+      if (typeof userIdentifier === 'string' && !Types.ObjectId.isValid(userIdentifier)) {
+        const userResult = await this.resolveNameToId(userIdentifier, 'user');
+        if (userResult.success) {
+          mapped.user_id = userResult.id;
+        } else {
+          errors.push(userResult.error!);
+        }
+      } else {
+        if (Types.ObjectId.isValid(userIdentifier)) {
+          mapped.user_id = new Types.ObjectId(userIdentifier);
+        } else {
+          errors.push({
+            field: 'user_id',
+            message: 'Invalid user ID format',
+            receivedValue: userIdentifier
+          });
+        }
+      }
+    }
+
+    // Resolve client name to client_id (optional)
+    if (data.client || data.clientId || data.client_id) {
+      const clientIdentifier = data.client || data.clientId || data.client_id;
+
+      if (typeof clientIdentifier === 'string' && !Types.ObjectId.isValid(clientIdentifier)) {
+        const clientResult = await this.resolveNameToId(clientIdentifier, 'client');
+        if (clientResult.success) {
+          mapped.client_id = clientResult.id;
+        } else {
+          errors.push(clientResult.error!);
+        }
+      } else {
+        if (Types.ObjectId.isValid(clientIdentifier)) {
+          mapped.client_id = new Types.ObjectId(clientIdentifier);
+        } else {
+          errors.push({
+            field: 'client_id',
+            message: 'Invalid client ID format',
+            receivedValue: clientIdentifier
+          });
+        }
+      }
+    }
+
+    // Map format (optional with default)
+    if (data.format) {
+      mapped.format = data.format.toUpperCase();
+    } else {
+      mapped.format = 'CSV'; // Default format
     }
 
     return {
@@ -1492,13 +2497,59 @@ class VoiceFieldMapper {
     const errors: FieldMappingError[] = [];
     const mapped: Record<string, any> = {};
 
-    // Map date range
+    // Map start date (optional)
     if (data.startDate || data.start_date) {
       mapped.start_date = this.parseDate(data.startDate || data.start_date);
+      if (!mapped.start_date) {
+        errors.push({
+          field: 'start_date',
+          message: 'Invalid start date format',
+          receivedValue: data.startDate || data.start_date
+        });
+      }
     }
 
+    // Map end date (optional)
     if (data.endDate || data.end_date) {
       mapped.end_date = this.parseDate(data.endDate || data.end_date);
+      if (!mapped.end_date) {
+        errors.push({
+          field: 'end_date',
+          message: 'Invalid end date format',
+          receivedValue: data.endDate || data.end_date
+        });
+      }
+    }
+
+    // Validate date range
+    if (mapped.start_date && mapped.end_date && mapped.start_date > mapped.end_date) {
+      errors.push({
+        field: 'end_date',
+        message: 'End date must be after start date',
+        receivedValue: data.endDate || data.end_date
+      });
+    }
+
+    // Map needExport boolean field
+    if (data.needExport !== undefined || data.need_export !== undefined) {
+      mapped.need_export = data.needExport ?? data.need_export;
+    } else {
+      mapped.need_export = false; // Default to false (just view, don't export)
+    }
+
+    // Map export format (optional, only used if needExport is true)
+    if (data.format && mapped.need_export) {
+      mapped.format = data.format.toUpperCase();
+    }
+
+    // Map action type filter (optional)
+    if (data.actionType || data.action_type) {
+      mapped.action_type = data.actionType || data.action_type;
+    }
+
+    // Map entity type filter (optional)
+    if (data.entityType || data.entity_type) {
+      mapped.entity_type = data.entityType || data.entity_type;
     }
 
     return {
@@ -1723,16 +2774,26 @@ class VoiceFieldMapper {
 
       // Team Review
       case 'approve_user':
+        return this.mapApproveUser(data);
+
       case 'approve_project_week':
+        return this.mapApproveProjectWeek(data);
+
       case 'reject_user':
+        return this.mapRejectUser(data);
+
       case 'reject_project_week':
+        return this.mapRejectProjectWeek(data);
+
       case 'send_reminder':
-        return this.mapTeamReviewAction(data);
+        return this.mapSendReminder(data);
 
       // Billing & Audit
       case 'export_project_billing':
+        return this.mapExportProjectBilling(data);
+
       case 'export_user_billing':
-        return this.mapExportBilling(data);
+        return this.mapExportUserBilling(data);
 
       case 'get_audit_logs':
         return this.mapGetAuditLogs(data);

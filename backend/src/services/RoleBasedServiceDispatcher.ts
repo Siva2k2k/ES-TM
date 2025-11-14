@@ -1464,8 +1464,8 @@ class RoleBasedServiceDispatcher {
       };
     }
 
-    // Map and validate fields first (though this intent might not need much mapping)
-    const mappingResult = await VoiceFieldMapper.mapTeamReviewAction(data);
+    // Map and validate fields first
+    const mappingResult = await VoiceFieldMapper.mapSendReminder(data);
 
     if (!mappingResult.success) {
       return {
@@ -1516,7 +1516,7 @@ class RoleBasedServiceDispatcher {
     }
 
     // Map and validate fields first
-    const mappingResult = await VoiceFieldMapper.mapExportBilling(data);
+    const mappingResult = await VoiceFieldMapper.mapExportProjectBilling(data);
 
     if (!mappingResult.success) {
       return {
@@ -1567,7 +1567,7 @@ class RoleBasedServiceDispatcher {
     }
 
     // Map and validate fields first
-    const mappingResult = await VoiceFieldMapper.mapExportBilling(data);
+    const mappingResult = await VoiceFieldMapper.mapExportUserBilling(data);
 
     if (!mappingResult.success) {
       return {
