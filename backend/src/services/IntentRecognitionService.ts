@@ -99,7 +99,7 @@ Identify the intents from this command.`;
       return parsed.intents;
     } catch (error) {
       logger.error('Intent detection failed, falling back to keyword matching', { error, transcript });
-      
+
       // Fallback: Use keyword-based intent detection
       return this.fallbackIntentDetection(transcript, user);
     }
@@ -430,7 +430,7 @@ Example:
       for (const intent of allowedIntents) {
         const keywords = intentKeywords[intent] || [];
         const hasKeyword = keywords.some(keyword => lowerTranscript.includes(keyword));
-        
+
         if (hasKeyword) {
           detectedIntents.push(intent);
         }
@@ -438,8 +438,8 @@ Example:
 
       // Default to add_entries if no specific intent found but mentions hours/time
       if (detectedIntents.length === 0) {
-        if (lowerTranscript.includes('hour') || lowerTranscript.includes('time') || 
-            lowerTranscript.includes('project')) {
+        if (lowerTranscript.includes('hour') || lowerTranscript.includes('time') ||
+          lowerTranscript.includes('project')) {
           detectedIntents.push('add_entries');
         }
       }
